@@ -47,12 +47,13 @@ describe("generation endpoint foundation", () => {
     expect(response.status).toBe(400);
   });
 
-  it("rejects client provider overrides without echoing the key", async () => {
+  it("accepts a complete nested provider without echoing its key", async () => {
     const response = await POST(request({ title: "", lecture: "evidence ".repeat(80), outputLanguage: "auto", provider: { baseURL: "https://gateway.example/v1", apiKey: "test-only-private-value", model: "custom-model" } }));
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
     const body = await response.text();
     expect(body).not.toContain("test-only-private-value");
-    expect(JSON.parse(body).error.code).toBe("INVALID_PROVIDER_CONFIG");
+    const events = body.trim().split('\n').map((line) => JSON.parse(line));
+    expect(events.at(-1).error.code).toBe("UPSTREAM_FAILURE");
   });
 
   it("rejects partial provider settings with a dedicated error", async () => {
@@ -63,13 +64,7 @@ describe("generation endpoint foundation", () => {
 });
 
 describe('transport and deployment boundaries', () => {
-  const body = { title: '', lecture: 'evidence '.repeat(80), outputLanguage: 'auto' };
-  beforeEach(() => {
-    vi.stubEnv('OPENAI_API_KEY', 'test-only-key');
-    vi.stubEnv('OPENAI_BASE_URL', 'https://gateway.example/v1');
-    vi.stubEnv('OPENAI_MODEL', 'gpt-5.5');
-    vi.stubEnv('OPENAI_API_FORMAT', 'responses');
-  });
+  const body = { title: '', lecture: 'evidence '.repeat(80), outputLanguage: 'auto', provider: { baseURL: 'https://gateway.example/v1', apiKey: 'test-only-key', model: 'test-model' } };
   it('returns a validated result event with the matching run ID', async () => {
     vi.mocked(generateStudyKit).mockImplementation(async (_input, _client, runId) => ({ ...studyKitFixture(), runId }));
     const response = await POST(request(body));
@@ -85,17 +80,17 @@ describe('transport and deployment boundaries', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).quiz).toHaveLength(1);
   });
-  it('blocks browser target overrides before invoking the pipeline', async () => {
+  it('blocks unapproved production targets before invoking the pipeline', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('OPENAI_BASE_URL', 'https://approved.example/v1');
     vi.stubEnv('ALLOWED_API_BASE_URLS', '');
-    const response = await POST(request({ ...body, provider: { baseURL: 'https://other.example/v1', apiKey: 'test-only-key', model: 'test-model' } }));
+    const response = await POST(request(body));
     expect(response.status).toBe(400);
     expect(generateStudyKit).not.toHaveBeenCalled();
   });
   it('accepts explicitly configured production bases', async () => {
     vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('OPENAI_BASE_URL', 'https://approved.example/v1');
+    vi.stubEnv('ALLOWED_API_BASE_URLS', body.provider.baseURL);
     const response = await POST(request(body));
     expect(response.status).toBe(200);
     await response.text();
