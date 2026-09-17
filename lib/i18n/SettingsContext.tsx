@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { type SupportedLanguage, type Translations, translations } from "./translations";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -10,120 +10,92 @@ type SettingsContextType = {
   setLanguage: (lang: SupportedLanguage) => void;
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
-  autoSave: boolean;
-  setAutoSave: (val: boolean) => void;
-  soundEffects: boolean;
-  setSoundEffects: (val: boolean) => void;
-  fontSize: "normal" | "large" | "compact";
-  setFontSize: (size: "normal" | "large" | "compact") => void;
   t: Translations;
-  mounted: boolean;
 };
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
+const LANGUAGE_KEY = "lumina.settings.lang";
+const THEME_KEY = "lumina.settings.theme";
+const SETTINGS_EVENT = "lumina:settings-changed";
+const memorySettings = new Map<string, string>();
 
 function subscribe(callback: () => void) {
-  window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === LANGUAGE_KEY || event.key === THEME_KEY) {
+      if (event.key === null) memorySettings.clear();
+      else memorySettings.delete(event.key);
+      callback();
+    }
+  };
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(SETTINGS_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(SETTINGS_EVENT, callback);
+  };
+}
+
+function readSetting(key: string): string | null {
+  if (memorySettings.has(key)) return memorySettings.get(key) ?? null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memorySettings.get(key) ?? null;
+  }
+}
+
+function writeSetting(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+    memorySettings.delete(key);
+  } catch {
+    // Keep settings usable for this tab when browser storage is unavailable.
+    memorySettings.set(key, value);
+  }
+  window.dispatchEvent(new Event(SETTINGS_EVENT));
+}
+
+function getLanguage(): SupportedLanguage {
+  const value = readSetting(LANGUAGE_KEY);
+  return value === "en" || value === "zh" || value === "ru" || value === "kk" ? value : "en";
+}
+
+function getTheme(): ThemeMode {
+  const value = readSetting(THEME_KEY);
+  return value === "light" || value === "dark" || value === "system" ? value : "system";
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const isClient = useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false
-  );
-
-  const [language, setLanguageState] = useState<SupportedLanguage>("en");
-  const [theme, setThemeState] = useState<ThemeMode>("system");
-  const [autoSave, setAutoSaveState] = useState(true);
-  const [soundEffects, setSoundEffectsState] = useState(false);
-  const [fontSize, setFontSizeState] = useState<"normal" | "large" | "compact">("normal");
+  // The server snapshots are also used for the first hydration render.
+  const language = useSyncExternalStore(subscribe, getLanguage, () => "en" as const);
+  const theme = useSyncExternalStore(subscribe, getTheme, () => "system" as const);
 
   useEffect(() => {
-    try {
-      const savedLang = localStorage.getItem("lumina.settings.lang") as SupportedLanguage;
-      if (savedLang && translations[savedLang]) { // eslint-disable-next-line react-hooks/set-state-in-effect
-        setLanguageState(savedLang);
-      }
+    document.documentElement.lang = language === "zh" ? "zh-CN" : language;
+  }, [language]);
 
-      const savedTheme = localStorage.getItem("lumina.settings.theme") as ThemeMode;
-      if (savedTheme) {
-        setThemeState(savedTheme);
-      }
-
-      const savedAutoSave = localStorage.getItem("lumina.settings.autosave");
-      if (savedAutoSave !== null) {
-        setAutoSaveState(savedAutoSave === "true");
-      }
-
-      const savedSound = localStorage.getItem("lumina.settings.sound");
-      if (savedSound !== null) {
-        setSoundEffectsState(savedSound === "true");
-      }
-
-      const savedFontSize = localStorage.getItem("lumina.settings.fontsize") as "normal" | "large" | "compact";
-      if (savedFontSize) {
-        setFontSizeState(savedFontSize);
-      }
-    } catch {}
-  }, []);
-
-  // Sync theme class to document
   useEffect(() => {
-    if (!isClient) return;
     const root = document.documentElement;
-    const isDark =
-      theme === "dark" ||
-      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    if (isDark) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-  }, [theme, isClient]);
-
-  const setLanguage = (lang: SupportedLanguage) => {
-    setLanguageState(lang);
-    try { localStorage.setItem("lumina.settings.lang", lang); } catch {}
-  };
-
-  const setTheme = (nextTheme: ThemeMode) => {
-    setThemeState(nextTheme);
-    try { localStorage.setItem("lumina.settings.theme", nextTheme); } catch {}
-  };
-
-  const setAutoSave = (val: boolean) => {
-    setAutoSaveState(val);
-    try { localStorage.setItem("lumina.settings.autosave", String(val)); } catch {}
-  };
-
-  const setSoundEffects = (val: boolean) => {
-    setSoundEffectsState(val);
-    try { localStorage.setItem("lumina.settings.sound", String(val)); } catch {}
-  };
-
-  const setFontSize = (size: "normal" | "large" | "compact") => {
-    setFontSizeState(size);
-    try { localStorage.setItem("lumina.settings.fontsize", size); } catch {}
-  };
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const isDark = theme === "dark" || (theme === "system" && media.matches);
+      root.classList.toggle("dark", isDark);
+      root.style.colorScheme = isDark ? "dark" : "light";
+    };
+    applyTheme();
+    if (theme !== "system") return;
+    media.addEventListener("change", applyTheme);
+    return () => media.removeEventListener("change", applyTheme);
+  }, [theme]);
 
   return (
     <SettingsContext.Provider
       value={{
         language,
-        setLanguage,
+        setLanguage: (lang) => writeSetting(LANGUAGE_KEY, lang),
         theme,
-        setTheme,
-        autoSave,
-        setAutoSave,
-        soundEffects,
-        setSoundEffects,
-        fontSize,
-        setFontSize,
+        setTheme: (nextTheme) => writeSetting(THEME_KEY, nextTheme),
         t: translations[language],
-        mounted: isClient,
       }}
     >
       {children}

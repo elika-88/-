@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Ellipsis, PanelLeftClose, Pencil, Search, SquarePen, Trash2, User, LogOut, Sparkles, MessageSquare, Settings } from "lucide-react";
+import { useState } from "react";
+import { Ellipsis, PanelLeftClose, Pencil, Search, SquarePen, Trash2, Sparkles, Settings } from "lucide-react";
 import type { StudySession } from "@/lib/client/sessions";
-import { getStoredUser, clearUser, type UserProfile } from "@/lib/client/auth";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 
@@ -31,12 +29,6 @@ export function HistorySidebar({
   const { t } = useSettings();
   const [search, setSearch] = useState("");
   const [menu, setMenu] = useState<string | null>(null);
-  const [user, setUser] = useState<UserProfile | null>(null);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUser(getStoredUser());
-  }, []);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const visible = [...sessions]
@@ -47,17 +39,11 @@ export function HistorySidebar({
         .includes(search.trim().toLocaleLowerCase())
     );
 
-  const handleLogout = () => {
-    clearUser();
-    setUser(null);
-    setUserMenuOpen(false);
-  };
-
   return (
     <>
       <div className={`gpt-sidebar-container ${collapsed ? "is-collapsed" : "is-expanded"}`}>
         {/* 1. Standby Rail View */}
-        <div className="gpt-rail-content" aria-hidden={!collapsed}>
+        <div className="gpt-rail-content" aria-hidden={!collapsed} inert={!collapsed}>
           <button
             className="gpt-rail-btn brand"
             type="button"
@@ -90,15 +76,6 @@ export function HistorySidebar({
             <button
               className="gpt-rail-btn"
               type="button"
-              title={t.recent}
-              aria-label={t.recent}
-              onClick={onToggleCollapse}
-            >
-              <MessageSquare size={18} />
-            </button>
-            <button
-              className="gpt-rail-btn"
-              type="button"
               title={t.settingsTitle}
               aria-label={t.settingsTitle}
               onClick={() => setSettingsOpen(true)}
@@ -107,27 +84,10 @@ export function HistorySidebar({
             </button>
           </div>
 
-          <div className="gpt-rail-bottom">
-            <Link
-              href={user ? "#" : "/login"}
-              className="gpt-rail-avatar-link"
-              title={user ? user.name : t.guestUser}
-              onClick={(e) => {
-                if (user) {
-                  e.preventDefault();
-                  onToggleCollapse();
-                }
-              }}
-            >
-              <div className="gpt-user-avatar guest small">
-                <User size={15} />
-              </div>
-            </Link>
-          </div>
         </div>
 
         {/* 2. Full Expanded Sidebar View */}
-        <div className="gpt-expanded-content" aria-hidden={collapsed}>
+        <div className="gpt-expanded-content" aria-hidden={collapsed} inert={collapsed}>
           <div className="gpt-brand-row">
             <span className="gpt-brand-title">Lumina</span>
             <div className="gpt-brand-icons">
@@ -185,6 +145,7 @@ export function HistorySidebar({
                   <button
                     className="gpt-chat-btn"
                     type="button"
+                    aria-current={activeId === session.id ? "page" : undefined}
                     title={session.title || t.untitled}
                     onClick={() => {
                       setMenu(null);
@@ -230,54 +191,18 @@ export function HistorySidebar({
             </ul>
           </nav>
 
-          {/* Footer: User Account + Settings Gear Button */}
+          {/* Preferences for the local workspace. */}
           <div className="gpt-sidebar-auth-footer">
             <div className="gpt-footer-user-row">
-              {user ? (
-                <div className="gpt-user-item-wrapper" style={{ flex: 1 }}>
-                  <button
-                    className="gpt-user-footer-btn"
-                    type="button"
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  >
-                    <div className="gpt-user-avatar">
-                      <User size={16} />
-                    </div>
-                    <div className="gpt-user-info">
-                      <span className="gpt-username">{user.name}</span>
-                      <span className="gpt-plan">{user.id}</span>
-                    </div>
-                  </button>
-
-                  {userMenuOpen && (
-                    <div className="gpt-user-dropdown">
-                      <button type="button" onClick={handleLogout}>
-                        <LogOut size={14} /> Log out
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link href="/login" className="gpt-user-footer-btn" style={{ flex: 1 }}>
-                  <div className="gpt-user-avatar guest">
-                    <User size={16} />
-                  </div>
-                  <div className="gpt-user-info">
-                    <span className="gpt-username">{t.guestUser}</span>
-                    <span className="gpt-plan">{t.signInOrRegister}</span>
-                  </div>
-                </Link>
-              )}
-
-              {/* Setting Gear Button */}
               <button
-                className="gpt-gear-btn"
+                className="gpt-nav-item"
                 type="button"
                 title={t.settingsTitle}
                 aria-label={t.settingsTitle}
                 onClick={() => setSettingsOpen(true)}
               >
                 <Settings size={18} />
+                <span>{t.settingsTitle}</span>
               </button>
             </div>
           </div>

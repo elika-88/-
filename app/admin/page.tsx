@@ -12,12 +12,9 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
-  Users,
   FileText,
-  Search,
   Settings,
-  RefreshCw,
-  Sparkles
+  RefreshCw
 } from "lucide-react";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
@@ -32,15 +29,7 @@ type Settings = {
   updatedAt: number | null;
 };
 
-type DbUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  created_at: number;
-};
-
-type AdminTab = "relay" | "users" | "logs";
+type AdminTab = "relay" | "logs";
 
 export default function AdminPage() {
   const { t } = useSettings();
@@ -54,9 +43,7 @@ export default function AdminPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(true);
   const [audit, setAudit] = useState<{ event: string; created_at: number }[]>([]);
-  const [users, setUsers] = useState<DbUser[]>([]);
   const [activeTab, setActiveTab] = useState<AdminTab>("relay");
-  const [userSearch, setUserSearch] = useState("");
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   // Model Fetcher State (like ccswitch)
@@ -72,7 +59,6 @@ export default function AdminPage() {
     setSetupError(data.setupError ?? "");
     setSettings(data.settings ?? null);
     setAudit(data.audit ?? []);
-    setUsers(data.users ?? []);
     if (response.status !== 401 && !response.ok) {
       throw new Error(data.error ?? "Could not load settings.");
     }
@@ -88,7 +74,6 @@ export default function AdminPage() {
         setSetupError(data.setupError ?? "");
         setSettings(data.settings ?? null);
         setAudit(data.audit ?? []);
-        setUsers(data.users ?? []);
         if (data.error) setErrorMsg(data.error);
       })
       .catch(() => {
@@ -103,6 +88,7 @@ export default function AdminPage() {
   async function handleFetchModels() {
     if (!settings?.baseURL) return;
     setFetchingModels(true);
+    setFetchedModels([]);
     setModelFetchMsg("");
     setErrorMsg("");
 
@@ -206,7 +192,7 @@ export default function AdminPage() {
               <input
                 id="admin-password"
                 type="password"
-                placeholder="Enter password (default: 123123)"
+                placeholder="Enter administrator password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -220,21 +206,10 @@ export default function AdminPage() {
               {busy ? "Authenticating..." : "Continue"}
             </button>
           </form>
-
-          <div className="gpt-auth-footer-prompt">
-            Default password is <span className="gpt-code-tag">123123</span>
-          </div>
         </div>
       </div>
     );
   }
-
-  // Filter real users from database
-  const filteredUsers = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase())
-  );
 
   return (
     <div className="gpt-admin-app">
@@ -297,14 +272,6 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                className={`gpt-admin-nav-item ${activeTab === "users" ? "active" : ""}`}
-                onClick={() => setActiveTab("users")}
-              >
-                <Users size={16} />
-                <span>{t.userDirTab}</span>
-              </button>
-              <button
-                type="button"
                 className={`gpt-admin-nav-item ${activeTab === "logs" ? "active" : ""}`}
                 onClick={() => setActiveTab("logs")}
               >
@@ -312,10 +279,6 @@ export default function AdminPage() {
                 <span>{t.auditLogsTab}</span>
               </button>
             </nav>
-          </div>
-
-          <div className="gpt-admin-sidebar-footer">
-            <div className="gpt-admin-version-tag">{t.versionLabel}</div>
           </div>
         </aside>
 
@@ -381,8 +344,12 @@ export default function AdminPage() {
                       className="gpt-admin-text-input"
                       placeholder="https://api.openai.com/v1"
                       value={settings.baseURL}
-                      onChange={(e) => setSettings({ ...settings, baseURL: e.target.value })}
-                      disabled={busy}
+                      onChange={(e) => {
+                        setSettings({ ...settings, baseURL: e.target.value });
+                        setFetchedModels([]);
+                        setModelFetchMsg("");
+                      }}
+                      disabled={busy || fetchingModels}
                     />
                   </div>
                   <p className="gpt-admin-help-text">
@@ -407,9 +374,13 @@ export default function AdminPage() {
                       className="gpt-admin-text-input"
                       placeholder={settings.hasApiKey ? "••••••••••••••••••••••••" : "sk-..."}
                       value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
+                      onChange={(e) => {
+                        setApiKey(e.target.value);
+                        setFetchedModels([]);
+                        setModelFetchMsg("");
+                      }}
                       maxLength={4096}
-                      disabled={busy}
+                      disabled={busy || fetchingModels}
                     />
                   </div>
                   <p className="gpt-admin-help-text">{t.apiKeyDesc}</p>
@@ -438,7 +409,6 @@ export default function AdminPage() {
                   {fetchedModels.length > 0 && (
                     <div className="gpt-model-picker-area">
                       <div className="gpt-model-picker-title">
-                        <Sparkles size={13} />
                         <span>Available upstream models (click to apply):</span>
                       </div>
                       <div className="gpt-model-chips-container">
@@ -497,7 +467,7 @@ export default function AdminPage() {
               {/* Status Footer */}
               <div className="gpt-admin-status-bar">
                 <div>
-                  Source: <strong>{settings.source}</strong> · Revision <strong>#{settings.revision}</strong> · Storage: <span className="gpt-badge role" style={{ marginLeft: 6 }}>{settings.source === "database" ? "SQLite / Turso Ready" : "Environment"}</span>
+                  Source: <strong>{settings.source}</strong> · Revision <strong>#{settings.revision}</strong>
                 </div>
                 {settings.updatedAt && (
                   <div>
@@ -508,81 +478,7 @@ export default function AdminPage() {
             </section>
           )}
 
-          {/* TAB 2: User Directory */}
-          {activeTab === "users" && (
-            <section className="gpt-admin-panel">
-              <div className="gpt-admin-panel-header">
-                <div>
-                  <h2>{t.userDirTab}</h2>
-                  <p>Real-time registered users list stored in server database.</p>
-                </div>
-              </div>
-
-              <div className="gpt-admin-table-toolbar">
-                <div className="gpt-admin-search-box">
-                  <Search size={15} />
-                  <input
-                    type="search"
-                    placeholder={t.searchUsers}
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                  />
-                </div>
-                <div className="gpt-admin-toolbar-stats">
-                  {t.totalUsers}: {filteredUsers.length}
-                </div>
-              </div>
-
-              <div className="gpt-admin-table-container">
-                <table className="gpt-admin-table">
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Role</th>
-                      <th>User ID</th>
-                      <th>Registered At</th>
-                      <th style={{ textAlign: "right" }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="gpt-table-empty">
-                          {t.noUsersYet}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredUsers.map((u) => (
-                        <tr key={u.id}>
-                          <td>
-                            <div className="gpt-table-user-cell">
-                              <div className="gpt-user-avatar guest" style={{ width: 30, height: 30, fontSize: 12 }}>
-                                {u.name.slice(0, 1).toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="gpt-table-name">{u.name}</div>
-                                <div className="gpt-table-sub">{u.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="gpt-badge role">{u.role}</span>
-                          </td>
-                          <td className="gpt-table-code">{u.id}</td>
-                          <td className="gpt-table-sub">{new Date(u.created_at).toLocaleString()}</td>
-                          <td style={{ textAlign: "right" }}>
-                            <span className="gpt-badge status active">Active</span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {/* TAB 3: Audit & System Logs */}
+          {/* Audit logs */}
           {activeTab === "logs" && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
@@ -598,14 +494,12 @@ export default function AdminPage() {
                     <tr>
                       <th>Timestamp</th>
                       <th>Event Type</th>
-                      <th>Origin</th>
-                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {audit.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="gpt-table-empty">
+                        <td colSpan={2} className="gpt-table-empty">
                           {t.noLogsYet}
                         </td>
                       </tr>
@@ -617,12 +511,12 @@ export default function AdminPage() {
                           </td>
                           <td>
                             <strong style={{ fontWeight: 500 }}>
-                              {entry.event === "login" ? "Administrator Signed In" : "AI Relay Configuration Updated"}
+                              {entry.event === "login"
+                                ? "Administrator Signed In"
+                                : entry.event === "settings_updated"
+                                ? "AI Relay Configuration Updated"
+                                : entry.event}
                             </strong>
-                          </td>
-                          <td className="gpt-table-sub">127.0.0.1 (Local Session)</td>
-                          <td>
-                            <span className="gpt-badge status active">Success</span>
                           </td>
                         </tr>
                       ))

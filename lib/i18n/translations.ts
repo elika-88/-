@@ -17,7 +17,6 @@ export type Translations = {
   generalTab: string;
   appearanceTab: string;
   studyModelTab: string;
-  aboutTab: string;
   themeLabel: string;
   themeDesc: string;
   themeLight: string;
@@ -43,23 +42,10 @@ export type Translations = {
   flashcardsTab: string;
   saveChanges: string;
   close: string;
-  autoSaveLabel: string;
-  autoSaveDesc: string;
-  soundEffectsLabel: string;
-  soundEffectsDesc: string;
-  fontSizeLabel: string;
-  fontSizeDesc: string;
-  fontNormal: string;
-  fontLarge: string;
-  fontCompact: string;
   exportDataLabel: string;
   exportDataDesc: string;
+  exportDataError: string;
   exportBtn: string;
-  clearAllHistory: string;
-  clearAllHistoryDesc: string;
-  clearBtn: string;
-  versionLabel: string;
-  licenseLabel: string;
   adminConsole: string;
   backToStudy: string;
   signOut: string;
@@ -102,7 +88,6 @@ export const translations: Record<SupportedLanguage, Translations> = {
     generalTab: "General",
     appearanceTab: "Appearance",
     studyModelTab: "Learning & Data",
-    aboutTab: "About",
     themeLabel: "Theme",
     themeDesc: "Customize how Lumina looks on your device",
     themeLight: "Light",
@@ -128,23 +113,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     flashcardsTab: "Flashcards",
     saveChanges: "Done",
     close: "Close",
-    autoSaveLabel: "Auto-save drafts",
-    autoSaveDesc: "Automatically retain lecture drafts in browser memory",
-    soundEffectsLabel: "Interactive sounds",
-    soundEffectsDesc: "Play soft feedback tones when flipping cards or answering quizzes",
-    fontSizeLabel: "Content font size",
-    fontSizeDesc: "Adjust text scale for reading summaries and study cards",
-    fontNormal: "Default",
-    fontLarge: "Comfortable",
-    fontCompact: "Compact",
     exportDataLabel: "Export study sessions",
-    exportDataDesc: "Download all your lecture kits as a JSON backup file",
+    exportDataDesc: "Download lectures saved in this browser as a JSON backup",
+    exportDataError: "Could not export saved lectures. Check browser storage access and try again.",
     exportBtn: "Export JSON",
-    clearAllHistory: "Delete all saved data",
-    clearAllHistoryDesc: "Permanently erase local history and learning materials",
-    clearBtn: "Clear all",
-    versionLabel: "Lumina AI Study Kit v1.2.0",
-    licenseLabel: "MIT Open Source License · Built for Students & Educators",
     adminConsole: "Admin Console",
     backToStudy: "Study Workspace",
     signOut: "Sign out",
@@ -156,7 +128,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     gatewayUrlDesc: "Custom relay, reverse proxy or official OpenAI endpoint.",
     apiKeyLabel: "Authorization API Key",
     apiKeyDesc: "Encrypted with AES-256-GCM in server database.",
-    activeInVault: "Active in Vault ✓",
+    activeInVault: "Key configured",
     unset: "Unset",
     modelLabel: "Model Identifier",
     modelDesc: "Supports gpt-5.5, gpt-4o, or upstream custom models.",
@@ -185,7 +157,6 @@ export const translations: Record<SupportedLanguage, Translations> = {
     generalTab: "通用",
     appearanceTab: "外观",
     studyModelTab: "学习与数据",
-    aboutTab: "关于",
     themeLabel: "主题模式",
     themeDesc: "自定义 Lumina 在您设备上的视觉呈现",
     themeLight: "浅色明亮",
@@ -211,23 +182,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     flashcardsTab: "记忆闪卡",
     saveChanges: "完成",
     close: "关闭",
-    autoSaveLabel: "自动保存草稿",
-    autoSaveDesc: "在输入内容时自动实时保存在浏览器中",
-    soundEffectsLabel: "操作音效反馈",
-    soundEffectsDesc: "在翻转闪卡或提交测验时提供柔和的声音反馈",
-    fontSizeLabel: "正文字体大小",
-    fontSizeDesc: "调节讲座内容与闪卡文字的阅读字号",
-    fontNormal: "标准",
-    fontLarge: "放大舒适",
-    fontCompact: "紧凑",
     exportDataLabel: "导出全部数据",
-    exportDataDesc: "将当前所有已保存的讲座与学习包下载为 JSON 备份",
+    exportDataDesc: "将此浏览器中保存的讲座下载为 JSON 备份",
+    exportDataError: "无法导出已保存的讲座，请检查浏览器存储权限后重试。",
     exportBtn: "导出备份",
-    clearAllHistory: "清除本地所有记录",
-    clearAllHistoryDesc: "彻底清空此浏览器中存储的讲座与答题记录",
-    clearBtn: "清空全部",
-    versionLabel: "Lumina AI 智能讲座研学系统 v1.2.0",
-    licenseLabel: "MIT 开源协议 · 专为高效学习与备考设计",
     adminConsole: "系统管理后台",
     backToStudy: "学习工作台",
     signOut: "退出登录",
@@ -239,7 +197,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     gatewayUrlDesc: "支持第三方中转站、反向代理或 OpenAI 官方地址。",
     apiKeyLabel: "授权 API 密钥",
     apiKeyDesc: "已在服务端使用 AES-256-GCM 高度加密存储。",
-    activeInVault: "安全库已激活 ✓",
+    activeInVault: "已配置密钥",
     unset: "未设置",
     modelLabel: "模型标识 (Model ID)",
     modelDesc: "支持 gpt-5.5, gpt-4o 或自定义大模型名称。",
@@ -268,7 +226,6 @@ export const translations: Record<SupportedLanguage, Translations> = {
     generalTab: "Основные",
     appearanceTab: "Внешний вид",
     studyModelTab: "Обучение и данные",
-    aboutTab: "О приложении",
     themeLabel: "Тема оформления",
     themeDesc: "Настройте внешний вид Lumina на вашем устройстве",
     themeLight: "Светлая",
@@ -294,23 +251,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     flashcardsTab: "Карточки",
     saveChanges: "Готово",
     close: "Закрыть",
-    autoSaveLabel: "Автосохранение черновиков",
-    autoSaveDesc: "Автоматически сохранять текст лекции в браузере",
-    soundEffectsLabel: "Звуковые эффекты",
-    soundEffectsDesc: "Воспроизводить мягкий звук при перевороте карточек",
-    fontSizeLabel: "Размер шрифта",
-    fontSizeDesc: "Масштаб текста для комфортного чтения материалов",
-    fontNormal: "Обычный",
-    fontLarge: "Увеличенный",
-    fontCompact: "Компактный",
     exportDataLabel: "Экспорт данных",
-    exportDataDesc: "Скачать все сохраненные материалы в формате JSON",
+    exportDataDesc: "Скачать лекции, сохранённые в этом браузере, в формате JSON",
+    exportDataError: "Не удалось экспортировать лекции. Проверьте доступ к хранилищу браузера и повторите попытку.",
     exportBtn: "Экспорт JSON",
-    clearAllHistory: "Очистить локальную историю",
-    clearAllHistoryDesc: "Удалить все сохраненные лекции из браузера",
-    clearBtn: "Очистить все",
-    versionLabel: "Lumina AI Study Kit v1.2.0",
-    licenseLabel: "Лицензия MIT · Создано для студентов и преподавателей",
     adminConsole: "Панель администратора",
     backToStudy: "Рабочая область",
     signOut: "Выйти",
@@ -322,7 +266,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     gatewayUrlDesc: "Сторонний прокси, реле или официальный OpenAI URL.",
     apiKeyLabel: "Ключ API авторизации",
     apiKeyDesc: "Зашифровано с помощью AES-256-GCM в базе данных.",
-    activeInVault: "Активен в хранилище ✓",
+    activeInVault: "Ключ настроен",
     unset: "Не установлен",
     modelLabel: "Идентификатор модели",
     modelDesc: "Поддерживает gpt-5.5, gpt-4o или пользовательские модели.",
@@ -351,7 +295,6 @@ export const translations: Record<SupportedLanguage, Translations> = {
     generalTab: "Жалпы",
     appearanceTab: "Сыртқы көрініс",
     studyModelTab: "Оқу және деректер",
-    aboutTab: "Бағдарлама туралы",
     themeLabel: "Тақырып түрі",
     themeDesc: "Lumina-ның құрылғыңыздағы сыртқы көрінісін баптаңыз",
     themeLight: "Ашық түсті",
@@ -377,23 +320,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     flashcardsTab: "Флэш-карталар",
     saveChanges: "Дайын",
     close: "Жабу",
-    autoSaveLabel: "Нобайларды автоматты сақтау",
-    autoSaveDesc: "Мәтінді браузер жадында автоматты түрде сақтау",
-    soundEffectsLabel: "Дыбыстық кері байланыс",
-    soundEffectsDesc: "Карточкаларды аударғанда дыбыстық белгі беру",
-    fontSizeLabel: "Қаріп өлшемі",
-    fontSizeDesc: "Ыңғайлы оқу үшін мәтін өлшемін баптау",
-    fontNormal: "Қалыпты",
-    fontLarge: "Үлкенірек",
-    fontCompact: "Ықшам",
     exportDataLabel: "Деректерді экспорттау",
-    exportDataDesc: "Барлық оқу материалдарын JSON файлы түрінде жүктеп алу",
+    exportDataDesc: "Осы браузерде сақталған дәрістерді JSON файлы ретінде жүктеп алу",
+    exportDataError: "Дәрістерді экспорттау мүмкін болмады. Браузер жадына рұқсатты тексеріп, қайталап көріңіз.",
     exportBtn: "Экспорттау",
-    clearAllHistory: "Барлық деректерді өшіру",
-    clearAllHistoryDesc: "Осы құрылғыдағы барлық сақталған деректерді толық тазарту",
-    clearBtn: "Барлығын өшіру",
-    versionLabel: "Lumina AI Study Kit v1.2.0",
-    licenseLabel: "MIT ашық лицензиясы · Студенттер мен оқытушыларға арналған",
     adminConsole: "Әкімшілік басқару панелі",
     backToStudy: "Жұмыс кеңістігі",
     signOut: "Шығу",
@@ -405,7 +335,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     gatewayUrlDesc: "Үшінші тарап проксиі немесе ресми OpenAI түйіні.",
     apiKeyLabel: "Авторизациялық API кілті",
     apiKeyDesc: "Деректер қорында AES-256-GCM арқылы шифрланған.",
-    activeInVault: "Қоймада белсенді ✓",
+    activeInVault: "Кілт бапталған",
     unset: "Орнатылмаған",
     modelLabel: "Модель идентификаторы",
     modelDesc: "gpt-5.5, gpt-4o немесе өзге модельдерді қолдайды.",

@@ -340,22 +340,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   color: #d32f2f;
 }
 
-.gpt-user-footer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 8px;
-  margin-top: 8px;
-  border-top: 1px solid #eaeaea;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.gpt-user-footer:hover {
-  background: #ececec;
-}
-
 .gpt-user-avatar {
   width: 32px;
   height: 32px;
@@ -365,38 +349,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-}
-
-.gpt-user-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.gpt-username {
-  font-size: 13.5px;
-  font-weight: 500;
-  line-height: 1.2;
-}
-
-.gpt-plan {
-  font-size: 11px;
-  color: #8e8e8e;
-  line-height: 1.2;
-}
-.gpt-clean-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 10px 4px;
-  margin-top: 8px;
-  border-top: 1px solid #eaeaea;
-  font-size: 12px;
-  color: #8e8e8e;
-}
-.gpt-clean-footer svg {
-  color: #8e8e8e;
   flex-shrink: 0;
 }
 /* ==================== ChatGPT Auth Pages Style ==================== */
@@ -412,13 +364,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 
 .gpt-auth-header {
   margin-bottom: 24px;
-}
-
-.gpt-auth-logo {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #0d0d0d;
 }
 
 .gpt-auth-box {
@@ -473,18 +418,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   color: #212121;
 }
 
-.gpt-auth-label-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.gpt-auth-forgot {
-  font-size: 12px;
-  color: #10a37f;
-  text-decoration: none;
-}
-
 .gpt-auth-field input {
   width: 100%;
   height: 48px;
@@ -517,99 +450,11 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 .gpt-auth-submit:hover {
   background: #0d8a6a;
 }
-
-.gpt-auth-footer-prompt {
-  margin-top: 24px;
-  text-align: center;
-  font-size: 13.5px;
-  color: #555555;
-}
-
-.gpt-auth-link {
-  color: #10a37f;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.gpt-auth-link:hover {
-  text-decoration: underline;
-}
 .gpt-sidebar-auth-footer {
   margin-top: 8px;
   border-top: 1px solid var(--border-color, #eaeaea);
   padding-top: 8px;
   position: relative;
-}
-
-.gpt-user-item-wrapper {
-  position: relative;
-}
-
-.gpt-user-footer-btn, .gpt-login-footer-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  text-decoration: none;
-  color: #0d0d0d;
-  transition: background 0.15s;
-  background: transparent;
-  border: none;
-  text-align: left;
-}
-
-.gpt-user-footer-btn:hover, .gpt-login-footer-btn:hover {
-  background: #ececec;
-}
-
-.gpt-login-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #e2e8f0;
-  color: #475569;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.gpt-user-more-icon {
-  margin-left: auto;
-  color: #8e8e8e;
-}
-
-.gpt-user-dropdown {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 4px;
-  z-index: 80;
-}
-
-.gpt-user-dropdown button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: #d32f2f;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.gpt-user-dropdown button:hover {
-  background: #fee2e2;
 }
 .gpt-user-avatar.guest {
   background: #ececec;
@@ -635,14 +480,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 
 .sidebar-collapsed .open-sidebar {
   display: none; /* Already have rail to control */
-}
-
-.gpt-rail-sidebar {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-  width: 100%;
 }
 
 .gpt-rail-icons {
@@ -677,16 +514,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   color: #0d0d0d;
 }
 
-.gpt-rail-bottom {
-  margin-top: auto;
-  padding-bottom: 6px;
-}
-
-.gpt-rail-avatar-link {
-  display: block;
-  text-decoration: none;
-}
-
 .gpt-user-avatar.small {
   width: 34px;
   height: 34px;
@@ -715,6 +542,12 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 
 .sidebar-collapsed .workspace {
   margin-left: 54px;
+}
+
+@media (max-width: 767px) {
+  .workspace,
+  .sidebar-collapsed .workspace { margin-left: 0; }
+  .sidebar-collapsed .open-sidebar { display: inline-flex; }
 }
 
 .gpt-sidebar-container {
@@ -805,16 +638,13 @@ html.dark .lecture-sidebar {
 
 html.dark .gpt-brand-row,
 html.dark .gpt-nav-item,
-html.dark .gpt-chat-btn,
-html.dark .gpt-user-username,
-html.dark .gpt-user-footer-btn {
+html.dark .gpt-chat-btn {
   color: #ececec !important;
 }
 
 html.dark .gpt-nav-item:hover,
 html.dark .gpt-chat-item:hover,
 html.dark .gpt-chat-item.active,
-html.dark .gpt-user-footer-btn:hover,
 html.dark .gpt-rail-btn:hover,
 html.dark .gpt-icon-btn:hover {
   background-color: #212121 !important;
@@ -1012,17 +842,6 @@ html.dark .gpt-popover-menu button:hover {
   margin: 0;
 }
 
-.gpt-setting-select {
-  height: 38px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-modal);
-  color: var(--text-main);
-  padding: 0 10px;
-  font-size: 13px;
-  outline: none;
-}
-
 /* Theme Selector Grid */
 .gpt-theme-grid {
   display: grid;
@@ -1058,50 +877,6 @@ html.dark .gpt-popover-menu button:hover {
   background: var(--hover-bg);
 }
 
-/* Toggle Switch */
-.gpt-toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-  flex-shrink: 0;
-}
-
-.gpt-toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.gpt-toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background-color: #ccc;
-  border-radius: 24px;
-  transition: 0.2s;
-}
-
-.gpt-toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  border-radius: 50%;
-  transition: 0.2s;
-}
-
-.gpt-toggle-switch input:checked + .gpt-toggle-slider {
-  background-color: #10a37f;
-}
-
-.gpt-toggle-switch input:checked + .gpt-toggle-slider:before {
-  transform: translateX(20px);
-}
-
 .gpt-secondary-btn {
   display: inline-flex;
   align-items: center;
@@ -1120,26 +895,6 @@ html.dark .gpt-popover-menu button:hover {
 
 .gpt-secondary-btn:hover {
   background: var(--hover-bg);
-}
-
-.gpt-danger-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: 1px solid #fee2e2;
-  background: #fef2f2;
-  color: #dc2626;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.gpt-danger-btn:hover {
-  background: #fecaca;
 }
 
 .text-danger {
@@ -1170,59 +925,6 @@ html.dark .gpt-popover-menu button:hover {
   background: #0d8a6a;
 }
 
-.gpt-about-card {
-  text-align: center;
-  padding: 30px 16px;
-}
-
-.gpt-about-brand {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 6px;
-}
-
-.gpt-about-version {
-  font-size: 13px;
-  color: #10a37f;
-  font-weight: 500;
-  margin-bottom: 12px;
-}
-
-.gpt-about-desc {
-  font-size: 12.5px;
-  color: var(--text-sub);
-}
-
-/* Gear Settings Button next to user in sidebar */
-.gpt-gear-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-  color: #676767;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-
-.gpt-gear-btn:hover {
-  background: #dedede;
-  color: #0d0d0d;
-}
-
-html.dark .gpt-gear-btn {
-  color: #a3a3a3;
-}
-
-html.dark .gpt-gear-btn:hover {
-  background: #2a2a2a;
-  color: #ffffff;
-}
 .gpt-footer-user-row {
   display: flex;
   align-items: center;
@@ -1448,10 +1150,6 @@ html.dark .gpt-custom-select-item.selected {
 html.dark .gpt-sidebar-auth-footer {
   border-top-color: #2e2e2e !important;
 }
-
-html.dark .gpt-clean-footer {
-  border-top-color: #2e2e2e !important;
-}
 /* ==================== ChatGPT Style Custom Rounded Inputs ==================== */
 .text-field {
   width: 100%;
@@ -1590,10 +1288,6 @@ html.dark .gpt-auth-page {
   color: #ececec !important;
 }
 
-html.dark .gpt-auth-logo {
-  color: #ffffff !important;
-}
-
 html.dark .gpt-auth-title {
   color: #ffffff !important;
 }
@@ -1615,10 +1309,6 @@ html.dark .gpt-auth-field input {
 html.dark .gpt-auth-field input:focus {
   border-color: #10a37f !important;
   box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.3) !important;
-}
-
-html.dark .gpt-auth-footer-prompt {
-  color: #a3a3a3 !important;
 }
 
 html.dark .gpt-auth-error {
@@ -1650,328 +1340,6 @@ html.dark .gpt-admin-back-link:hover {
   color: #ffffff;
 }
 
-.gpt-admin-shield-badge {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #ecfdf5;
-  color: #10a37f;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-html.dark .gpt-admin-shield-badge {
-  background: #064e3b;
-  color: #34d399;
-}
-
-.gpt-code-tag {
-  background: #f4f4f5;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: monospace;
-  color: #111111;
-  font-weight: 600;
-}
-
-html.dark .gpt-code-tag {
-  background: #27272a;
-  color: #f4f4f5;
-}
-
-/* Authenticated Admin Dashboard */
-.gpt-admin-dashboard-page {
-  min-height: 100dvh;
-  background-color: var(--background, #fafafa);
-  color: var(--foreground, #111111);
-  padding: 32px 20px 80px;
-}
-
-.gpt-admin-container {
-  max-width: 780px;
-  margin: 0 auto;
-}
-
-.gpt-admin-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
-}
-
-.gpt-admin-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.gpt-admin-back-btn:hover {
-  color: #000;
-}
-
-html.dark .gpt-admin-back-btn {
-  color: #a3a3a3;
-}
-
-html.dark .gpt-admin-back-btn:hover {
-  color: #fff;
-}
-
-.gpt-admin-signout-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid #e4e4e7;
-  background: #fff;
-  color: #dc2626;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.gpt-admin-signout-btn:hover {
-  background: #fef2f2;
-}
-
-html.dark .gpt-admin-signout-btn {
-  background: #212121;
-  border-color: #383838;
-  color: #f87171;
-}
-
-html.dark .gpt-admin-signout-btn:hover {
-  background: #391515;
-}
-
-.gpt-admin-hero {
-  margin-bottom: 24px;
-}
-
-.gpt-admin-hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #10a37f;
-  background: #ecfdf5;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  margin-bottom: 10px;
-}
-
-html.dark .gpt-admin-hero-badge {
-  background: #064e3b;
-  color: #34d399;
-}
-
-.gpt-admin-hero h1 {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0 0 6px;
-}
-
-.gpt-admin-hero p {
-  color: #71717a;
-  font-size: 14.5px;
-  margin: 0;
-}
-
-html.dark .gpt-admin-hero p {
-  color: #a1a1aa;
-}
-
-.gpt-admin-alert {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  font-size: 13.5px;
-  margin-bottom: 20px;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.gpt-admin-alert.success {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #065f46;
-}
-
-html.dark .gpt-admin-alert.success {
-  background: #064e3b;
-  border-color: #047857;
-  color: #6ee7b7;
-}
-
-.gpt-admin-alert.error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-}
-
-html.dark .gpt-admin-alert.error {
-  background: #391515;
-  border-color: #5c1d1d;
-  color: #fca5a5;
-}
-
-.gpt-admin-card {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-  margin-bottom: 24px;
-}
-
-html.dark .gpt-admin-card {
-  background: #212121;
-  border-color: #333333;
-  box-shadow: none;
-}
-
-.gpt-admin-fields {
-  display: grid;
-  gap: 20px;
-}
-
-.gpt-admin-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.gpt-admin-field label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: #18181b;
-}
-
-html.dark .gpt-admin-field label {
-  color: #f4f4f5;
-}
-
-.gpt-admin-field small {
-  font-size: 12px;
-  color: #71717a;
-}
-
-html.dark .gpt-admin-field small {
-  color: #a1a1aa;
-}
-
-.gpt-admin-input, .gpt-admin-select {
-  width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  border: 1px solid #d4d4d8;
-  border-radius: 10px;
-  font-size: 14px;
-  background: #ffffff;
-  color: #111111;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-html.dark .gpt-admin-input, html.dark .gpt-admin-select {
-  background: #18181b;
-  border-color: #3f3f46;
-  color: #f4f4f5;
-}
-
-.gpt-admin-input:focus, .gpt-admin-select:focus {
-  border-color: #10a37f;
-  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.2);
-}
-
-.gpt-admin-meta-row {
-  display: flex;
-  gap: 18px;
-  padding: 16px 0;
-  margin-top: 16px;
-  border-top: 1px solid #f4f4f5;
-  font-size: 12.5px;
-  color: #71717a;
-}
-
-html.dark .gpt-admin-meta-row {
-  border-top-color: #27272a;
-  color: #a1a1aa;
-}
-
-.gpt-admin-submit-row {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.gpt-admin-card.audit {
-  padding: 20px 24px;
-}
-
-.gpt-admin-card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14.5px;
-  font-weight: 600;
-  margin-bottom: 14px;
-}
-
-.gpt-admin-empty-audit {
-  font-size: 13px;
-  color: #71717a;
-  margin: 0;
-}
-
-.gpt-admin-audit-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.gpt-admin-audit-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: #fafafa;
-  border-radius: 8px;
-  font-size: 12.5px;
-}
-
-html.dark .gpt-admin-audit-list li {
-  background: #18181b;
-}
-
-.gpt-audit-time {
-  color: #71717a;
-  font-family: monospace;
-}
-
-html.dark .gpt-audit-time {
-  color: #a1a1aa;
-}
-
-.gpt-audit-event {
-  font-weight: 500;
-}
 /* ==================== ChatGPT Workspace Admin Console ==================== */
 .gpt-admin-app {
   min-height: 100dvh;
@@ -2156,21 +1524,6 @@ html.dark .gpt-admin-nav-item:hover {
 html.dark .gpt-admin-nav-item.active {
   background: #262626;
   color: #ffffff;
-}
-
-.gpt-admin-sidebar-footer {
-  margin-top: auto;
-  padding: 10px;
-  border-top: 1px solid var(--border-color, #eaeaea);
-}
-
-html.dark .gpt-admin-sidebar-footer {
-  border-top-color: #2e2e2e;
-}
-
-.gpt-admin-version-tag {
-  font-size: 11.5px;
-  color: #999;
 }
 
 /* Right Main Area */
@@ -2384,48 +1737,6 @@ html.dark .gpt-admin-toast.error {
 }
 
 /* Tables */
-.gpt-admin-table-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.gpt-admin-search-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 280px;
-}
-
-.gpt-admin-search-box svg {
-  position: absolute;
-  left: 12px;
-  color: #8e8e8e;
-}
-
-.gpt-admin-search-box input {
-  width: 100%;
-  height: 38px;
-  padding: 0 12px 0 34px;
-  border: 1px solid var(--border-color, #d4d4d8);
-  border-radius: 9999px;
-  font-size: 13px;
-  background: var(--bg-modal, #ffffff);
-  color: var(--text-main, #111111);
-  outline: none;
-}
-
-html.dark .gpt-admin-search-box input {
-  background: #1e1e1e;
-  border-color: #333333;
-  color: #f4f4f5;
-}
-
-.gpt-admin-toolbar-stats {
-  font-size: 13px;
-  color: #71717a;
-}
 
 .gpt-admin-table-container {
   background: var(--bg-modal, #ffffff);
@@ -2472,22 +1783,6 @@ html.dark .gpt-admin-table td {
   border-bottom-color: #27272a;
 }
 
-.gpt-table-user-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.gpt-table-name {
-  font-weight: 500;
-  color: var(--text-main, #111111);
-}
-
-.gpt-table-sub {
-  font-size: 12.5px;
-  color: #71717a;
-}
-
 .gpt-table-code {
   font-family: monospace;
   font-size: 12.5px;
@@ -2505,38 +1800,6 @@ html.dark .gpt-table-code {
 }
 
 /* Badges */
-.gpt-badge {
-  display: inline-flex;
-  padding: 3px 8px;
-  border-radius: 9999px;
-  font-size: 11.5px;
-  font-weight: 500;
-}
-
-.gpt-badge.role {
-  background: #f4f4f5;
-  color: #52525b;
-}
-
-html.dark .gpt-badge.role {
-  background: #27272a;
-  color: #d4d4d8;
-}
-
-.gpt-badge.status.active {
-  background: #ecfdf5;
-  color: #059669;
-}
-
-html.dark .gpt-badge.status.active {
-  background: #064e3b;
-  color: #34d399;
-}
-
-.gpt-badge.status.invited {
-  background: #eff6ff;
-  color: #2563eb;
-}
 
 .gpt-icon-action-btn {
   display: inline-flex;
@@ -2556,101 +1819,6 @@ html.dark .gpt-badge.status.active {
   color: #111111;
 }
 
-/* Metrics Grid */
-.gpt-admin-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-.gpt-metric-card {
-  background: var(--bg-modal, #ffffff);
-  border: 1px solid var(--border-color, #e4e4e7);
-  border-radius: 14px;
-  padding: 20px;
-}
-
-html.dark .gpt-metric-card {
-  background: #1e1e1e;
-  border-color: #2e2e2e;
-}
-
-.gpt-metric-title {
-  font-size: 12.5px;
-  color: #71717a;
-  margin-bottom: 8px;
-}
-
-.gpt-metric-value {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--text-main, #111111);
-}
-
-.gpt-metric-hint {
-  font-size: 11.5px;
-  color: #10a37f;
-  margin-top: 6px;
-}
-
-.gpt-admin-card-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  border: 1px dashed var(--border-color, #d4d4d8);
-  border-radius: 14px;
-  text-align: center;
-}
-
-.gpt-admin-card-placeholder h3 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 6px;
-}
-
-.gpt-admin-card-placeholder p {
-  font-size: 13px;
-  color: #71717a;
-  max-width: 420px;
-  margin: 0;
-}
-
-/* Security Cards */
-.gpt-admin-card-row {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.gpt-admin-sec-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px;
-  background: var(--bg-modal, #ffffff);
-  border: 1px solid var(--border-color, #e4e4e7);
-  border-radius: 12px;
-}
-
-html.dark .gpt-admin-sec-item {
-  background: #1e1e1e;
-  border-color: #2e2e2e;
-}
-
-.gpt-sec-info strong {
-  font-size: 14px;
-  display: block;
-  margin-bottom: 2px;
-}
-
-.gpt-sec-info p {
-  font-size: 12.5px;
-  color: #71717a;
-  margin: 0;
-}
 /* ==================== ccswitch Style Model Fetcher & Chips ==================== */
 .gpt-fetch-models-btn {
   display: inline-flex;

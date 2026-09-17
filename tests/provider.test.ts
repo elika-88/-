@@ -45,13 +45,13 @@ describe("custom provider validation", () => {
 });
 
 describe("server configuration isolation", () => {
-  it("reads the API format only from the server environment", () => {
+  it("reads the API format only from the server environment", async () => {
     vi.stubEnv("OPENAI_API_FORMAT", undefined);
-    expect(readApiFormat()).toBe("responses");
+    expect(await readApiFormat()).toBe("responses");
     vi.stubEnv("OPENAI_API_FORMAT", "chat_completions");
-    expect(readApiFormat()).toBe("chat_completions");
+    expect(await readApiFormat()).toBe("chat_completions");
     vi.stubEnv("OPENAI_API_FORMAT", "invalid");
-    expect(() => readApiFormat()).toThrow();
+    await expect(readApiFormat()).rejects.toThrow();
   });
 
   it("connects to a server-configured relay with the exact gpt-5.5 model", async () => {
@@ -61,7 +61,7 @@ describe("server configuration isolation", () => {
     vi.stubEnv("OPENAI_API_FORMAT", "chat_completions");
     const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ index: 0, message: { role: "assistant", content: "Hello" }, finish_reason: "stop" }] }));
     vi.stubGlobal("fetch", fetch);
-    const { client, model, apiFormat } = createOpenAIClient();
+    const { client, model, apiFormat } = await createOpenAIClient();
     expect(apiFormat).toBe("chat_completions");
     await client.chat.completions.create({ model, messages: [{ role: "user", content: "Test transport only" }] });
     const [url, options] = fetch.mock.calls[0] as [string, RequestInit];
@@ -71,22 +71,22 @@ describe("server configuration isolation", () => {
     expect(options.redirect).toBe("error");
   });
 
-  it("uses environment defaults only when no custom config is supplied", () => {
+  it("uses environment defaults only when no custom config is supplied", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-only-server-key");
     vi.stubEnv("OPENAI_BASE_URL", undefined);
     vi.stubEnv("OPENAI_MODEL", undefined);
-    expect(readOpenAIEnvironment()).toEqual({ baseURL: "https://api.openai.com/v1", apiKey: "test-only-server-key", model: "gpt-5.5" });
+    expect(await readOpenAIEnvironment()).toEqual({ baseURL: "https://api.openai.com/v1", apiKey: "test-only-server-key", model: "gpt-5.5" });
     vi.stubEnv("OPENAI_BASE_URL", "https://server.example/v1/");
     vi.stubEnv("OPENAI_MODEL", "server-model");
-    expect(readOpenAIEnvironment().baseURL).toBe("https://server.example/v1");
-    expect(readOpenAIEnvironment().model).toBe("server-model");
-    expect(readOpenAIEnvironment(provider)).toEqual(provider);
+    expect((await readOpenAIEnvironment()).baseURL).toBe("https://server.example/v1");
+    expect((await readOpenAIEnvironment()).model).toBe("server-model");
+    expect(await readOpenAIEnvironment(provider)).toEqual(provider);
   });
 
-  it("never fills a missing custom key with the server key", () => {
+  it("never fills a missing custom key with the server key", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-only-server-key");
-    expect(() => readOpenAIEnvironment({ baseURL: provider.baseURL, model: provider.model } as ProviderConfig))
-      .toThrow("OpenAI server configuration is missing or invalid.");
+    await expect(readOpenAIEnvironment({ baseURL: provider.baseURL, model: provider.model } as ProviderConfig))
+      .rejects.toThrow("OpenAI server configuration is missing or invalid.");
   });
 
   it("creates an isolated SDK client that sends the selected URL, key, and model", async () => {
@@ -96,7 +96,7 @@ describe("server configuration isolation", () => {
     vi.stubEnv("OPENAI_PROJECT_ID", "test-only-server-project");
     const fetch = vi.fn().mockResolvedValue(Response.json({ id: "test-only-response" }));
     vi.stubGlobal("fetch", fetch);
-    const { client, model } = createOpenAIClient(provider);
+    const { client, model } = await createOpenAIClient(provider);
     await client.responses.create({ model, input: "Test transport configuration only.", store: false });
     const [url, options] = fetch.mock.calls[0] as [string, RequestInit];
     expect(String(url)).toBe("https://gateway.example/v1/responses");

@@ -50,7 +50,19 @@ Storage failures are visible. Unreadable history is not overwritten. History
 from the standalone desktop HTML is on a different browser origin and is not
 automatically accessible to the localhost application.
 
-## Development
+## Runtime cleanup
+
+Removed the simulated `/login`, `/signup`, and `/api/auth` paths. They did not
+verify passwords or establish authenticated user sessions. A future user-account
+API must provide server-side authentication before these controls return.
+Existing database records and browser study history were not erased.
+
+Settings expose interface language, appearance, and working JSON export only.
+The disconnected autosave/sound/font controls and invented version/license
+claims were removed. The backend still uses local SQLite; the installed libSQL
+package is not yet wired into database operations.
+
+## Checks
 
 ```bash
 npm ci
