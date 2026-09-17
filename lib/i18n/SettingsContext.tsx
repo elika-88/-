@@ -44,31 +44,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     try {
       const savedLang = localStorage.getItem("lumina.settings.lang") as SupportedLanguage;
       if (savedLang && translations[savedLang]) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLanguageState(savedLang);
       }
 
       const savedTheme = localStorage.getItem("lumina.settings.theme") as ThemeMode;
       if (savedTheme) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setThemeState(savedTheme);
       }
 
       const savedAutoSave = localStorage.getItem("lumina.settings.autosave");
       if (savedAutoSave !== null) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setAutoSaveState(savedAutoSave === "true");
       }
 
       const savedSound = localStorage.getItem("lumina.settings.sound");
       if (savedSound !== null) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSoundEffectsState(savedSound === "true");
       }
 
       const savedFontSize = localStorage.getItem("lumina.settings.fontsize") as "normal" | "large" | "compact";
       if (savedFontSize) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFontSizeState(savedFontSize);
       }
     } catch {}
