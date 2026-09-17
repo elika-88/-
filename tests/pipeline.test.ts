@@ -39,6 +39,42 @@ describe('source grounding', () => {
 });
 
 describe('generation pipeline', () => {
+  it('retries only a failed group while retaining successful siblings', async () => {
+    const parse = vi.fn().mockResolvedValueOnce(response(analysis))
+      .mockResolvedValueOnce(response(notePart))
+      .mockRejectedValueOnce(new Error('temporary timeout'))
+      .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
+      .mockResolvedValueOnce(response({ quiz: materials.quiz }))
+      .mockResolvedValueOnce(response({ items: verdicts }));
+    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as ReturnType<typeof createOpenAIClient>;
+    await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
+    expect(parse.mock.calls.map(([request]) => request.text.format.name)).toEqual(['lecture_analysis', 'study_notes', 'study_quiz', 'study_cards', 'study_quiz', 'material_review']);
+  });
+  it('retries a malformed review without regenerating material', async () => {
+    const parse = successfulCalls();
+    // Replace the final successful response with an incomplete review.
+    parse.mockReset().mockResolvedValueOnce(response(analysis))
+      .mockResolvedValueOnce(response(notePart))
+      .mockResolvedValueOnce(response({ quiz: materials.quiz }))
+      .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
+      .mockResolvedValueOnce(response({ items: verdicts.slice(1) }))
+      .mockResolvedValueOnce(response({ items: verdicts }));
+    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as ReturnType<typeof createOpenAIClient>;
+    await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
+    expect(parse.mock.calls.map(([request]) => request.text.format.name)).toEqual(['lecture_analysis', 'study_notes', 'study_quiz', 'study_cards', 'material_review', 'material_review']);
+  });
+  it('repairs only the rejected group then reviews the entire kit again', async () => {
+    const parse = vi.fn().mockResolvedValueOnce(response(analysis))
+      .mockResolvedValueOnce(response(notePart))
+      .mockResolvedValueOnce(response({ quiz: materials.quiz }))
+      .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
+      .mockResolvedValueOnce(response({ items: verdicts.map((v) => v.itemId === materials.quiz[0].id ? { ...v, status: 'unsupported' } : v) }))
+      .mockResolvedValueOnce(response({ quiz: materials.quiz }))
+      .mockResolvedValueOnce(response({ items: verdicts }));
+    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as ReturnType<typeof createOpenAIClient>;
+    await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
+    expect(parse.mock.calls.map(([request]) => request.text.format.name)).toEqual(['lecture_analysis', 'study_notes', 'study_quiz', 'study_cards', 'material_review', 'study_quiz', 'material_review']);
+  });
   it('runs analysis, parallel materials and review, computing counts from records', async () => {
     const parse = successfulCalls();
     const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as ReturnType<typeof createOpenAIClient>;

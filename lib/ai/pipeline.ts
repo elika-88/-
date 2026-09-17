@@ -52,7 +52,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Retur
   let analysis: z.infer<typeof AnalysisSchema> | undefined;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      analysis = await structured(AnalysisSchema, 'lecture_analysis', 'Identify 3-8 genuine topics (fewer when appropriate), at most 5 key concepts, 2 relationships and 2 ambiguities. Set sufficient=false if the text cannot support useful learning material. Use short exact source quotes (about 40-160 characters); do not paraphrase quotes. Keep analysis under 900 words. Empty relationship/ambiguity arrays are valid.', source);
+      analysis = await structured(AnalysisSchema, 'lecture_analysis', 'Identify 3-6 genuine topics (fewer when appropriate), each with one short exact quote. Set sufficient=false if the text cannot support useful learning material. Keep this routing analysis compact: concepts and relationships must be empty arrays; include only essential ambiguities (at most 2). Material generators will read the full source directly. Do not paraphrase quotes. Target under 350 words.', source);
       if (!analysis.sufficient) throw new PipelineError('INSUFFICIENT_CONTENT', 'The lecture does not contain enough clear information to create study materials.');
       if (!analysis.topics.length) throw new Error('No topics.');
       for (const item of [...analysis.topics, ...analysis.concepts, ...analysis.relationships, ...analysis.ambiguities]) validateEvidence(item.evidence, segments);
@@ -66,7 +66,12 @@ export async function generateStudyKit(input: GenerateRequest, connection: Retur
   }
   if (!analysis) throw new PipelineError('INVALID_OUTPUT', 'No lecture analysis.');
   let feedback: unknown = null;
+  // Request-local only. Never retain lecture material or credentials across users.
+  let savedNotes: z.infer<typeof NotesSchema> | undefined;
+  let savedQuiz: z.infer<typeof QuizSchema> | undefined;
+  let savedCards: z.infer<typeof CardsSchema> | undefined;
   for (let attempt = 1; attempt <= 3; attempt++) {
+    let phase: 'generation' | 'validation' | 'review' = 'generation';
     emit({ type: 'stage', runId, stage: attempt === 1 ? 'generating' : 'correcting' });
     try {
       const data = JSON.stringify({ source: JSON.parse(source), analysis, previousValidationFeedback: feedback });
@@ -74,18 +79,24 @@ export async function generateStudyKit(input: GenerateRequest, connection: Retur
       // Independent material groups share the analysis and run concurrently.
       // All must succeed before the combined result can reach verification.
       const parts = await Promise.allSettled([
-        structured(NotesSchema, 'study_notes', `${shared} Generate a concise overview (2 sentences), themed summary (1-2 sentences per section), and 5-8 distinct key points. IDs: overview, summary1..., point1... . Report real limitations.`, data),
-        structured(QuizSchema, 'study_quiz', `${shared} Generate 8-10 varied questions if supported, otherwise fewer. IDs q1, q2... . Exactly four distinct options and one correct answer indexed 0-3. Plausible distractors are incorrect alternatives, not asserted facts. Explanations must be one concise sentence.`, data),
-        structured(CardsSchema, 'study_cards', `${shared} Generate 10-12 distinct cards if supported, otherwise fewer. IDs fc1, fc2... . Answers must be one concise sentence. Cover definitions, distinctions and relationships.`, data),
+        savedNotes ? Promise.resolve(savedNotes) : structured(NotesSchema, 'study_notes', `${shared} Generate a concise overview (one sentence), 3-5 themed summary sections (one focused sentence each), and 5 distinct key points. Cover the main topics while avoiding repetition and compound claims. IDs: overview, summary1..., point1... . Report real limitations.`, data),
+        savedQuiz ? Promise.resolve(savedQuiz) : structured(QuizSchema, 'study_quiz', `${shared} Generate 8 varied questions if supported, otherwise fewer. IDs q1, q2... . Exactly four distinct options and one correct answer indexed 0-3. Plausible distractors are incorrect alternatives, not asserted facts. Explanations must be one concise sentence.`, data),
+        savedCards ? Promise.resolve(savedCards) : structured(CardsSchema, 'study_cards', `${shared} Generate 10 distinct cards if supported, otherwise fewer. IDs fc1, fc2... . Answers must be one concise sentence. Cover definitions, distinctions and relationships.`, data),
       ]);
+      // Save every successful sibling before propagating any failure.
+      if (parts[0].status === 'fulfilled') savedNotes = parts[0].value;
+      if (parts[1].status === 'fulfilled') savedQuiz = parts[1].value;
+      if (parts[2].status === 'fulfilled') savedCards = parts[2].value;
       const fulfilled = <T,>(part: PromiseSettledResult<T>): T => { if (part.status === 'rejected') throw part.reason; return part.value; };
       const notes = fulfilled(parts[0]);
       const quiz = fulfilled(parts[1]);
       const cards = fulfilled(parts[2]);
       const materials = GeneratedMaterialsSchema.parse({ ...notes, ...quiz, ...cards });
+      phase = 'validation';
       if (materials.quiz.length < 8 || materials.flashcards.length < 10) materials.limitations.push('Fewer practice items were generated to stay within the available source evidence.');
       const representedTopics = validateMaterials(materials, analysis.topics, segments);
       emit({ type: 'stage', runId, stage: 'verifying' });
+      phase = 'review';
       const verdicts = await structured(VerdictsSchema, 'material_review', 'Independently verify every factual claim against the original lecture AND its cited evidence. Return exactly one record for each overview, summary section, key point, quiz and card ID. Review quiz premise, correct option, uniqueness of correct answer and explanation; wrong distractors are intentionally false. Mark the entire item partially_supported if any claim lacks support or its cited evidence is insufficient. Preserve source uncertainty. Do not trust candidate evidence without checking the source. Reasons must be concise (at most 15 words).', JSON.stringify({ source: JSON.parse(source), materials }));
       const review = VerificationResponseSchema.parse({ items: verdicts.items.map((verdict) => ({ ...verdict, evidence: materialItems(materials).find((item) => item.id === verdict.itemId)?.evidence ?? [] })) });
       validateReview(materials, review.items, segments);
@@ -94,6 +105,15 @@ export async function generateStudyKit(input: GenerateRequest, connection: Retur
       console.info(JSON.stringify({ event: 'generation_retry', stage: 'materials', attempt, kind: error instanceof z.ZodError ? 'schema' : error instanceof Error ? error.name : 'unknown', unsupportedItems: error instanceof ReviewFailure ? error.issues.length : undefined }));
       if (signal.aborted || error instanceof PipelineError || (error as { status?: number })?.status) throw error;
       if (attempt === 3) throw new PipelineError('VERIFICATION_FAILED', 'Could not produce fully source-supported materials. Try a clearer or shorter lecture.');
+      if (error instanceof ReviewFailure) {
+        const rejected = new Set(error.issues.map((item) => item.itemId));
+        if (savedNotes && [savedNotes.overview, ...savedNotes.summary, ...savedNotes.keyPoints].some((item) => rejected.has(item.id))) savedNotes = undefined;
+        if (savedQuiz?.quiz.some((item) => rejected.has(item.id))) savedQuiz = undefined;
+        if (savedCards?.flashcards.some((item) => rejected.has(item.id))) savedCards = undefined;
+      } else if (phase === 'validation') {
+        savedNotes = undefined; savedQuiz = undefined; savedCards = undefined;
+      }
+      // A transport/schema failure during review repeats review only.
       feedback = error instanceof ReviewFailure ? { reviewIssues: error.issues } : { validationError: error instanceof z.ZodError ? 'Output did not match the schema.' : 'Use unique IDs, valid topic references, distinct options, and exact source quotes.' };
       emit({ type: 'retry', runId, stage: 'generating', attempt: attempt + 1, maxAttempts: 3, message: 'Repairing materials and checking them again.' });
     }
