@@ -37,11 +37,9 @@ test('restores real preferences without showing demo account or disconnected set
 });
 
 test('admin renders recorded audit values without invented users, status or origin', async ({ page }) => {
-  await page.route('**/api/admin', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ authenticated: true, settings: { baseURL: 'https://relay.example/v1', model: 'test-model', apiFormat: 'responses', revision: 0, hasApiKey: false, source: 'environment', updatedAt: null }, audit: [{ event: 'recorded-event', created_at: 1_700_000_000_000 }] }),
-  }));
+  const adminPayload = JSON.stringify({ authenticated: true, configured: true, settings: { baseURL: 'https://relay.example/v1', model: 'test-model', apiFormat: 'responses', revision: 0, hasApiKey: false, source: 'environment', updatedAt: null }, audit: [{ event: 'recorded-event', created_at: 1_700_000_000_000 }] });
+  await page.route('**/api/admin/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: adminPayload }));
+  await page.route('**/api/admin', route => route.fulfill({ status: 200, contentType: 'application/json', body: adminPayload }));
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'AI Relay & Model', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'User Directory', exact: true })).toHaveCount(0);
