@@ -15,7 +15,9 @@ import {
   Users,
   FileText,
   Search,
-  Settings
+  Settings,
+  RefreshCw,
+  Sparkles
 } from "lucide-react";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
@@ -57,6 +59,11 @@ export default function AdminPage() {
   const [userSearch, setUserSearch] = useState("");
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
+  // Model Fetcher State (like ccswitch)
+  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [modelFetchMsg, setModelFetchMsg] = useState("");
+
   async function refresh() {
     const response = await fetch("/api/admin", { cache: "no-store" });
     const data = await response.json();
@@ -92,6 +99,39 @@ export default function AdminPage() {
       });
     return () => controller.abort();
   }, []);
+
+  async function handleFetchModels() {
+    if (!settings?.baseURL) return;
+    setFetchingModels(true);
+    setModelFetchMsg("");
+    setErrorMsg("");
+
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "fetch_models",
+          baseURL: settings.baseURL,
+          apiKey,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to query models from endpoint.");
+
+      if (Array.isArray(data.models) && data.models.length > 0) {
+        setFetchedModels(data.models);
+        setModelFetchMsg(`Found ${data.models.length} models available on this relay.`);
+      } else {
+        setModelFetchMsg("Endpoint responded, but returned an empty model list.");
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to fetch model list.");
+    } finally {
+      setFetchingModels(false);
+    }
+  }
 
   async function action(event: FormEvent, name: "login" | "save" | "logout") {
     event.preventDefault();
@@ -296,7 +336,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 1: AI Relay & Model Settings */}
+          {/* TAB 1: AI Relay & Model Settings (with ccswitch-style model fetcher) */}
           {activeTab === "relay" && settings && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
@@ -318,11 +358,20 @@ export default function AdminPage() {
               </div>
 
               <div className="gpt-admin-form-grid">
-                {/* Base URL */}
+                {/* Base URL with Test / Fetch Models Button */}
                 <div className="gpt-admin-form-group">
                   <div className="gpt-admin-form-label">
                     <label htmlFor="admin-url">{t.gatewayUrl}</label>
-                    <span>Upstream endpoint</span>
+                    <button
+                      type="button"
+                      className="gpt-fetch-models-btn"
+                      onClick={handleFetchModels}
+                      disabled={fetchingModels || !settings.baseURL}
+                      title="Fetch available models from endpoint"
+                    >
+                      <RefreshCw size={13} className={fetchingModels ? "animate-spin" : ""} />
+                      <span>{fetchingModels ? "Scanning..." : "Fetch Models (获取模型)"}</span>
+                    </button>
                   </div>
                   <div className="gpt-admin-input-wrap">
                     <Globe size={16} className="gpt-admin-input-icon" />
@@ -336,7 +385,9 @@ export default function AdminPage() {
                       disabled={busy}
                     />
                   </div>
-                  <p className="gpt-admin-help-text">{t.gatewayUrlDesc}</p>
+                  <p className="gpt-admin-help-text">
+                    Custom relay, reverse proxy or official OpenAI root endpoint.
+                  </p>
                 </div>
 
                 {/* API Key */}
@@ -364,7 +415,7 @@ export default function AdminPage() {
                   <p className="gpt-admin-help-text">{t.apiKeyDesc}</p>
                 </div>
 
-                {/* Model Identifier */}
+                {/* Model Identifier with Dropdown / Tag Picker */}
                 <div className="gpt-admin-form-group">
                   <div className="gpt-admin-form-label">
                     <label htmlFor="admin-model">{t.modelLabel}</label>
@@ -382,7 +433,37 @@ export default function AdminPage() {
                       disabled={busy}
                     />
                   </div>
-                  <p className="gpt-admin-help-text">{t.modelDesc}</p>
+
+                  {/* ccswitch Style Available Models Capsule List */}
+                  {fetchedModels.length > 0 && (
+                    <div className="gpt-model-picker-area">
+                      <div className="gpt-model-picker-title">
+                        <Sparkles size={13} />
+                        <span>Available upstream models (click to apply):</span>
+                      </div>
+                      <div className="gpt-model-chips-container">
+                        {fetchedModels.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={`gpt-model-chip ${settings.model === m ? "active" : ""}`}
+                            onClick={() => setSettings({ ...settings, model: m })}
+                          >
+                            <span>{m}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {modelFetchMsg && (
+                    <p className="gpt-admin-help-text" style={{ color: "#10a37f" }}>
+                      {modelFetchMsg}
+                    </p>
+                  )}
+                  {!modelFetchMsg && (
+                    <p className="gpt-admin-help-text">{t.modelDesc}</p>
+                  )}
                 </div>
 
                 {/* API Format */}
@@ -437,7 +518,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Search & Stats toolbar */}
               <div className="gpt-admin-table-toolbar">
                 <div className="gpt-admin-search-box">
                   <Search size={15} />
@@ -453,7 +533,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Real Users Table */}
               <div className="gpt-admin-table-container">
                 <table className="gpt-admin-table">
                   <thead>
@@ -556,7 +635,6 @@ export default function AdminPage() {
         </main>
       </div>
 
-      {/* Synchronized Settings Modal */}
       <SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
     </div>
   );

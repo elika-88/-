@@ -57,6 +57,29 @@ export async function POST(request: NextRequest) {
       response.cookies.set(cookieName, '', { path: '/api/admin', maxAge: 0 });
       return response;
     }
+    if (body.action === 'fetch_models') {
+      const targetUrl = typeof body.baseURL === 'string' ? body.baseURL.trim().replace(/\/+$/, '') : '';
+      const authKey = typeof body.apiKey === 'string' && body.apiKey.trim() ? body.apiKey.trim() : (readStoredSettings()?.settings.apiKey ?? process.env.OPENAI_API_KEY ?? '');
+      if (!targetUrl) return json({ error: 'Please enter API Base URL.' }, 400);
+      try {
+        const modelsEndpoint = targetUrl.endsWith('/models') ? targetUrl : `${targetUrl}/models`;
+        const headers: Record<string, string> = { 'Accept': 'application/json' };
+        if (authKey) headers['Authorization'] = `Bearer ${authKey}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(modelsEndpoint, { headers, signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timeout);
+        if (!res.ok) {
+          return json({ error: `Upstream error ${res.status}: ${res.statusText}` }, 400);
+        }
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+        const modelIds: string[] = list.map((m: { id?: string } | string) => typeof m === 'string' ? m : m?.id).filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+        return json({ models: modelIds });
+      } catch (err) {
+        return json({ error: err instanceof Error ? err.message : 'Failed to fetch models from endpoint.' }, 502);
+      }
+    }
     if (body.action !== 'save') return json({ error: 'Unknown action.' }, 400);
     const parsed = SaveAdminSettingsSchema.safeParse(body.settings);
     if (!parsed.success) return json({ error: 'Check the API URL, key, model and format.' }, 400);
