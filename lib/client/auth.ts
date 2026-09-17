@@ -20,6 +20,14 @@ export function getStoredUser(): UserProfile | null {
 export function saveUser(user: UserProfile) {
   if (typeof window === "undefined") return;
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  // Sync with server user directory in background
+  try {
+    fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(user),
+    }).catch(() => {});
+  } catch {}
 }
 
 export function clearUser() {

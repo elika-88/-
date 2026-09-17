@@ -29,7 +29,8 @@ export function withAdminDb<T>(action: (db: DatabaseSync) => T): T {
       CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, password_hash TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, event TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS login_limit (id INTEGER PRIMARY KEY CHECK(id=1), attempts INTEGER NOT NULL, reset_at INTEGER NOT NULL);
-      PRAGMA user_version=1;`);
+      CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, created_at INTEGER NOT NULL);
+      PRAGMA user_version=2;`);
     return action(db);
   } finally { db.close(); }
 }
@@ -94,4 +95,21 @@ export function validAdminSession(token: string) {
 }
 export function logoutAdmin(token: string) {
   withAdminDb((db) => { db.prepare('DELETE FROM sessions WHERE token_hash=?').run(hash(token)); });
+}
+export function readUsers(): { id: string; name: string; email: string; role: string; created_at: number }[] {
+  return withAdminDb((db) => {
+    return db.prepare('SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC').all() as { id: string; name: string; email: string; role: string; created_at: number }[];
+  });
+}
+
+export function saveUserToDb(user: { id: string; name: string; email: string; role?: string }) {
+  return withAdminDb((db) => {
+    db.prepare('INSERT INTO users(id, name, email, role, created_at) VALUES(?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email').run(
+      user.id,
+      user.name,
+      user.email,
+      user.role || 'Member',
+      Date.now()
+    );
+  });
 }

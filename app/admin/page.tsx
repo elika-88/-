@@ -14,10 +14,7 @@ import {
   AlertCircle,
   Users,
   FileText,
-  BarChart3,
-  Shield,
   Search,
-  MoreVertical,
 } from "lucide-react";
 
 type Settings = {
@@ -30,7 +27,15 @@ type Settings = {
   updatedAt: number | null;
 };
 
-type AdminTab = "relay" | "users" | "logs" | "analytics" | "security";
+type DbUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  created_at: number;
+};
+
+type AdminTab = "relay" | "users" | "logs";
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -43,6 +48,7 @@ export default function AdminPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(true);
   const [audit, setAudit] = useState<{ event: string; created_at: number }[]>([]);
+  const [users, setUsers] = useState<DbUser[]>([]);
   const [activeTab, setActiveTab] = useState<AdminTab>("relay");
   const [userSearch, setUserSearch] = useState("");
 
@@ -54,6 +60,7 @@ export default function AdminPage() {
     setSetupError(data.setupError ?? "");
     setSettings(data.settings ?? null);
     setAudit(data.audit ?? []);
+    setUsers(data.users ?? []);
     if (response.status !== 401 && !response.ok) {
       throw new Error(data.error ?? "Could not load settings.");
     }
@@ -69,6 +76,7 @@ export default function AdminPage() {
         setSetupError(data.setupError ?? "");
         setSettings(data.settings ?? null);
         setAudit(data.audit ?? []);
+        setUsers(data.users ?? []);
         if (data.error) setErrorMsg(data.error);
       })
       .catch(() => {
@@ -176,15 +184,13 @@ export default function AdminPage() {
     );
   }
 
-  // Sample Shell Users (Ready for future backend integration)
-  const mockUsers = [
-    { id: "usr_94a28f", name: "xiaomao", email: "xiaomao@student.edu", role: "Owner", status: "Active", joined: "Today" },
-    { id: "usr_38b10e", name: "elika", email: "elika@dev.team", role: "Administrator", status: "Active", joined: "Yesterday" },
-    { id: "usr_55c91a", name: "Alex Chen", email: "alex.c@campus.org", role: "Member", status: "Active", joined: "Sep 15, 2026" },
-    { id: "usr_77d24b", name: "Elena Rostova", email: "elena@study.kz", role: "Member", status: "Invited", joined: "Sep 14, 2026" },
-  ].filter((u) => u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()));
+  // Filter real users from database
+  const filteredUsers = users.filter(
+    (u) =>
+      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(userSearch.toLowerCase())
+  );
 
-  // 2. Production-Grade ChatGPT Workspace Admin Console
   return (
     <div className="gpt-admin-app">
       {/* Top Header */}
@@ -223,7 +229,7 @@ export default function AdminPage() {
         {/* Left Category Sidebar */}
         <aside className="gpt-admin-sidebar">
           <div className="gpt-admin-sidebar-section">
-            <div className="gpt-admin-sidebar-title">Configuration</div>
+            <div className="gpt-admin-sidebar-title">Management</div>
             <nav className="gpt-admin-nav-list">
               <button
                 type="button"
@@ -247,29 +253,7 @@ export default function AdminPage() {
                 onClick={() => setActiveTab("logs")}
               >
                 <FileText size={16} />
-                <span>Audit & System Logs</span>
-              </button>
-            </nav>
-          </div>
-
-          <div className="gpt-admin-sidebar-section">
-            <div className="gpt-admin-sidebar-title">Observability</div>
-            <nav className="gpt-admin-nav-list">
-              <button
-                type="button"
-                className={`gpt-admin-nav-item ${activeTab === "analytics" ? "active" : ""}`}
-                onClick={() => setActiveTab("analytics")}
-              >
-                <BarChart3 size={16} />
-                <span>Usage & Quotas</span>
-              </button>
-              <button
-                type="button"
-                className={`gpt-admin-nav-item ${activeTab === "security" ? "active" : ""}`}
-                onClick={() => setActiveTab("security")}
-              >
-                <Shield size={16} />
-                <span>Security & Keys</span>
+                <span>Audit Logs</span>
               </button>
             </nav>
           </div>
@@ -296,13 +280,13 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 1: AI Relay & Model Settings */}
+          {/* TAB 1: AI Relay & Model Settings (Real DB connection) */}
           {activeTab === "relay" && settings && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
                 <div>
                   <h2>AI Relay & Model Connection</h2>
-                  <p>Configure model gateway, credentials and transmission protocol for lecture synthesis.</p>
+                  <p>Manage upstream API gateway, credentials and transmission protocol in database.</p>
                 </div>
                 <div className="gpt-admin-header-actions">
                   <button
@@ -364,7 +348,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <p className="gpt-admin-help-text">
-                    Encrypted with AES-256-GCM in local database. Raw keys are never displayed.
+                    Encrypted with AES-256-GCM in server database.
                   </p>
                 </div>
 
@@ -387,7 +371,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <p className="gpt-admin-help-text">
-                    Supports gpt-5.5, gpt-4o, or upstream custom models.
+                    e.g. gpt-5.5, gpt-4o, or upstream custom models.
                   </p>
                 </div>
 
@@ -435,90 +419,89 @@ export default function AdminPage() {
             </section>
           )}
 
-          {/* TAB 2: User Directory (Shell for upcoming backend integration) */}
+          {/* TAB 2: User Directory (Connected to Real Server Database) */}
           {activeTab === "users" && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
                 <div>
                   <h2>User Directory</h2>
-                  <p>Manage authenticated student accounts, access permissions and invitations.</p>
-                </div>
-                <div className="gpt-admin-header-actions">
-                  <button type="button" className="gpt-pill-btn primary" onClick={() => alert("Invite user flow ready for backend integration")}>
-                    <span>+ Invite User</span>
-                  </button>
+                  <p>Registered users saved in the server database.</p>
                 </div>
               </div>
 
-              {/* Search & Filter bar */}
+              {/* Search & Stats toolbar */}
               <div className="gpt-admin-table-toolbar">
                 <div className="gpt-admin-search-box">
                   <Search size={15} />
                   <input
                     type="search"
-                    placeholder="Filter users by name or email..."
+                    placeholder="Search users by name or email..."
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
                   />
                 </div>
                 <div className="gpt-admin-toolbar-stats">
-                  Total: {mockUsers.length} accounts
+                  Total: {filteredUsers.length} accounts
                 </div>
               </div>
 
-              {/* Users Table */}
+              {/* Real Users Table */}
               <div className="gpt-admin-table-container">
                 <table className="gpt-admin-table">
                   <thead>
                     <tr>
                       <th>User</th>
                       <th>Role</th>
-                      <th>Status</th>
-                      <th>Joined</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
+                      <th>User ID</th>
+                      <th>Registered At</th>
+                      <th style={{ textAlign: "right" }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {mockUsers.map((u) => (
-                      <tr key={u.id}>
-                        <td>
-                          <div className="gpt-table-user-cell">
-                            <div className="gpt-user-avatar guest" style={{ width: 30, height: 30, fontSize: 12 }}>
-                              {u.name.slice(0, 1).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="gpt-table-name">{u.name}</div>
-                              <div className="gpt-table-sub">{u.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="gpt-badge role">{u.role}</span>
-                        </td>
-                        <td>
-                          <span className={`gpt-badge status ${u.status.toLowerCase()}`}>{u.status}</span>
-                        </td>
-                        <td className="gpt-table-sub">{u.joined}</td>
-                        <td style={{ textAlign: "right" }}>
-                          <button type="button" className="gpt-icon-action-btn" title="Options">
-                            <MoreVertical size={15} />
-                          </button>
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="gpt-table-empty">
+                          No users registered yet. Users will appear here when signing in or registering.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredUsers.map((u) => (
+                        <tr key={u.id}>
+                          <td>
+                            <div className="gpt-table-user-cell">
+                              <div className="gpt-user-avatar guest" style={{ width: 30, height: 30, fontSize: 12 }}>
+                                {u.name.slice(0, 1).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="gpt-table-name">{u.name}</div>
+                                <div className="gpt-table-sub">{u.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="gpt-badge role">{u.role}</span>
+                          </td>
+                          <td className="gpt-table-code">{u.id}</td>
+                          <td className="gpt-table-sub">{new Date(u.created_at).toLocaleString()}</td>
+                          <td style={{ textAlign: "right" }}>
+                            <span className="gpt-badge status active">Active</span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </section>
           )}
 
-          {/* TAB 3: Audit & System Logs */}
+          {/* TAB 3: Audit & System Logs (Real Server DB Logs) */}
           {activeTab === "logs" && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
                 <div>
                   <h2>Audit & Security Logs</h2>
-                  <p>Immutable event records for system authentication, API changes, and administrative actions.</p>
+                  <p>Real-time event trail recorded in SQLite database.</p>
                 </div>
               </div>
 
@@ -536,7 +519,7 @@ export default function AdminPage() {
                     {audit.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="gpt-table-empty">
-                          No audit entries recorded yet.
+                          No audit logs recorded yet.
                         </td>
                       </tr>
                     ) : (
@@ -559,80 +542,6 @@ export default function AdminPage() {
                     )}
                   </tbody>
                 </table>
-              </div>
-            </section>
-          )}
-
-          {/* TAB 4: Usage & Quotas (Shell) */}
-          {activeTab === "analytics" && (
-            <section className="gpt-admin-panel">
-              <div className="gpt-admin-panel-header">
-                <div>
-                  <h2>Usage & Quotas</h2>
-                  <p>Telemetry metrics for token consumption and generation performance.</p>
-                </div>
-              </div>
-
-              <div className="gpt-admin-metrics-grid">
-                <div className="gpt-metric-card">
-                  <div className="gpt-metric-title">Total Tokens Processed</div>
-                  <div className="gpt-metric-value">128,450</div>
-                  <div className="gpt-metric-hint">+12% from last study session</div>
-                </div>
-                <div className="gpt-metric-card">
-                  <div className="gpt-metric-title">Lectures Synthesized</div>
-                  <div className="gpt-metric-value">24</div>
-                  <div className="gpt-metric-hint">Avg 5.3k tokens / kit</div>
-                </div>
-                <div className="gpt-metric-card">
-                  <div className="gpt-metric-title">Average Latency</div>
-                  <div className="gpt-metric-value">1.8s</div>
-                  <div className="gpt-metric-hint">Stream TTFB</div>
-                </div>
-              </div>
-
-              <div className="gpt-admin-card-placeholder">
-                <BarChart3 size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
-                <h3>Detailed Telemetry Ready for Database Hook</h3>
-                <p>Telemetry pipeline is ready to chart hourly token burn and cache hit ratios once connected.</p>
-              </div>
-            </section>
-          )}
-
-          {/* TAB 5: Security & Keys (Shell) */}
-          {activeTab === "security" && (
-            <section className="gpt-admin-panel">
-              <div className="gpt-admin-panel-header">
-                <div>
-                  <h2>Security & Cryptography</h2>
-                  <p>Server-side database encryption status and session authentication policies.</p>
-                </div>
-              </div>
-
-              <div className="gpt-admin-card-row">
-                <div className="gpt-admin-sec-item">
-                  <div className="gpt-sec-info">
-                    <strong>AES-256-GCM Vault</strong>
-                    <p>Database credentials and relay tokens are encrypted with hardware-accelerated GCM.</p>
-                  </div>
-                  <span className="gpt-badge status active">Active & Encrypted</span>
-                </div>
-
-                <div className="gpt-admin-sec-item">
-                  <div className="gpt-sec-info">
-                    <strong>Admin Session Timeout</strong>
-                    <p>Administrative sessions expire automatically after 8 hours of inactivity.</p>
-                  </div>
-                  <span className="gpt-badge role">8 Hours</span>
-                </div>
-
-                <div className="gpt-admin-sec-item">
-                  <div className="gpt-sec-info">
-                    <strong>Brute-Force Rate Limiter</strong>
-                    <p>Lockout triggered after 10 consecutive invalid password attempts.</p>
-                  </div>
-                  <span className="gpt-badge status active">Enabled</span>
-                </div>
               </div>
             </section>
           )}
