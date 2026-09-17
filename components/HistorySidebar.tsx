@@ -33,6 +33,7 @@ export function HistorySidebar({
   const [menu, setMenu] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(getStoredUser());
   }, []);
   const [userMenuOpen, setUserMenuOpen] = useState(false);

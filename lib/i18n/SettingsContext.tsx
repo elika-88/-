@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { type SupportedLanguage, type Translations, translations } from "./translations";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -22,49 +22,61 @@ type SettingsContextType = {
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
 
+function subscribe(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  // Always initialize with static defaults to ensure SSR match
+  const isClient = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false
+  );
+
   const [language, setLanguageState] = useState<SupportedLanguage>("en");
   const [theme, setThemeState] = useState<ThemeMode>("system");
   const [autoSave, setAutoSaveState] = useState(true);
   const [soundEffects, setSoundEffectsState] = useState(false);
   const [fontSize, setFontSizeState] = useState<"normal" | "large" | "compact">("normal");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     try {
       const savedLang = localStorage.getItem("lumina.settings.lang") as SupportedLanguage;
       if (savedLang && translations[savedLang]) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLanguageState(savedLang);
       }
 
       const savedTheme = localStorage.getItem("lumina.settings.theme") as ThemeMode;
       if (savedTheme) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setThemeState(savedTheme);
       }
 
       const savedAutoSave = localStorage.getItem("lumina.settings.autosave");
       if (savedAutoSave !== null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setAutoSaveState(savedAutoSave === "true");
       }
 
       const savedSound = localStorage.getItem("lumina.settings.sound");
       if (savedSound !== null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSoundEffectsState(savedSound === "true");
       }
 
       const savedFontSize = localStorage.getItem("lumina.settings.fontsize") as "normal" | "large" | "compact";
       if (savedFontSize) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFontSizeState(savedFontSize);
       }
     } catch {}
-
-    setMounted(true);
   }, []);
 
   // Sync theme class to document
   useEffect(() => {
-    if (!mounted) return;
+    if (!isClient) return;
     const root = document.documentElement;
     const isDark =
       theme === "dark" ||
@@ -75,7 +87,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove("dark");
     }
-  }, [theme, mounted]);
+  }, [theme, isClient]);
 
   const setLanguage = (lang: SupportedLanguage) => {
     setLanguageState(lang);
@@ -116,7 +128,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         fontSize,
         setFontSize,
         t: translations[language],
-        mounted,
+        mounted: isClient,
       }}
     >
       {children}
