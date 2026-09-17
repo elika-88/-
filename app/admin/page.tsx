@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 type Settings = { baseURL: string; model: string; apiFormat: 'responses' | 'chat_completions'; revision: number; hasApiKey: boolean; source: string; updatedAt: number | null };
 export default function AdminPage() {
@@ -45,7 +46,7 @@ export default function AdminPage() {
     finally { setBusy(false); }
   }
   return <main style={{ maxWidth: 760, margin: '40px auto', padding: '0 24px' }}>
-    <Link href="/">← Back to study</Link>
+    <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}><Image src="/ChatGPT_Image_2026%E5%B9%B49%E6%9C%8817%E6%97%A5_23_28_48_-_%E5%89%AF%E6%9C%AC-removebg-preview.png" alt="Lumina" width={40} height={40} unoptimized />Back to study</Link>
     <h1 style={{ fontSize: 28, margin: '24px 0 8px' }}>Administration</h1>
     <p style={{ marginBottom: 24 }}>Manage the default AI connection for this installation.</p>
     {message && <p role="alert" style={{ padding: 16, background: '#f1f5f3', marginBottom: 20 }}>{message}</p>}
