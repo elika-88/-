@@ -82,7 +82,7 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
             const isWrong = answered && isSelected && !isCorrect;
             return (
               <label key={index} className={`${styles.option} ${isSelected ? styles.optionSelected : ""} ${isCorrect ? styles.optionCorrect : ""} ${isWrong ? styles.optionWrong : ""}`}>
-                <input type="radio" name={`quiz-${question.id}`} value={index} checked={isSelected} onChange={() => setSelection(index)} />
+                <input type="radio" aria-label={option} name={`quiz-${question.id}`} value={index} checked={isSelected} onChange={() => setSelection(index)} />
                 <span className={styles.optionLetter} aria-hidden="true">{String.fromCharCode(65 + index)}</span>
                 <span className={styles.optionText}>{option}</span>
                 {isCorrect && <Check aria-label="Correct answer" size={18} />}

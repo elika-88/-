@@ -1,7 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/ai/pipeline', async (original) => ({ ...await original<typeof import('@/lib/ai/pipeline')>(), generateStudyKit: vi.fn().mockRejectedValue(new Error('test failure')) }));
-beforeEach(() => { vi.stubEnv('OPENAI_API_KEY', ''); });
+beforeEach(() => { vi.stubEnv('OPENAI_API_KEY', ''); vi.mocked(generateStudyKit).mockReset().mockRejectedValue(new Error('test failure')); });
+afterEach(() => vi.unstubAllEnvs());
+import { generateStudyKit } from '@/lib/ai/pipeline';
+import { studyKitFixture } from './fixtures/studyKit';
 import { POST } from "@/app/api/generate/route";
 import { ErrorResponseSchema } from "@/lib/contracts/errors";
 import { INPUT_LIMITS } from "@/lib/input";
@@ -56,5 +59,46 @@ describe("generation endpoint foundation", () => {
     const response = await POST(request({ title: "", lecture: "evidence ".repeat(80), outputLanguage: "auto", provider: { baseURL: "https://gateway.example/v1", model: "custom-model" } }));
     expect(response.status).toBe(400);
     expect((await response.json()).error.code).toBe("INVALID_PROVIDER_CONFIG");
+  });
+});
+
+describe('transport and deployment boundaries', () => {
+  const body = { title: '', lecture: 'evidence '.repeat(80), outputLanguage: 'auto' };
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-only-key');
+    vi.stubEnv('OPENAI_BASE_URL', 'https://gateway.example/v1');
+    vi.stubEnv('OPENAI_MODEL', 'gpt-5.5');
+    vi.stubEnv('OPENAI_API_FORMAT', 'responses');
+  });
+  it('returns a validated result event with the matching run ID', async () => {
+    vi.mocked(generateStudyKit).mockImplementation(async (_input, _client, runId) => ({ ...studyKitFixture(), runId }));
+    const response = await POST(request(body));
+    const events = (await response.text()).trim().split('\n').map((line) => JSON.parse(line));
+    expect(events.map((event) => event.type)).toEqual(['stage', 'stage', 'result']);
+    expect(events.at(-1).data.runId).toBe(events[0].runId);
+    expect(response.headers.get('content-type')).toContain('application/x-ndjson');
+  });
+  it('supports explicit JSON negotiation with the same result contract', async () => {
+    vi.mocked(generateStudyKit).mockImplementation(async (_input, _client, runId) => ({ ...studyKitFixture(), runId }));
+    const req = request(body); req.headers.set('accept', 'application/json');
+    const response = await POST(req);
+    expect(response.status).toBe(200);
+    expect((await response.json()).quiz).toHaveLength(1);
+  });
+  it('blocks browser target overrides before invoking the pipeline', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('OPENAI_BASE_URL', 'https://approved.example/v1');
+    vi.stubEnv('ALLOWED_API_BASE_URLS', '');
+    const response = await POST(request({ ...body, provider: { baseURL: 'https://other.example/v1', apiKey: 'test-only-key', model: 'test-model' } }));
+    expect(response.status).toBe(400);
+    expect(generateStudyKit).not.toHaveBeenCalled();
+  });
+  it('accepts explicitly configured production bases', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('OPENAI_BASE_URL', 'https://approved.example/v1');
+    const response = await POST(request(body));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(generateStudyKit).toHaveBeenCalledTimes(1);
   });
 });

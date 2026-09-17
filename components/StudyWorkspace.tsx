@@ -31,6 +31,7 @@ export function StudyWorkspace() {
   const [rename, setRename] = useState("");
   const [error, setError] = useState<GenerationClientError | null>(null);
   const [pending, setPending] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [progress, setProgress] = useState("");
   const operation = useRef<Operation | null>(null);
   const lectureInput = useRef<HTMLTextAreaElement>(null);
@@ -92,6 +93,20 @@ export function StudyWorkspace() {
     requestAnimationFrame(() => lectureInput.current?.focus());
   }
 
+  async function loadDemo() {
+    if (!ready || pending || demoLoading) return;
+    setDemoLoading(true); setError(null);
+    try {
+      const response = await fetch('/demo/research-methods.txt');
+      if (!response.ok) throw new Error('Demo source unavailable');
+      const lecture = await response.text();
+      const session = { ...createSession(), title: 'How Evidence Becomes Knowledge', customTitle: true, lecture };
+      save({ ...historyRef.current, activeId: session.id, sessions: [...historyRef.current.sessions, session] });
+      setProgress('Demo lecture loaded. Generate to create fresh materials.');
+    } catch { setError(new GenerationClientError('NETWORK_ERROR', true)); }
+    finally { setDemoLoading(false); }
+  }
+
   function selectLecture(id: string) {
     if (!ready) return;
     cancel(""); setError(null);
@@ -124,7 +139,7 @@ export function StudyWorkspace() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (pending || !ready) return;
+    if (pending || demoLoading || !ready) return;
     const validation = validateGenerationInput({ title: active.title, lecture: active.lecture, outputLanguage: active.outputLanguage });
     if (!validation.success) { setError(new GenerationClientError(validation.error.code, validation.error.retryable)); lectureInput.current?.focus(); return; }
     setError(null); setPending(true); setProgress("Sending lecture");
@@ -169,9 +184,9 @@ export function StudyWorkspace() {
       <main className="workspace-main">
         {storageError && <div className="notice warning" role="alert"><AlertCircle aria-hidden="true" /><p>{storageError}</p></div>}
         <section className="input-section" aria-labelledby="input-heading">
-          <h1 id="input-heading">Build your study materials</h1>
+          <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1><Button type="button" variant="ghost" disabled={!ready || pending || demoLoading} onClick={loadDemo}>{demoLoading ? 'Loading lecture…' : 'Load demo lecture'}</Button></div>
           <form onSubmit={submit} noValidate aria-busy={pending}>
-            <fieldset disabled={!ready || pending} className="lecture-fields">
+            <fieldset disabled={!ready || pending || demoLoading} className="lecture-fields">
               <div><label htmlFor="lecture-title">Lecture title <span className="optional">(optional)</span></label><input className="text-field" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder="Untitled lecture" /></div>
               <div><div className="field-heading"><label htmlFor="lecture">Lecture text</label><span id="lecture-count">{countWords(active.lecture).toLocaleString("en-US")} words · {active.lecture.length.toLocaleString("en-US")} / 60,000</span></div>
                 <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder="Lecture text" /></div>

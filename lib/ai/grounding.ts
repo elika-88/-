@@ -1,5 +1,12 @@
 import type { Evidence, GeneratedMaterials, ReviewItem, SourceSegment, Topic } from '../schemas/studyMaterials';
 
+export class ReviewFailure extends Error {
+  constructor(public issues: Pick<ReviewItem, 'itemId' | 'status' | 'reason'>[]) {
+    super('Some claims or their citations are not fully supported.');
+    this.name = 'ReviewFailure';
+  }
+}
+
 export function materialItems(materials: GeneratedMaterials) {
   return [materials.overview, ...materials.summary, ...materials.keyPoints, ...materials.quiz, ...materials.flashcards];
 }
@@ -33,5 +40,6 @@ export function validateReview(materials: GeneratedMaterials, reviews: ReviewIte
   const ids = new Set(materialItems(materials).map((item) => item.id));
   if (reviews.length !== ids.size || new Set(reviews.map((item) => item.itemId)).size !== ids.size || reviews.some((item) => !ids.has(item.itemId))) throw new Error('Review must cover every item exactly once.');
   for (const item of reviews) if (item.status === 'supported') validateEvidence(item.evidence, segments);
-  if (reviews.some((item) => item.status !== 'supported')) throw new Error('Some claims are not fully supported. Regenerate conservatively from exact source evidence.');
+  const concerns = reviews.filter((item) => item.status !== 'supported');
+  if (concerns.length) throw new ReviewFailure(concerns.map(({ itemId, status, reason }) => ({ itemId, status, reason })));
 }
