@@ -23,6 +23,16 @@ export function databaseConfiguration(): { mode: 'local' | 'turso'; config: Conf
   return { mode: 'local', path, config: { url: pathToFileURL(path).href } };
 }
 
+export function databaseSetupIssue() {
+  const url = process.env.TURSO_DATABASE_URL?.trim();
+  const token = process.env.TURSO_AUTH_TOKEN?.trim();
+  if ((process.env.VERCEL === '1' || process.env.VERCEL === 'true') && (!url || !token)) {
+    return 'Configure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in Vercel, then redeploy.';
+  }
+  if (Boolean(url) !== Boolean(token)) return 'Both TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required together.';
+  return null;
+}
+
 // Native SQLite writes must complete before another in-process transaction starts.
 const localQueues = new Map<string, Promise<unknown>>();
 

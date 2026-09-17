@@ -4,6 +4,7 @@ import { Secret, TOTP } from 'otpauth';
 import type { Client, Transaction } from '@libsql/client';
 import { AdminSettingsSchema, type AdminSettings } from '../admin-schema';
 import { withDatabase } from './database';
+import { databaseSetupIssue } from './database';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const passwordHash = () => hash(process.env.ADMIN_PASSWORD!);
@@ -17,13 +18,14 @@ function encryptionKey() {
 }
 
 export function adminReady() {
-  return Boolean(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 6 && /^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY ?? ''));
+  return Boolean(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 6 && /^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY ?? '') && !databaseSetupIssue());
 }
 
 export function adminSetupIssue() {
   if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_ENCRYPTION_KEY) return 'Run npm run admin:setup on the server, then restart the app.';
   if (process.env.ADMIN_PASSWORD.length < 6) return 'Administrator password must contain at least 6 characters. Update it on the server, then restart.';
   if (!/^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY)) return 'The server encryption key is invalid. Restore the original key before restarting.';
+  if (databaseSetupIssue()) return databaseSetupIssue();
   return null;
 }
 

@@ -57,7 +57,7 @@ Next.js、React、TypeScript、Tailwind、Zod、OpenAI SDK。普通路径为分�
 
 普通用户登录和注册尚未接入真实身份验证，模拟登录、伪造用户 ID 和用户写入接口已移除。管理员登录、配置保存和审计日志使用现有服务端接口。学习材料可导出为本地 JSON。
 
-当前数据库调用仍使用本地 SQLite；虽然安装了 `@libsql/client`，Turso 驱动尚未接入，配置 Turso 变量不会自动迁移数据库。Vercel 上的数据库功能需完成云端驱动接入后再部署。已有数据库记录和本地学习历史不会因清理演示功能而被删除。
+本地开发使用 SQLite；Vercel 自动使用 `@libsql/client` 连接 Turso。生产部署必须设置 `TURSO_DATABASE_URL` 和 `TURSO_AUTH_TOKEN`，以及 `ADMIN_PASSWORD`、`ADMIN_ENCRYPTION_KEY`；没有持久化数据库时管理页会明确提示配置缺失。首次打开管理页使用 `/api/admin/status` 检查状态，因此未登录不会产生误导性的 `/api/admin` 401 日志。详见 `docs/admin.md`。
 
 ## 文档
 

@@ -66,7 +66,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/admin", { cache: "no-store", signal: controller.signal })
+    fetch("/api/admin/status", { cache: "no-store", signal: controller.signal })
       .then((response) => response.json())
       .then((data) => {
         setAuthenticated(data.authenticated === true);
