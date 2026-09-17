@@ -15,7 +15,10 @@ import {
   Users,
   FileText,
   Search,
+  Settings
 } from "lucide-react";
+import { useSettings } from "@/lib/i18n/SettingsContext";
+import { SettingsModal } from "@/components/settings/SettingsModal";
 
 type Settings = {
   baseURL: string;
@@ -38,6 +41,7 @@ type DbUser = {
 type AdminTab = "relay" | "users" | "logs";
 
 export default function AdminPage() {
+  const { t } = useSettings();
   const [authenticated, setAuthenticated] = useState(false);
   const [configured, setConfigured] = useState(true);
   const [setupError, setSetupError] = useState("");
@@ -51,6 +55,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [activeTab, setActiveTab] = useState<AdminTab>("relay");
   const [userSearch, setUserSearch] = useState("");
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   async function refresh() {
     const response = await fetch("/api/admin", { cache: "no-store" });
@@ -124,7 +129,7 @@ export default function AdminPage() {
       setApiKey("");
       await refresh();
       if (name === "save") {
-        setMessage("Configuration updated. New AI generations will use these settings.");
+        setMessage(t.saveChangesBtn + " ✓");
       }
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Operation failed.");
@@ -133,18 +138,18 @@ export default function AdminPage() {
     }
   }
 
-  // 1. Unauthenticated Login Card (ChatGPT Clean Auth Style)
+  // 1. Unauthenticated Login Card
   if (!authenticated) {
     return (
       <div className="gpt-auth-page">
         <div className="gpt-auth-header">
           <Link href="/" className="gpt-admin-back-link">
-            <ArrowLeft size={16} /> Back to study
+            <ArrowLeft size={16} /> {t.backToStudy}
           </Link>
         </div>
 
         <div className="gpt-auth-box">
-          <h1 className="gpt-auth-title">Admin Console</h1>
+          <h1 className="gpt-auth-title">{t.adminConsole}</h1>
           <p className="gpt-auth-subtitle">Enter administrator credentials to manage workspace</p>
 
           {!configured && (
@@ -196,30 +201,41 @@ export default function AdminPage() {
       {/* Top Header */}
       <header className="gpt-admin-topbar">
         <div className="gpt-admin-topbar-left">
-          <Link href="/" className="gpt-admin-top-back" title="Back to study workspace">
+          <Link href="/" className="gpt-admin-top-back" title={t.backToStudy}>
             <ArrowLeft size={16} />
-            <span>Study Workspace</span>
+            <span>{t.backToStudy}</span>
           </Link>
           <span className="gpt-admin-divider">/</span>
-          <span className="gpt-admin-current-brand">Admin Console</span>
+          <span className="gpt-admin-current-brand">{t.adminConsole}</span>
         </div>
 
         <div className="gpt-admin-topbar-right">
+          <button
+            type="button"
+            className="gpt-icon-action-btn"
+            title={t.settingsTitle}
+            onClick={() => setSettingsModalOpen(true)}
+            style={{ width: 34, height: 34 }}
+          >
+            <Settings size={17} />
+          </button>
+
           <div className="gpt-admin-user-pill">
             <div className="gpt-user-avatar guest" style={{ width: 26, height: 26 }}>
               <span>A</span>
             </div>
             <span>Administrator</span>
           </div>
+
           <button
             type="button"
             className="gpt-admin-logout-link"
             onClick={(e) => action(e, "logout")}
             disabled={busy}
-            title="Sign out of admin"
+            title={t.signOut}
           >
             <LogOut size={15} />
-            <span>Sign out</span>
+            <span>{t.signOut}</span>
           </button>
         </div>
       </header>
@@ -229,7 +245,7 @@ export default function AdminPage() {
         {/* Left Category Sidebar */}
         <aside className="gpt-admin-sidebar">
           <div className="gpt-admin-sidebar-section">
-            <div className="gpt-admin-sidebar-title">Management</div>
+            <div className="gpt-admin-sidebar-title">{t.management}</div>
             <nav className="gpt-admin-nav-list">
               <button
                 type="button"
@@ -237,7 +253,7 @@ export default function AdminPage() {
                 onClick={() => setActiveTab("relay")}
               >
                 <Cpu size={16} />
-                <span>AI Relay & Model</span>
+                <span>{t.aiRelayTab}</span>
               </button>
               <button
                 type="button"
@@ -245,7 +261,7 @@ export default function AdminPage() {
                 onClick={() => setActiveTab("users")}
               >
                 <Users size={16} />
-                <span>User Directory</span>
+                <span>{t.userDirTab}</span>
               </button>
               <button
                 type="button"
@@ -253,13 +269,13 @@ export default function AdminPage() {
                 onClick={() => setActiveTab("logs")}
               >
                 <FileText size={16} />
-                <span>Audit Logs</span>
+                <span>{t.auditLogsTab}</span>
               </button>
             </nav>
           </div>
 
           <div className="gpt-admin-sidebar-footer">
-            <div className="gpt-admin-version-tag">Lumina Server v1.2</div>
+            <div className="gpt-admin-version-tag">{t.versionLabel}</div>
           </div>
         </aside>
 
@@ -280,13 +296,13 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 1: AI Relay & Model Settings (Real DB connection) */}
+          {/* TAB 1: AI Relay & Model Settings */}
           {activeTab === "relay" && settings && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
                 <div>
-                  <h2>AI Relay & Model Connection</h2>
-                  <p>Manage upstream API gateway, credentials and transmission protocol in database.</p>
+                  <h2>{t.aiRelayTab}</h2>
+                  <p>{t.gatewayUrlDesc}</p>
                 </div>
                 <div className="gpt-admin-header-actions">
                   <button
@@ -296,7 +312,7 @@ export default function AdminPage() {
                     disabled={busy}
                   >
                     <Save size={15} />
-                    <span>{busy ? "Saving..." : "Save Changes"}</span>
+                    <span>{busy ? "Saving..." : t.saveChangesBtn}</span>
                   </button>
                 </div>
               </div>
@@ -305,7 +321,7 @@ export default function AdminPage() {
                 {/* Base URL */}
                 <div className="gpt-admin-form-group">
                   <div className="gpt-admin-form-label">
-                    <label htmlFor="admin-url">Gateway Base URL</label>
+                    <label htmlFor="admin-url">{t.gatewayUrl}</label>
                     <span>Upstream endpoint</span>
                   </div>
                   <div className="gpt-admin-input-wrap">
@@ -320,17 +336,15 @@ export default function AdminPage() {
                       disabled={busy}
                     />
                   </div>
-                  <p className="gpt-admin-help-text">
-                    Custom relay, reverse proxy or official OpenAI root endpoint.
-                  </p>
+                  <p className="gpt-admin-help-text">{t.gatewayUrlDesc}</p>
                 </div>
 
                 {/* API Key */}
                 <div className="gpt-admin-form-group">
                   <div className="gpt-admin-form-label">
-                    <label htmlFor="admin-key">Authorization API Key</label>
+                    <label htmlFor="admin-key">{t.apiKeyLabel}</label>
                     <span className={settings.hasApiKey ? "text-success" : "text-warning"}>
-                      {settings.hasApiKey ? "Active in Vault ✓" : "Unset"}
+                      {settings.hasApiKey ? t.activeInVault : t.unset}
                     </span>
                   </div>
                   <div className="gpt-admin-input-wrap">
@@ -340,22 +354,20 @@ export default function AdminPage() {
                       type="password"
                       autoComplete="off"
                       className="gpt-admin-text-input"
-                      placeholder={settings.hasApiKey ? "•••••••••••••••••••••••• (Leave blank to keep)" : "sk-..."}
+                      placeholder={settings.hasApiKey ? "••••••••••••••••••••••••" : "sk-..."}
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       maxLength={4096}
                       disabled={busy}
                     />
                   </div>
-                  <p className="gpt-admin-help-text">
-                    Encrypted with AES-256-GCM in server database.
-                  </p>
+                  <p className="gpt-admin-help-text">{t.apiKeyDesc}</p>
                 </div>
 
                 {/* Model Identifier */}
                 <div className="gpt-admin-form-group">
                   <div className="gpt-admin-form-label">
-                    <label htmlFor="admin-model">Model Identifier</label>
+                    <label htmlFor="admin-model">{t.modelLabel}</label>
                     <span>Target engine</span>
                   </div>
                   <div className="gpt-admin-input-wrap">
@@ -370,15 +382,13 @@ export default function AdminPage() {
                       disabled={busy}
                     />
                   </div>
-                  <p className="gpt-admin-help-text">
-                    e.g. gpt-5.5, gpt-4o, or upstream custom models.
-                  </p>
+                  <p className="gpt-admin-help-text">{t.modelDesc}</p>
                 </div>
 
                 {/* API Format */}
                 <div className="gpt-admin-form-group">
                   <div className="gpt-admin-form-label">
-                    <label htmlFor="admin-format">Transmission Protocol</label>
+                    <label htmlFor="admin-format">{t.protocolLabel}</label>
                     <span>API Standard</span>
                   </div>
                   <div className="gpt-admin-input-wrap">
@@ -399,16 +409,14 @@ export default function AdminPage() {
                       <option value="responses">Responses API (OpenAI Native)</option>
                     </select>
                   </div>
-                  <p className="gpt-admin-help-text">
-                    Chat Completions is recommended for third-party proxy relays.
-                  </p>
+                  <p className="gpt-admin-help-text">{t.protocolDesc}</p>
                 </div>
               </div>
 
               {/* Status Footer */}
               <div className="gpt-admin-status-bar">
                 <div>
-                  Configuration source: <strong>{settings.source}</strong> · Revision <strong>#{settings.revision}</strong>
+                  Source: <strong>{settings.source}</strong> · Revision <strong>#{settings.revision}</strong>
                 </div>
                 {settings.updatedAt && (
                   <div>
@@ -419,13 +427,13 @@ export default function AdminPage() {
             </section>
           )}
 
-          {/* TAB 2: User Directory (Connected to Real Server Database) */}
+          {/* TAB 2: User Directory */}
           {activeTab === "users" && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
                 <div>
-                  <h2>User Directory</h2>
-                  <p>Registered users saved in the server database.</p>
+                  <h2>{t.userDirTab}</h2>
+                  <p>Real-time registered users list stored in server database.</p>
                 </div>
               </div>
 
@@ -435,13 +443,13 @@ export default function AdminPage() {
                   <Search size={15} />
                   <input
                     type="search"
-                    placeholder="Search users by name or email..."
+                    placeholder={t.searchUsers}
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
                   />
                 </div>
                 <div className="gpt-admin-toolbar-stats">
-                  Total: {filteredUsers.length} accounts
+                  {t.totalUsers}: {filteredUsers.length}
                 </div>
               </div>
 
@@ -461,7 +469,7 @@ export default function AdminPage() {
                     {filteredUsers.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="gpt-table-empty">
-                          No users registered yet. Users will appear here when signing in or registering.
+                          {t.noUsersYet}
                         </td>
                       </tr>
                     ) : (
@@ -495,13 +503,13 @@ export default function AdminPage() {
             </section>
           )}
 
-          {/* TAB 3: Audit & System Logs (Real Server DB Logs) */}
+          {/* TAB 3: Audit & System Logs */}
           {activeTab === "logs" && (
             <section className="gpt-admin-panel">
               <div className="gpt-admin-panel-header">
                 <div>
-                  <h2>Audit & Security Logs</h2>
-                  <p>Real-time event trail recorded in SQLite database.</p>
+                  <h2>{t.auditLogsTab}</h2>
+                  <p>Real event logs stored in database.</p>
                 </div>
               </div>
 
@@ -519,7 +527,7 @@ export default function AdminPage() {
                     {audit.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="gpt-table-empty">
-                          No audit logs recorded yet.
+                          {t.noLogsYet}
                         </td>
                       </tr>
                     ) : (
@@ -547,6 +555,9 @@ export default function AdminPage() {
           )}
         </main>
       </div>
+
+      {/* Synchronized Settings Modal */}
+      <SettingsModal isOpen={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
     </div>
   );
 }

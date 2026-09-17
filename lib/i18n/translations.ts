@@ -60,6 +60,28 @@ export type Translations = {
   clearBtn: string;
   versionLabel: string;
   licenseLabel: string;
+  adminConsole: string;
+  backToStudy: string;
+  signOut: string;
+  management: string;
+  aiRelayTab: string;
+  userDirTab: string;
+  auditLogsTab: string;
+  gatewayUrl: string;
+  gatewayUrlDesc: string;
+  apiKeyLabel: string;
+  apiKeyDesc: string;
+  activeInVault: string;
+  unset: string;
+  modelLabel: string;
+  modelDesc: string;
+  protocolLabel: string;
+  protocolDesc: string;
+  saveChangesBtn: string;
+  searchUsers: string;
+  totalUsers: string;
+  noUsersYet: string;
+  noLogsYet: string;
 };
 
 export const translations: Record<SupportedLanguage, Translations> = {
@@ -123,6 +145,28 @@ export const translations: Record<SupportedLanguage, Translations> = {
     clearBtn: "Clear all",
     versionLabel: "Lumina AI Study Kit v1.2.0",
     licenseLabel: "MIT Open Source License · Built for Students & Educators",
+    adminConsole: "Admin Console",
+    backToStudy: "Study Workspace",
+    signOut: "Sign out",
+    management: "Management",
+    aiRelayTab: "AI Relay & Model",
+    userDirTab: "User Directory",
+    auditLogsTab: "Audit Logs",
+    gatewayUrl: "Gateway Base URL",
+    gatewayUrlDesc: "Custom relay, reverse proxy or official OpenAI endpoint.",
+    apiKeyLabel: "Authorization API Key",
+    apiKeyDesc: "Encrypted with AES-256-GCM in server database.",
+    activeInVault: "Active in Vault ✓",
+    unset: "Unset",
+    modelLabel: "Model Identifier",
+    modelDesc: "Supports gpt-5.5, gpt-4o, or upstream custom models.",
+    protocolLabel: "Transmission Protocol",
+    protocolDesc: "Chat Completions is recommended for third-party proxy relays.",
+    saveChangesBtn: "Save Changes",
+    searchUsers: "Search users by name or email...",
+    totalUsers: "Total accounts",
+    noUsersYet: "No users registered yet.",
+    noLogsYet: "No audit logs recorded yet.",
   },
   zh: {
     newLecture: "新讲座",
@@ -184,6 +228,28 @@ export const translations: Record<SupportedLanguage, Translations> = {
     clearBtn: "清空全部",
     versionLabel: "Lumina AI 智能讲座研学系统 v1.2.0",
     licenseLabel: "MIT 开源协议 · 专为高效学习与备考设计",
+    adminConsole: "系统管理后台",
+    backToStudy: "学习工作台",
+    signOut: "退出登录",
+    management: "系统管理",
+    aiRelayTab: "模型与中转站",
+    userDirTab: "用户目录",
+    auditLogsTab: "操作审计日志",
+    gatewayUrl: "接口网关地址 (Base URL)",
+    gatewayUrlDesc: "支持第三方中转站、反向代理或 OpenAI 官方地址。",
+    apiKeyLabel: "授权 API 密钥",
+    apiKeyDesc: "已在服务端使用 AES-256-GCM 高度加密存储。",
+    activeInVault: "安全库已激活 ✓",
+    unset: "未设置",
+    modelLabel: "模型标识 (Model ID)",
+    modelDesc: "支持 gpt-5.5, gpt-4o 或自定义大模型名称。",
+    protocolLabel: "传输协议规范",
+    protocolDesc: "对于第三方中转站，强烈推荐使用 Chat Completions 模式。",
+    saveChangesBtn: "保存配置",
+    searchUsers: "输入用户名或邮箱过滤...",
+    totalUsers: "用户总数",
+    noUsersYet: "暂无注册用户。",
+    noLogsYet: "暂无操作审计日志。",
   },
   ru: {
     newLecture: "Новая лекция",
@@ -245,6 +311,28 @@ export const translations: Record<SupportedLanguage, Translations> = {
     clearBtn: "Очистить все",
     versionLabel: "Lumina AI Study Kit v1.2.0",
     licenseLabel: "Лицензия MIT · Создано для студентов и преподавателей",
+    adminConsole: "Панель администратора",
+    backToStudy: "Рабочая область",
+    signOut: "Выйти",
+    management: "Управление",
+    aiRelayTab: "ИИ Шлюз и Модель",
+    userDirTab: "Пользователи",
+    auditLogsTab: "Журнал аудита",
+    gatewayUrl: "Базовый URL шлюза",
+    gatewayUrlDesc: "Сторонний прокси, реле или официальный OpenAI URL.",
+    apiKeyLabel: "Ключ API авторизации",
+    apiKeyDesc: "Зашифровано с помощью AES-256-GCM в базе данных.",
+    activeInVault: "Активен в хранилище ✓",
+    unset: "Не установлен",
+    modelLabel: "Идентификатор модели",
+    modelDesc: "Поддерживает gpt-5.5, gpt-4o или пользовательские модели.",
+    protocolLabel: "Протокол передачи",
+    protocolDesc: "Рекомендуется Chat Completions для сторонних шлюзов.",
+    saveChangesBtn: "Сохранить",
+    searchUsers: "Поиск пользователей...",
+    totalUsers: "Всего аккаунтов",
+    noUsersYet: "Пока нет зарегистрированных пользователей.",
+    noLogsYet: "Логов пока нет.",
   },
   kk: {
     newLecture: "Жаңа дәріс",
@@ -306,5 +394,27 @@ export const translations: Record<SupportedLanguage, Translations> = {
     clearBtn: "Барлығын өшіру",
     versionLabel: "Lumina AI Study Kit v1.2.0",
     licenseLabel: "MIT ашық лицензиясы · Студенттер мен оқытушыларға арналған",
+    adminConsole: "Әкімшілік басқару панелі",
+    backToStudy: "Жұмыс кеңістігі",
+    signOut: "Шығу",
+    management: "Басқару",
+    aiRelayTab: "ЖИ шлюзі және Модель",
+    userDirTab: "Пайдаланушылар тізімі",
+    auditLogsTab: "Аудит журналдары",
+    gatewayUrl: "Шлюздің негізгі мекенжайы (Base URL)",
+    gatewayUrlDesc: "Үшінші тарап проксиі немесе ресми OpenAI түйіні.",
+    apiKeyLabel: "Авторизациялық API кілті",
+    apiKeyDesc: "Деректер қорында AES-256-GCM арқылы шифрланған.",
+    activeInVault: "Қоймада белсенді ✓",
+    unset: "Орнатылмаған",
+    modelLabel: "Модель идентификаторы",
+    modelDesc: "gpt-5.5, gpt-4o немесе өзге модельдерді қолдайды.",
+    protocolLabel: "Тасымалдау хаттамасы",
+    protocolDesc: "Үшінші тарап шлюздері үшін Chat Completions ұсынылады.",
+    saveChangesBtn: "Сақтау",
+    searchUsers: "Пайдаланушыны іздеу...",
+    totalUsers: "Барлық тіркелгілер",
+    noUsersYet: "Тіркелген пайдаланушылар жоқ.",
+    noLogsYet: "Аудит журналдары әлі жоқ.",
   }
 };
