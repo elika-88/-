@@ -22,7 +22,8 @@ export function adminReady() {
 }
 
 export function adminSetupIssue() {
-  if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_ENCRYPTION_KEY) return 'Run npm run admin:setup on the server, then restart the app.';
+  const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+  if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_ENCRYPTION_KEY) return isVercel ? 'Set ADMIN_PASSWORD and ADMIN_ENCRYPTION_KEY in Vercel, then redeploy.' : 'Run npm run admin:setup on the server, then restart the app.';
   if (process.env.ADMIN_PASSWORD.length < 6) return 'Administrator password must contain at least 6 characters. Update it on the server, then restart.';
   if (!/^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY)) return 'The server encryption key is invalid. Restore the original key before restarting.';
   if (databaseSetupIssue()) return databaseSetupIssue();

@@ -6,7 +6,7 @@
 
 ### Vercel 部署
 
-Vercel 无持久化本地磁盘。请在 Turso 创建数据库，将以下变量添加到 Vercel 项目的 **Production** 环境后重新部署：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`ADMIN_PASSWORD`、`ADMIN_ENCRYPTION_KEY`。其中管理员密码至少6位，加密密钥必须是64位十六进制。再配置 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL` 和 `OPENAI_API_FORMAT`。访问 `/api/admin/status` 应返回 HTTP 200；返回 `configured:false` 时响应中的 `setupError` 会指出缺少哪类配置。
+Vercel 无持久化本地磁盘。请在 Turso 创建数据库，将以下变量添加到 Vercel 项目的 **Production** 环境后重新部署：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`ADMIN_PASSWORD`、`ADMIN_ENCRYPTION_KEY`。其中管理员密码至少6位，加密密钥必须是64位十六进制。再配置 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL` 和 `OPENAI_API_FORMAT`。访问 `/api/admin/status` 应返回 HTTP 200；返回 `configured:false` 时响应中的 `setupError` 会直接告诉你应在 Vercel 设置哪些变量。
 
 首次访问 `/admin` 不再调用受保护的 `/api/admin`，而是调用公开的状态接口；未登录的 `/api/admin` 返回401仍是刻意的鉴权行为，不是服务故障。
 
