@@ -497,7 +497,7 @@ export default function AdminPage() {
               {/* Status Footer */}
               <div className="gpt-admin-status-bar">
                 <div>
-                  Source: <strong>{settings.source}</strong> · Revision <strong>#{settings.revision}</strong>
+                  Source: <strong>{settings.source}</strong> · Revision <strong>#{settings.revision}</strong> · Storage: <span className="gpt-badge role" style={{ marginLeft: 6 }}>{settings.source === "database" ? "SQLite / Turso Ready" : "Environment"}</span>
                 </div>
                 {settings.updatedAt && (
                   <div>

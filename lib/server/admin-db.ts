@@ -10,15 +10,26 @@ function encryptionKey() {
   if (!key || !/^[a-f0-9]{64}$/i.test(key)) throw new Error('Admin encryption key is not configured.');
   return Buffer.from(key, 'hex');
 }
+
+export function isCloudTursoConfigured() {
+  return Boolean(process.env.TURSO_DATABASE_URL && process.env.TURSO_DATABASE_URL.trim().length > 0);
+}
+
+export function getDatabaseMode(): 'turso_cloud' | 'local_sqlite' {
+  return isCloudTursoConfigured() ? 'turso_cloud' : 'local_sqlite';
+}
+
 export function adminReady() {
   return Boolean(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 6 && /^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY ?? ''));
 }
+
 export function adminSetupIssue() {
   if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_ENCRYPTION_KEY) return 'Run npm run admin:setup on the server, then restart the app.';
-  if (process.env.ADMIN_PASSWORD.length < 6) return 'Administrator password must contain at least 8 characters. Update it on the server, then restart.';
+  if (process.env.ADMIN_PASSWORD.length < 6) return 'Administrator password must contain at least 6 characters. Update it on the server, then restart.';
   if (!/^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY)) return 'The server encryption key is invalid. Restore the original key before restarting.';
   return null;
 }
+
 export function withAdminDb<T>(action: (db: DatabaseSync) => T): T {
   const path = resolve(process.env.ADMIN_DATABASE_PATH ?? '.data/admin.sqlite');
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -34,26 +45,29 @@ export function withAdminDb<T>(action: (db: DatabaseSync) => T): T {
     return action(db);
   } finally { db.close(); }
 }
+
 function encrypt(value: AdminSettings) {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv);
   const data = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
   return JSON.stringify({ iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') });
 }
+
 function decrypt(value: string) {
   const record = JSON.parse(value);
   const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(record.iv, 'base64'));
   decipher.setAuthTag(Buffer.from(record.tag, 'base64'));
   return AdminSettingsSchema.parse(JSON.parse(Buffer.concat([decipher.update(Buffer.from(record.data, 'base64')), decipher.final()]).toString('utf8')));
 }
+
 export function readStoredSettings(): { settings: AdminSettings; revision: number; updatedAt: number } | null {
-  // Normal installations keep environment-only configuration until admin setup.
   if (!process.env.ADMIN_ENCRYPTION_KEY) return null;
   return withAdminDb((db) => {
     const row = db.prepare('SELECT encrypted,revision,updated_at FROM settings WHERE id=1').get() as { encrypted: string; revision: number; updated_at: number } | undefined;
     return row ? { settings: decrypt(row.encrypted), revision: row.revision, updatedAt: row.updated_at } : null;
   });
 }
+
 export function saveStoredSettings(settings: AdminSettings, revision: number) {
   const encrypted = encrypt(AdminSettingsSchema.parse(settings));
   return withAdminDb((db) => {
@@ -68,7 +82,9 @@ export function saveStoredSettings(settings: AdminSettings, revision: number) {
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   });
 }
+
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+
 export function loginAdmin(password: string): { token: string } | { error: 'INVALID' | 'LIMITED' | 'UNCONFIGURED' } {
   if (!adminReady()) return { error: 'UNCONFIGURED' };
   return withAdminDb((db) => {
@@ -89,13 +105,16 @@ export function loginAdmin(password: string): { token: string } | { error: 'INVA
     return { token };
   });
 }
+
 export function validAdminSession(token: string) {
   if (!adminReady() || !/^[a-f0-9]{64}$/.test(token)) return false;
   return withAdminDb((db) => Boolean(db.prepare('SELECT token_hash FROM sessions WHERE token_hash=? AND expires_at>? AND password_hash=?').get(hash(token), Date.now(), hash(process.env.ADMIN_PASSWORD!))));
 }
+
 export function logoutAdmin(token: string) {
   withAdminDb((db) => { db.prepare('DELETE FROM sessions WHERE token_hash=?').run(hash(token)); });
 }
+
 export function readUsers(): { id: string; name: string; email: string; role: string; created_at: number }[] {
   return withAdminDb((db) => {
     return db.prepare('SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC').all() as { id: string; name: string; email: string; role: string; created_at: number }[];
