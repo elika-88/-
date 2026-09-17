@@ -43,7 +43,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const savedLang = localStorage.getItem("lumina.settings.lang") as SupportedLanguage;
-      if (savedLang && translations[savedLang]) {
+      if (savedLang && translations[savedLang]) { // eslint-disable-next-line react-hooks/set-state-in-effect
         setLanguageState(savedLang);
       }
 
