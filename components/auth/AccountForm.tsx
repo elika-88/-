@@ -2,9 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff, LoaderCircle } from "lucide-react";
 
 export function AccountForm({ mode }: { mode: "login" | "signup" }) {
+  const router = useRouter();
   const registering = mode === "signup";
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -27,7 +29,7 @@ export function AccountForm({ mode }: { mode: "login" | "signup" }) {
       const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("lumina-auth");
       channel?.postMessage("changed"); channel?.close();
       // Full navigation starts the workspace with the server's authenticated cookie.
-      window.location.assign("/");
+      router.push("/");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Connection failed. Try again.");
       setPending(false);
