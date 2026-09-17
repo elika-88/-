@@ -80,6 +80,8 @@ button svg { flex-shrink: 0; }
 .workspace-main { max-width: 980px; margin: 40px auto; padding: 0 32px 60px; }
 .input-section { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px #00000008, 0 2px 4px -1px #00000005; margin-bottom: 36px; }
 .input-section h1 { font-size: 24px; font-weight: 600; line-height: 1.4; margin: 0 0 24px; }
+.input-heading-row { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 24px; }
+.input-heading-row h1 { margin: 0; }
 .lecture-fields { display: grid; gap: 20px; border: 0; min-width: 0; }
 .lecture-fields label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 8px; }
 .optional { color: #666; font-weight: 400; }
