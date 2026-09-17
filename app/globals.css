@@ -1626,3 +1626,349 @@ html.dark .gpt-auth-error {
   border-color: #5c1d1d !important;
   color: #fca5a5 !important;
 }
+/* ==================== ChatGPT Admin Page Redesign ==================== */
+.gpt-admin-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #666666;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.gpt-admin-back-link:hover {
+  color: #000000;
+}
+
+html.dark .gpt-admin-back-link {
+  color: #a3a3a3;
+}
+
+html.dark .gpt-admin-back-link:hover {
+  color: #ffffff;
+}
+
+.gpt-admin-shield-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  color: #10a37f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html.dark .gpt-admin-shield-badge {
+  background: #064e3b;
+  color: #34d399;
+}
+
+.gpt-code-tag {
+  background: #f4f4f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: #111111;
+  font-weight: 600;
+}
+
+html.dark .gpt-code-tag {
+  background: #27272a;
+  color: #f4f4f5;
+}
+
+/* Authenticated Admin Dashboard */
+.gpt-admin-dashboard-page {
+  min-height: 100dvh;
+  background-color: var(--background, #fafafa);
+  color: var(--foreground, #111111);
+  padding: 32px 20px 80px;
+}
+
+.gpt-admin-container {
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.gpt-admin-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.gpt-admin-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.gpt-admin-back-btn:hover {
+  color: #000;
+}
+
+html.dark .gpt-admin-back-btn {
+  color: #a3a3a3;
+}
+
+html.dark .gpt-admin-back-btn:hover {
+  color: #fff;
+}
+
+.gpt-admin-signout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #e4e4e7;
+  background: #fff;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gpt-admin-signout-btn:hover {
+  background: #fef2f2;
+}
+
+html.dark .gpt-admin-signout-btn {
+  background: #212121;
+  border-color: #383838;
+  color: #f87171;
+}
+
+html.dark .gpt-admin-signout-btn:hover {
+  background: #391515;
+}
+
+.gpt-admin-hero {
+  margin-bottom: 24px;
+}
+
+.gpt-admin-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #10a37f;
+  background: #ecfdf5;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  margin-bottom: 10px;
+}
+
+html.dark .gpt-admin-hero-badge {
+  background: #064e3b;
+  color: #34d399;
+}
+
+.gpt-admin-hero h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+
+.gpt-admin-hero p {
+  color: #71717a;
+  font-size: 14.5px;
+  margin: 0;
+}
+
+html.dark .gpt-admin-hero p {
+  color: #a1a1aa;
+}
+
+.gpt-admin-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  margin-bottom: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.gpt-admin-alert.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+html.dark .gpt-admin-alert.success {
+  background: #064e3b;
+  border-color: #047857;
+  color: #6ee7b7;
+}
+
+.gpt-admin-alert.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+html.dark .gpt-admin-alert.error {
+  background: #391515;
+  border-color: #5c1d1d;
+  color: #fca5a5;
+}
+
+.gpt-admin-card {
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  margin-bottom: 24px;
+}
+
+html.dark .gpt-admin-card {
+  background: #212121;
+  border-color: #333333;
+  box-shadow: none;
+}
+
+.gpt-admin-fields {
+  display: grid;
+  gap: 20px;
+}
+
+.gpt-admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gpt-admin-field label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #18181b;
+}
+
+html.dark .gpt-admin-field label {
+  color: #f4f4f5;
+}
+
+.gpt-admin-field small {
+  font-size: 12px;
+  color: #71717a;
+}
+
+html.dark .gpt-admin-field small {
+  color: #a1a1aa;
+}
+
+.gpt-admin-input, .gpt-admin-select {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #ffffff;
+  color: #111111;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+html.dark .gpt-admin-input, html.dark .gpt-admin-select {
+  background: #18181b;
+  border-color: #3f3f46;
+  color: #f4f4f5;
+}
+
+.gpt-admin-input:focus, .gpt-admin-select:focus {
+  border-color: #10a37f;
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.2);
+}
+
+.gpt-admin-meta-row {
+  display: flex;
+  gap: 18px;
+  padding: 16px 0;
+  margin-top: 16px;
+  border-top: 1px solid #f4f4f5;
+  font-size: 12.5px;
+  color: #71717a;
+}
+
+html.dark .gpt-admin-meta-row {
+  border-top-color: #27272a;
+  color: #a1a1aa;
+}
+
+.gpt-admin-submit-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gpt-admin-card.audit {
+  padding: 20px 24px;
+}
+
+.gpt-admin-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.gpt-admin-empty-audit {
+  font-size: 13px;
+  color: #71717a;
+  margin: 0;
+}
+
+.gpt-admin-audit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gpt-admin-audit-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fafafa;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+html.dark .gpt-admin-audit-list li {
+  background: #18181b;
+}
+
+.gpt-audit-time {
+  color: #71717a;
+  font-family: monospace;
+}
+
+html.dark .gpt-audit-time {
+  color: #a1a1aa;
+}
+
+.gpt-audit-event {
+  font-weight: 500;
+}

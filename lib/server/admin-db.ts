@@ -11,11 +11,11 @@ function encryptionKey() {
   return Buffer.from(key, 'hex');
 }
 export function adminReady() {
-  return Boolean(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 8 && /^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY ?? ''));
+  return Boolean(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 6 && /^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY ?? ''));
 }
 export function adminSetupIssue() {
   if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_ENCRYPTION_KEY) return 'Run npm run admin:setup on the server, then restart the app.';
-  if (process.env.ADMIN_PASSWORD.length < 8) return 'Administrator password must contain at least 8 characters. Update it on the server, then restart.';
+  if (process.env.ADMIN_PASSWORD.length < 6) return 'Administrator password must contain at least 8 characters. Update it on the server, then restart.';
   if (!/^[a-f0-9]{64}$/i.test(process.env.ADMIN_ENCRYPTION_KEY)) return 'The server encryption key is invalid. Restore the original key before restarting.';
   return null;
 }
