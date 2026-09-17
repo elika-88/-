@@ -48,6 +48,15 @@ describe('source grounding', () => {
 });
 
 describe('generation pipeline', () => {
+  it('uses the configured chat format with strict structured output and full review', async () => {
+    const outputs = [analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }];
+    const parse = vi.fn().mockImplementation(async () => ({ choices: [{ finish_reason: 'stop', message: { parsed: outputs.shift(), refusal: null } }] }));
+    const connection = { client: { chat: { completions: { parse } } }, model: 'test-model', apiFormat: 'chat_completions' } as unknown as ReturnType<typeof createOpenAIClient>;
+    const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
+    expect(result.verification.supportedItems).toBe(5);
+    expect(parse).toHaveBeenCalledTimes(5);
+    expect(parse.mock.calls[0][0].response_format.type).toBe('json_schema');
+  });
   it('retries only a failed group while retaining successful siblings', async () => {
     const parse = vi.fn().mockResolvedValueOnce(response(analysis))
       .mockResolvedValueOnce(response(notePart))

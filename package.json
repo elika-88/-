@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "admin:setup": "node scripts/admin-setup.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "1.3.3",
