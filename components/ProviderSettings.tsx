@@ -21,14 +21,14 @@ export function ProviderSettings({ enabled, value, disabled, onEnabledChange, on
 
   return (
     <fieldset disabled={disabled} className="min-w-0 border-t border-border pt-5">
-      <legend className="flex items-center gap-2 pr-3 text-sm font-medium"><Settings2 className="size-4 text-muted-foreground" aria-hidden="true" />Настройки API</legend>
+      <legend className="flex items-center gap-2 pr-3 text-sm font-medium"><Settings2 className="size-4 text-muted-foreground" aria-hidden="true" />API settings</legend>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label htmlFor="custom-api" className="flex cursor-pointer items-center gap-2 text-sm">
           <input id="custom-api" type="checkbox" checked={enabled} onChange={(event) => { setShowKey(false); onEnabledChange(event.target.checked); }} className="size-4 accent-primary" aria-controls="provider-fields" />
-          Свой API
+          Use custom API
         </label>
-        {!enabled && <span className="text-xs text-muted-foreground">Серверная конфигурация</span>}
-        {enabled && <Button type="button" variant="ghost" size="icon" title="Сбросить настройки API" aria-label="Сбросить настройки API" onClick={() => { setShowKey(false); onReset(); }}><RotateCcw aria-hidden="true" /></Button>}
+        {!enabled && <span className="text-xs text-muted-foreground">Server default</span>}
+        {enabled && <Button type="button" variant="ghost" size="icon" title="Reset API settings" aria-label="Reset API settings" onClick={() => { setShowKey(false); onReset(); }}><RotateCcw aria-hidden="true" /></Button>}
       </div>
       {enabled && <div id="provider-fields" className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">
         <div className="min-w-0 sm:col-span-2">
@@ -39,14 +39,14 @@ export function ProviderSettings({ enabled, value, disabled, onEnabledChange, on
           <label htmlFor="api-key" className="mb-2 block text-sm font-medium">API key</label>
           <div className="flex min-w-0 items-center gap-2">
             <input id="api-key" type={showKey ? "text" : "password"} value={value.apiKey} onChange={(event) => onChange({ ...value, apiKey: event.target.value })} maxLength={4096} autoComplete="off" autoCapitalize="none" spellCheck={false} className={`${fieldClass} flex-1`} placeholder="API key" aria-describedby="key-handling" required />
-            <Button type="button" variant="outline" size="icon" className="shrink-0" title={showKey ? "Скрыть ключ" : "Показать ключ"} aria-label={showKey ? "Скрыть ключ" : "Показать ключ"} aria-pressed={showKey} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</Button>
+            <Button type="button" variant="outline" size="icon" className="shrink-0" title={showKey ? "Hide API key" : "Show API key"} aria-label={showKey ? "Hide API key" : "Show API key"} aria-pressed={showKey} onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</Button>
           </div>
         </div>
         <div className="min-w-0">
-          <label htmlFor="api-model" className="mb-2 block text-sm font-medium">Модель</label>
+          <label htmlFor="api-model" className="mb-2 block text-sm font-medium">Model</label>
           <input id="api-model" value={value.model} onChange={(event) => onChange({ ...value, model: event.target.value })} maxLength={256} autoComplete="off" spellCheck={false} className={fieldClass} placeholder="gpt-5-mini" required />
         </div>
-        <p id="key-handling" className="text-xs leading-5 text-muted-foreground sm:col-span-2">Ключ хранится только в памяти вкладки и передаётся серверу приложения при отправке.</p>
+        <p id="key-handling" className="text-xs leading-5 text-muted-foreground sm:col-span-2">Your key is used for this request and is not saved in lecture history.</p>
       </div>}
     </fieldset>
   );
