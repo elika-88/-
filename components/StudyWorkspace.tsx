@@ -1,23 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import Link from 'next/link';
-import { AlertCircle, BookOpen, Check, Languages, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertCircle, BookOpen, Check, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { CustomLanguageSelect } from '@/components/CustomLanguageSelect';
 import { HistorySidebar } from "@/components/HistorySidebar";
-import { ProviderSettings } from "@/components/ProviderSettings";
 import { StudyDashboard } from "@/components/StudyDashboard";
 import { GenerationClientError, requestGeneration } from "@/lib/client/generationStream";
 import { createSession, emptyHistory, parseHistory, serializeHistory, STORAGE_KEY, type SessionHistory, type StudySession, type SessionTab } from "@/lib/client/sessions";
-import { countWords, INPUT_LIMITS, OutputLanguageSchema, validateGenerationInput } from "@/lib/input";
-import { DEFAULT_API_BASE_URL, DEFAULT_MODEL, type ProviderConfig } from "@/lib/provider";
+import { countWords, INPUT_LIMITS, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
 
 const stages: Record<GenerationStage, string> = {
   validating: "Validating lecture", analyzing: "Analyzing lecture", generating: "Generating study materials",
   verifying: "Checking source evidence", correcting: "Refining study materials", complete: "Receiving final result",
 };
-const defaultProvider = (): ProviderConfig => ({ baseURL: DEFAULT_API_BASE_URL, apiKey: "", model: DEFAULT_MODEL });
 const emptyDraft: StudySession = { id: "draft", title: "", lecture: "", outputLanguage: "auto", tab: "summary", kit: null, updatedAt: 0, customTitle: false };
 type Operation = { controller: AbortController; sessionId: string };
 
@@ -33,15 +30,19 @@ export function StudyWorkspace() {
   const editDialog = useRef<HTMLDialogElement>(null);
   const [edit, setEdit] = useState<{ id: string; action: "rename" | "delete" } | null>(null);
   const [rename, setRename] = useState("");
-  const [customApi, setCustomApi] = useState(false);
-  const [provider, setProvider] = useState(defaultProvider);
   const [error, setError] = useState<GenerationClientError | null>(null);
   const [pending, setPending] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
+  
   const [progress, setProgress] = useState("");
   const operation = useRef<Operation | null>(null);
   const lectureInput = useRef<HTMLTextAreaElement>(null);
   const active = history.sessions.find((session) => session.id === history.activeId) ?? draft;
+  useEffect(() => {
+    if (lectureInput.current) {
+      lectureInput.current.style.height = "auto";
+      lectureInput.current.style.height = `${Math.min(Math.max(lectureInput.current.scrollHeight, 180), 550)}px`;
+    }
+  }, [active.lecture]);
   const staleKit = Boolean(active.kit && active.kit.source.text !== active.lecture);
 
   useEffect(() => {
@@ -99,19 +100,7 @@ export function StudyWorkspace() {
     requestAnimationFrame(() => lectureInput.current?.focus());
   }
 
-  async function loadDemo() {
-    if (!ready || pending || demoLoading) return;
-    setDemoLoading(true); setError(null);
-    try {
-      const response = await fetch('/demo/research-methods.txt');
-      if (!response.ok) throw new Error('Demo source unavailable');
-      const lecture = await response.text();
-      const session = { ...createSession(), title: 'How Evidence Becomes Knowledge', customTitle: true, lecture };
-      save({ ...historyRef.current, activeId: session.id, sessions: [...historyRef.current.sessions, session] });
-      setProgress('Demo lecture loaded. Generate to create fresh materials.');
-    } catch { setError(new GenerationClientError('NETWORK_ERROR', true)); }
-    finally { setDemoLoading(false); }
-  }
+  
 
   function selectLecture(id: string) {
     if (!ready) return;
@@ -145,8 +134,8 @@ export function StudyWorkspace() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (pending || demoLoading || !ready) return;
-    const validation = validateGenerationInput({ title: active.title, lecture: active.lecture, outputLanguage: active.outputLanguage, ...(customApi ? { provider } : {}) });
+    if (pending || !ready) return;
+    const validation = validateGenerationInput({ title: active.title, lecture: active.lecture, outputLanguage: active.outputLanguage });
     if (!validation.success) { setError(new GenerationClientError(validation.error.code, validation.error.retryable)); lectureInput.current?.focus(); return; }
     setError(null); setPending(true); setProgress("Sending lecture");
     const current: Operation = { controller: new AbortController(), sessionId: active.id };
@@ -180,26 +169,24 @@ export function StudyWorkspace() {
 
   const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit };
   return <div className={`study-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-    {!sidebarCollapsed && <aside className="lecture-sidebar" aria-label="Lecture history"><HistorySidebar {...sidebarProps} onClose={() => setSidebarCollapsed(true)} /></aside>}
-    <dialog ref={mobileSidebar} className="mobile-sidebar" aria-label="Lecture history"><HistorySidebar {...sidebarProps} onClose={() => mobileSidebar.current?.close()} /></dialog>
+    <aside className={`lecture-sidebar ${sidebarCollapsed ? "rail" : ""}`} aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} onClose={() => setSidebarCollapsed(true)} /></aside>
+    <dialog ref={mobileSidebar} className="mobile-sidebar" aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={false} onToggleCollapse={() => mobileSidebar.current?.close()} onClose={() => mobileSidebar.current?.close()} /></dialog>
     <div className="workspace">
       <header className="workspace-header"><div className="header-inner">
         <button className="icon-button open-sidebar" type="button" title="Open sidebar" aria-label="Open sidebar" onClick={() => { if (matchMedia("(max-width: 767px)").matches) mobileSidebar.current?.showModal(); else setSidebarCollapsed(false); }}><PanelLeft aria-hidden="true" /></button>
-        <div className="logo"><span className="logo-mark" aria-hidden="true" />Lumina</div><span className="workspace-title">{active.title || "New lecture"}</span>
+        <span className="workspace-title">{active.title || "New lecture"}</span>
       </div></header>
       <main className="workspace-main">
-        <nav aria-label="Administration" style={{ textAlign: 'right', marginBottom: 12 }}><Link href="/admin" className="text-sm text-muted-foreground">Administration</Link></nav>
         {storageError && <div className="notice warning" role="alert"><AlertCircle aria-hidden="true" /><p>{storageError}</p></div>}
         <section className="input-section" aria-labelledby="input-heading">
-          <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1><Button type="button" variant="ghost" disabled={!ready || pending || demoLoading} onClick={loadDemo}>{demoLoading ? 'Loading lecture…' : 'Load demo lecture'}</Button></div>
+          <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1></div>
           <form onSubmit={submit} noValidate aria-busy={pending}>
-            <fieldset disabled={!ready || pending || demoLoading} className="lecture-fields">
+            <fieldset disabled={!ready || pending} className="lecture-fields">
               <div><label htmlFor="lecture-title">Lecture title <span className="optional">(optional)</span></label><input className="text-field" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder="Untitled lecture" /></div>
               <div><div className="field-heading"><label htmlFor="lecture">Lecture text</label><span id="lecture-count">{countWords(active.lecture).toLocaleString("en-US")} words · {active.lecture.length.toLocaleString("en-US")} / 60,000</span></div>
                 <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder="Lecture text" /></div>
-              <details className="api-options"><summary>API settings</summary><div className="api-settings-body"><ProviderSettings enabled={customApi} value={provider} disabled={pending} onEnabledChange={(enabled) => { setCustomApi(enabled); setProvider((value) => ({ ...value, apiKey: "" })); setError(null); }} onChange={(value) => { setProvider(value); setError(null); }} onReset={() => { setCustomApi(false); setProvider(defaultProvider()); setError(null); }} /></div></details>
             </fieldset>
-            <div className="input-toolbar"><div className="language-field"><label htmlFor="language"><Languages aria-hidden="true" />Output language</label><select id="language" disabled={!ready || pending} value={active.outputLanguage} onChange={(event) => updateSession({ outputLanguage: OutputLanguageSchema.parse(event.target.value) })}><option value="auto">Match lecture</option><option value="en">English</option><option value="ru">Русский</option><option value="zh">中文</option></select></div>
+            <div className="input-toolbar"><CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending} onChange={(val) => updateSession({ outputLanguage: val })} />
               <div className="generate-actions">{pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}<Button type="submit" disabled={!ready || pending}>{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : active.kit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{pending ? "Generating" : active.kit ? "Regenerate materials" : "Generate materials"}</Button></div>
             </div>
             {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}

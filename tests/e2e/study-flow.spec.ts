@@ -41,12 +41,17 @@ test('studies a generated kit, reviews mistakes and preserves it after failed re
   expect(requests).toBe(2);
 });
 
-test('loads only demo source without starting generation', async ({ page }) => {
+test('starts empty without demo controls or simulated account creation', async ({ page }) => {
   let generated = false;
   page.on('request', (request) => { if (request.url().endsWith('/api/generate')) generated = true; });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Load demo lecture' }).click();
-  await expect(page.getByLabel('Lecture text', { exact: true })).toHaveValue(/How Evidence Becomes Knowledge/);
+  await expect(page.getByRole('button', { name: 'Load demo lecture' })).toHaveCount(0);
+  await expect(page.getByLabel('Lecture text', { exact: true })).toHaveValue('');
+  await expect(page.locator('a[href="/login"], a[href="/signup"]')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'No study materials yet' })).toBeVisible();
+  for (const path of ['/login', '/signup', '/demo/research-methods.txt']) {
+    expect((await page.request.get(path)).status()).toBe(404);
+  }
+  expect((await page.request.post('/api/auth', { data: { email: 'fixture@example.invalid' } })).status()).toBe(404);
   expect(generated).toBe(false);
 });

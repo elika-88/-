@@ -1,18 +1,19 @@
 # Frontend Integration
 
 The workspace now uses the Lumina layout, English UI, local lecture history,
-and the shared generation contract. The backend files and shared schemas are
-unchanged. There are no generated sample results in the application.
+and the shared generation contract. There are no generated sample results in
+the application.
 
 ## Current API Behavior
 
 The form submits `POST /api/generate` with `title`, `lecture`,
-`outputLanguage`, and optional `provider`. Frontend validation uses
+`outputLanguage`. Frontend validation uses
 `validateGenerationInput` from `lib/input.ts`.
 
 Backend commit `fe98d02` now implements real generation and source verification.
-The frontend consumes its NDJSON response directly. Configure an API key through
-the page's API settings or the server environment before generating.
+The frontend consumes its NDJSON response directly. Configure URL, key, model,
+and API format in the server `.env` before generating. Browser provider overrides
+are rejected.
 
 ## Ready for Backend Events
 
@@ -42,15 +43,26 @@ and successful materials in localStorage. Sessions can be searched, renamed,
 deleted, and reopened. A failed regeneration preserves the previous result;
 changed lecture text is explicitly marked when viewing older materials.
 
-Custom API URL, key, and model are kept only in component memory and request
-handling. They are not part of the stored session schema. The key clears when
-custom mode is disabled, settings are reset, or the page reloads.
+API URL, key, and model stay on the server. There are no browser connection
+controls and no credentials in saved sessions or frontend requests.
 
 Storage failures are visible. Unreadable history is not overwritten. History
 from the standalone desktop HTML is on a different browser origin and is not
 automatically accessible to the localhost application.
 
-## Development
+## Runtime cleanup
+
+Removed the simulated `/login`, `/signup`, and `/api/auth` paths. They did not
+verify passwords or establish authenticated user sessions. A future user-account
+API must provide server-side authentication before these controls return.
+Existing database records and browser study history were not erased.
+
+Settings expose interface language, appearance, and working JSON export only.
+The disconnected autosave/sound/font controls and invented version/license
+claims were removed. The backend still uses local SQLite; the installed libSQL
+package is not yet wired into database operations.
+
+## Checks
 
 ```bash
 npm ci

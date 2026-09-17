@@ -90,9 +90,6 @@ button svg { flex-shrink: 0; }
 .field-heading span { font-size: 12px; color: #666; font-variant-numeric: tabular-nums; }
 #lecture { display: block; width: 100%; min-height: 150px; height: 170px; padding: 16px; background: #fafafa; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; line-height: 1.75; }
 #lecture:focus { background: white; border-color: #888; }
-.api-options { font-size: 13px; color: #555; }
-.api-options > summary { cursor: pointer; width: fit-content; padding: 4px 0; }
-.api-settings-body { margin-top: 16px; color: #111; }
 .input-toolbar { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding-top: 20px; margin-top: 16px; border-top: 1px solid var(--border); }
 .language-field { width: 170px; }
 .language-field label { display: flex; gap: 6px; align-items: center; font-size: 12px; margin-bottom: 8px; }
@@ -138,4 +135,1799 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+/* ==================== ChatGPT Style Sidebar ==================== */
+.chatgpt-sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px 12px;
+  background-color: #f9f9f9;
+  color: #0d0d0d;
+}
+
+.gpt-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 12px;
+}
+
+.gpt-brand-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.gpt-brand-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gpt-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #676767;
+  transition: background 0.15s, color 0.15s;
+}
+
+.gpt-icon-btn:hover {
+  background: #ebebeb;
+  color: #0d0d0d;
+}
+
+.gpt-nav-actions {
+  margin-bottom: 8px;
+}
+
+.gpt-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #0d0d0d;
+  transition: background 0.15s;
+}
+
+.gpt-nav-item:hover {
+  background: #ececec;
+}
+
+.gpt-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 4px 0 12px;
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.gpt-search-wrapper svg {
+  color: #8e8e8e;
+  flex-shrink: 0;
+}
+
+.gpt-search-wrapper input {
+  width: 100%;
+  height: 34px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  padding-left: 8px;
+  outline: none;
+}
+
+.gpt-section-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8e8e8e;
+  padding: 8px 8px 4px;
+}
+
+.gpt-history-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gpt-empty-hint {
+  padding: 16px 8px;
+  font-size: 13px;
+  color: #8e8e8e;
+  text-align: center;
+}
+
+.gpt-chat-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.gpt-chat-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.gpt-chat-item:hover, .gpt-chat-item.active {
+  background: #ececec;
+}
+
+.gpt-chat-btn {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  color: #212121;
+}
+
+.gpt-chat-btn span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gpt-item-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #676767;
+  margin-right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.gpt-chat-item:hover .gpt-item-more, .gpt-chat-item.active .gpt-item-more {
+  opacity: 1;
+}
+
+.gpt-item-more:hover {
+  background: #dedede;
+  color: #000;
+}
+
+.gpt-popover-menu {
+  position: absolute;
+  right: 6px;
+  top: calc(100% + 2px);
+  z-index: 70;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  min-width: 100px;
+}
+
+.gpt-popover-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  text-align: left;
+  width: 100%;
+}
+
+.gpt-popover-menu button:hover {
+  background: #f4f4f4;
+}
+
+.gpt-popover-menu button.danger {
+  color: #d32f2f;
+}
+
+.gpt-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #ff5c7c;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+/* ==================== ChatGPT Auth Pages Style ==================== */
+.gpt-auth-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #ffffff;
+  padding: 24px;
+}
+
+.gpt-auth-header {
+  margin-bottom: 24px;
+}
+
+.gpt-auth-box {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.gpt-auth-title {
+  font-size: 32px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 8px;
+  color: #0d0d0d;
+  letter-spacing: -0.02em;
+}
+
+.gpt-auth-subtitle {
+  font-size: 14px;
+  color: #6e6e6e;
+  text-align: center;
+  margin: 0 0 24px;
+}
+
+.gpt-auth-error {
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  color: #b91c1c;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.gpt-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gpt-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gpt-auth-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #212121;
+}
+
+.gpt-auth-field input {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid #c2c8d0;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  background: #ffffff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.gpt-auth-field input:focus {
+  border-color: #10a37f;
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.2);
+}
+
+.gpt-auth-submit {
+  margin-top: 8px;
+  height: 48px;
+  background: #10a37f;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  transition: background 0.15s;
+}
+
+.gpt-auth-submit:hover {
+  background: #0d8a6a;
+}
+.gpt-sidebar-auth-footer {
+  margin-top: 8px;
+  border-top: 1px solid var(--border-color, #eaeaea);
+  padding-top: 8px;
+  position: relative;
+}
+.gpt-user-avatar.guest {
+  background: #ececec;
+  color: #6e6e6e;
+}
+/* ==================== ChatGPT Collapsed Rail Sidebar ==================== */
+.lecture-sidebar {
+  transition: width 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.workspace {
+  transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.lecture-sidebar.rail {
+  width: 56px;
+  padding: 8px 6px;
+}
+
+.sidebar-collapsed .workspace {
+  margin-left: 56px;
+}
+
+.sidebar-collapsed .open-sidebar {
+  display: none; /* Already have rail to control */
+}
+
+.gpt-rail-icons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  flex: 1;
+}
+
+.gpt-rail-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  color: #555555;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.gpt-rail-btn:hover {
+  background: #ececec;
+  color: #0d0d0d;
+}
+
+.gpt-rail-btn.brand {
+  color: #0d0d0d;
+}
+
+.gpt-user-avatar.small {
+  width: 34px;
+  height: 34px;
+}
+/* ==================== ChatGPT Smooth Collapsing Sidebar Container ==================== */
+.lecture-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 260px;
+  background-color: #f9f9f9;
+  border-right: 1px solid #e8e8e8;
+  z-index: 60;
+  transition: width 0.28s cubic-bezier(0.2, 0, 0, 1);
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+.lecture-sidebar.rail {
+  width: 54px;
+}
+
+.workspace {
+  margin-left: 260px;
+  transition: margin-left 0.28s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.sidebar-collapsed .workspace {
+  margin-left: 54px;
+}
+
+@media (max-width: 767px) {
+  .workspace,
+  .sidebar-collapsed .workspace { margin-left: 0; }
+  .sidebar-collapsed .open-sidebar { display: inline-flex; }
+}
+
+.gpt-sidebar-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Standby Rail Content */
+.gpt-rail-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 54px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1) 0.05s, transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  transform: scale(0.92);
+}
+
+.gpt-sidebar-container.is-collapsed .gpt-rail-content {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+/* Expanded Full Content */
+.gpt-expanded-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  transform: translateX(0);
+}
+
+.gpt-sidebar-container.is-collapsed .gpt-expanded-content {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-12px);
+}
+/* ==================== ChatGPT Style Settings Modal & Multi-Theme ==================== */
+:root {
+  --bg-modal: #ffffff;
+  --text-main: #0d0d0d;
+  --text-sub: #666666;
+  --border-color: #e5e5e5;
+  --hover-bg: #f3f3f3;
+  --card-bg: #f9f9f9;
+}
+
+html.dark {
+  --background: #171717;
+  --foreground: #ececec;
+  --muted: #212121;
+  --muted-foreground: #8e8e8e;
+  --border: #2e2e2e;
+  --input: #3e3e3e;
+  --bg-modal: #1e1e1e;
+  --text-main: #f5f5f5;
+  --text-sub: #a3a3a3;
+  --border-color: #333333;
+  --hover-bg: #2a2a2a;
+  --card-bg: #262626;
+}
+
+html.dark body {
+  background-color: #171717;
+  color: #ececec;
+}
+
+html.dark .chatgpt-sidebar-inner,
+html.dark .lecture-sidebar {
+  background-color: #171717 !important;
+  border-right-color: #2e2e2e !important;
+}
+
+html.dark .gpt-brand-row,
+html.dark .gpt-nav-item,
+html.dark .gpt-chat-btn {
+  color: #ececec !important;
+}
+
+html.dark .gpt-nav-item:hover,
+html.dark .gpt-chat-item:hover,
+html.dark .gpt-chat-item.active,
+html.dark .gpt-rail-btn:hover,
+html.dark .gpt-icon-btn:hover {
+  background-color: #212121 !important;
+  color: #ffffff !important;
+}
+
+html.dark .gpt-search-wrapper {
+  background-color: #212121 !important;
+}
+
+html.dark .gpt-search-wrapper input {
+  color: #ececec !important;
+}
+
+html.dark .workspace-header {
+  background: rgba(23, 23, 23, 0.85) !important;
+  border-bottom-color: #2e2e2e !important;
+}
+
+html.dark .input-section {
+  background-color: #212121 !important;
+  border-color: #2e2e2e !important;
+}
+
+html.dark #lecture {
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
+  color: #f1f1f1 !important;
+}
+
+html.dark .text-field {
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
+  color: #f1f1f1 !important;
+}
+
+html.dark .language-field select {
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
+  color: #f1f1f1 !important;
+}
+
+html.dark .gpt-popover-menu {
+  background-color: #262626 !important;
+  border-color: #383838 !important;
+}
+
+html.dark .gpt-popover-menu button {
+  color: #ececec !important;
+}
+
+html.dark .gpt-popover-menu button:hover {
+  background-color: #333333 !important;
+}
+
+/* Modal Dialog */
+.gpt-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.gpt-settings-dialog {
+  background-color: var(--bg-modal);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 680px;
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.gpt-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.gpt-settings-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.gpt-settings-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-sub);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.gpt-settings-close-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-main);
+}
+
+.gpt-settings-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.gpt-settings-tabs {
+  width: 190px;
+  border-right: 1px solid var(--border-color);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--card-bg);
+}
+
+.gpt-settings-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--text-sub);
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gpt-settings-tab-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-main);
+}
+
+.gpt-settings-tab-btn.active {
+  background: var(--hover-bg);
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.gpt-settings-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.gpt-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.gpt-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.gpt-setting-row.block {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.gpt-setting-info label {
+  font-size: 14px;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.gpt-setting-info p {
+  font-size: 12.5px;
+  color: var(--text-sub);
+  margin: 0;
+}
+
+/* Theme Selector Grid */
+.gpt-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gpt-theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 12px;
+  border-radius: 10px;
+  border: 2px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-sub);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.gpt-theme-card:hover {
+  border-color: #888888;
+  color: var(--text-main);
+}
+
+.gpt-theme-card.active {
+  border-color: #10a37f;
+  color: #10a37f;
+  background: var(--hover-bg);
+}
+
+.gpt-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-modal);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.gpt-secondary-btn:hover {
+  background: var(--hover-bg);
+}
+
+.text-danger {
+  color: #dc2626 !important;
+}
+
+.gpt-settings-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gpt-settings-done-btn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 8px;
+  background: #10a37f;
+  color: white;
+  font-size: 13.5px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.gpt-settings-done-btn:hover {
+  background: #0d8a6a;
+}
+
+.gpt-footer-user-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+/* ==================== ChatGPT Style Custom Rounded Select ==================== */
+.gpt-custom-select-container {
+  position: relative;
+  width: 190px;
+}
+
+.gpt-custom-select-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666666;
+  margin-bottom: 6px;
+}
+
+html.dark .gpt-custom-select-label {
+  color: #999999;
+}
+
+.gpt-custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  background: #ffffff;
+  border: 1px solid #d4d4d8;
+  border-radius: 9999px; /* Complete pill rounded circle */
+  font-size: 13.5px;
+  color: #111111;
+  cursor: pointer;
+  outline: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.gpt-custom-select-trigger:hover:not(:disabled) {
+  border-color: #888888;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06);
+}
+
+.gpt-custom-select-trigger:focus-visible,
+.gpt-custom-select-trigger.is-open {
+  border-color: #10a37f;
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.15);
+}
+
+.gpt-custom-select-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f4f4f5;
+}
+
+html.dark .gpt-custom-select-trigger {
+  background: #212121;
+  border-color: #383838;
+  color: #ececec;
+}
+
+html.dark .gpt-custom-select-trigger:hover:not(:disabled) {
+  border-color: #555555;
+}
+
+html.dark .gpt-custom-select-trigger:disabled {
+  background: #1a1a1a;
+}
+
+.gpt-select-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 450;
+}
+
+.gpt-select-arrow {
+  color: #71717a;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.gpt-select-arrow.rotate {
+  transform: rotate(180deg);
+}
+
+/* Dropdown Menu (Pill styling & elevation) */
+.gpt-custom-select-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  padding: 6px;
+  list-style: none;
+  margin: 0;
+  z-index: 90;
+  animation: fadeIn 0.15s ease-out;
+}
+
+html.dark .gpt-custom-select-menu {
+  background: #242424;
+  border-color: #383838;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.gpt-custom-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  color: #27272a;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+html.dark .gpt-custom-select-item {
+  color: #e4e4e7;
+}
+
+.gpt-custom-select-item:hover {
+  background: #f4f4f5;
+  color: #000000;
+}
+
+html.dark .gpt-custom-select-item:hover {
+  background: #303030;
+  color: #ffffff;
+}
+
+.gpt-custom-select-item.selected {
+  font-weight: 500;
+  color: #10a37f;
+}
+
+html.dark .gpt-custom-select-item.selected {
+  color: #10a37f;
+}
+
+.gpt-check-icon {
+  color: #10a37f;
+}
+/* ==================== Settings Modal Custom Rounded Select ==================== */
+.gpt-settings-select-container {
+  position: relative;
+  width: 220px;
+}
+
+.gpt-settings-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-color);
+  border-radius: 9999px; /* Complete pill rounded circle */
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+  outline: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.gpt-settings-select-trigger:hover {
+  border-color: #888888;
+}
+
+.gpt-settings-select-trigger:focus-visible,
+.gpt-settings-select-trigger.is-open {
+  border-color: #10a37f;
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.15);
+}
+
+.gpt-settings-select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 100%;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
+  padding: 6px;
+  list-style: none;
+  margin: 0;
+  z-index: 1050;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.gpt-settings-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.gpt-settings-select-item:hover {
+  background: var(--hover-bg);
+}
+
+.gpt-settings-select-item.selected {
+  font-weight: 500;
+  color: #10a37f;
+}
+html.dark .gpt-sidebar-auth-footer {
+  border-top-color: #2e2e2e !important;
+}
+/* ==================== ChatGPT Style Custom Rounded Inputs ==================== */
+.text-field {
+  width: 100%;
+  border: 1px solid #d4d4d8 !important;
+  border-radius: 9999px !important; /* Pill rounded for title input */
+  padding: 10px 18px !important;
+  font-size: 14.5px !important;
+  background: #ffffff !important;
+  color: #111111 !important;
+  outline: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+.text-field:hover {
+  border-color: #888888 !important;
+}
+
+.text-field:focus {
+  border-color: #10a37f !important;
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.15) !important;
+}
+
+#lecture {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  height: 200px;
+  padding: 18px 20px !important;
+  background: #fafafa !important;
+  border: 1px solid #d4d4d8 !important;
+  border-radius: 20px !important; /* Smooth extra-rounded canvas card */
+  font-size: 15px !important;
+  line-height: 1.75 !important;
+  color: #111111 !important;
+  outline: none !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) inset !important;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+#lecture:hover {
+  border-color: #888888 !important;
+}
+
+#lecture:focus {
+  background: #ffffff !important;
+  border-color: #10a37f !important;
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.15) !important;
+}
+
+/* Dark Theme Overrides for Custom Inputs */
+html.dark .text-field {
+  background-color: #212121 !important;
+  border-color: #383838 !important;
+  color: #ececec !important;
+  box-shadow: none !important;
+}
+
+html.dark .text-field:hover {
+  border-color: #555555 !important;
+}
+
+html.dark .text-field:focus {
+  border-color: #10a37f !important;
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.2) !important;
+}
+
+html.dark #lecture {
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
+  color: #f1f1f1 !important;
+  box-shadow: none !important;
+}
+
+html.dark #lecture:hover {
+  border-color: #555555 !important;
+}
+
+html.dark #lecture:focus {
+  background-color: #212121 !important;
+  border-color: #10a37f !important;
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.2) !important;
+}
+/* ==================== ChatGPT Style Custom Rounded Scrollbar & Auto-Resize ==================== */
+#lecture {
+  resize: none !important; /* Disallow ugly system resize handle */
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(150, 150, 150, 0.4) transparent !important;
+}
+
+/* Chrome / Safari / Edge Custom Scrollbar */
+#lecture::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+#lecture::-webkit-scrollbar-track {
+  background: transparent !important;
+  margin: 12px 0 !important;
+}
+
+#lecture::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.4) !important;
+  border-radius: 9999px !important; /* Smooth pill scroll thumb */
+  transition: background 0.2s ease !important;
+}
+
+#lecture::-webkit-scrollbar-thumb:hover {
+  background: rgba(150, 150, 150, 0.7) !important;
+}
+
+html.dark #lecture {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent !important;
+}
+
+html.dark #lecture::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.dark #lecture::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+/* Dark Theme Overrides for History Item More Button */
+html.dark .gpt-item-more {
+  color: #a3a3a3 !important;
+  background: transparent !important;
+}
+
+html.dark .gpt-item-more:hover {
+  background: #333333 !important;
+  color: #ffffff !important;
+}
+/* ==================== Dark Theme for Login & Signup Pages ==================== */
+html.dark .gpt-auth-page {
+  background-color: #171717 !important;
+  color: #ececec !important;
+}
+
+html.dark .gpt-auth-title {
+  color: #ffffff !important;
+}
+
+html.dark .gpt-auth-subtitle {
+  color: #a3a3a3 !important;
+}
+
+html.dark .gpt-auth-field label {
+  color: #e5e5e5 !important;
+}
+
+html.dark .gpt-auth-field input {
+  background-color: #212121 !important;
+  border-color: #383838 !important;
+  color: #ffffff !important;
+}
+
+html.dark .gpt-auth-field input:focus {
+  border-color: #10a37f !important;
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.3) !important;
+}
+
+html.dark .gpt-auth-error {
+  background: #391515 !important;
+  border-color: #5c1d1d !important;
+  color: #fca5a5 !important;
+}
+/* ==================== ChatGPT Admin Page Redesign ==================== */
+.gpt-admin-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #666666;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.gpt-admin-back-link:hover {
+  color: #000000;
+}
+
+html.dark .gpt-admin-back-link {
+  color: #a3a3a3;
+}
+
+html.dark .gpt-admin-back-link:hover {
+  color: #ffffff;
+}
+
+/* ==================== ChatGPT Workspace Admin Console ==================== */
+.gpt-admin-app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background, #fafafa);
+  color: var(--foreground, #111111);
+  font-family: var(--font-sans);
+}
+
+/* Topbar */
+.gpt-admin-topbar {
+  height: 54px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  background: var(--bg-modal, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  flex-shrink: 0;
+}
+
+html.dark .gpt-admin-topbar {
+  background: #171717;
+  border-bottom-color: #2e2e2e;
+}
+
+.gpt-admin-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.gpt-admin-top-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #666;
+  text-decoration: none;
+  font-weight: 450;
+  transition: color 0.15s;
+}
+
+.gpt-admin-top-back:hover {
+  color: #000;
+}
+
+html.dark .gpt-admin-top-back {
+  color: #a3a3a3;
+}
+
+html.dark .gpt-admin-top-back:hover {
+  color: #fff;
+}
+
+.gpt-admin-divider {
+  color: #ccc;
+}
+
+html.dark .gpt-admin-divider {
+  color: #444;
+}
+
+.gpt-admin-current-brand {
+  font-weight: 600;
+  color: var(--text-main, #0d0d0d);
+}
+
+.gpt-admin-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.gpt-admin-user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main, #212121);
+}
+
+.gpt-admin-logout-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: #dc2626;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.gpt-admin-logout-link:hover {
+  background: #fef2f2;
+}
+
+html.dark .gpt-admin-logout-link:hover {
+  background: #391515;
+}
+
+/* Two-column Layout */
+.gpt-admin-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Left Sidebar */
+.gpt-admin-sidebar {
+  width: 240px;
+  border-right: 1px solid var(--border-color, #e5e5e5);
+  background: var(--bg-modal, #ffffff);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  flex-shrink: 0;
+}
+
+html.dark .gpt-admin-sidebar {
+  background: #171717;
+  border-right-color: #2e2e2e;
+}
+
+.gpt-admin-sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8e8e8e;
+  padding: 0 10px 8px;
+}
+
+.gpt-admin-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gpt-admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: #666;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gpt-admin-nav-item:hover {
+  background: #f3f3f3;
+  color: #0d0d0d;
+}
+
+.gpt-admin-nav-item.active {
+  background: #ececec;
+  color: #0d0d0d;
+  font-weight: 500;
+}
+
+html.dark .gpt-admin-nav-item {
+  color: #a3a3a3;
+}
+
+html.dark .gpt-admin-nav-item:hover {
+  background: #212121;
+  color: #ffffff;
+}
+
+html.dark .gpt-admin-nav-item.active {
+  background: #262626;
+  color: #ffffff;
+}
+
+/* Right Main Area */
+.gpt-admin-main {
+  flex: 1;
+  padding: 32px 40px;
+  overflow-y: auto;
+  max-width: 1000px;
+}
+
+.gpt-admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.gpt-admin-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.gpt-admin-panel-header h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.gpt-admin-panel-header p {
+  font-size: 14px;
+  color: #71717a;
+  margin: 0;
+}
+
+html.dark .gpt-admin-panel-header p {
+  color: #a1a1aa;
+}
+
+.gpt-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9999px; /* Pill rounded */
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.gpt-pill-btn.primary {
+  background: #10a37f;
+  color: #ffffff;
+}
+
+.gpt-pill-btn.primary:hover:not(:disabled) {
+  background: #0d8a6a;
+}
+
+.gpt-pill-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Form Grid */
+.gpt-admin-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: var(--bg-modal, #ffffff);
+  border: 1px solid var(--border-color, #e4e4e7);
+  border-radius: 14px;
+  padding: 24px;
+}
+
+html.dark .gpt-admin-form-grid {
+  background: #1e1e1e;
+  border-color: #2e2e2e;
+}
+
+.gpt-admin-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gpt-admin-form-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gpt-admin-form-label label {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-main, #18181b);
+}
+
+.gpt-admin-form-label span {
+  font-size: 12px;
+  color: #71717a;
+}
+
+.gpt-admin-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.gpt-admin-input-icon {
+  position: absolute;
+  left: 14px;
+  color: #8e8e8e;
+  pointer-events: none;
+}
+
+.gpt-admin-text-input,
+.gpt-admin-select-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px 0 40px;
+  border: 1px solid var(--border-color, #d4d4d8);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--bg-modal, #ffffff);
+  color: var(--text-main, #111111);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+html.dark .gpt-admin-text-input,
+html.dark .gpt-admin-select-input {
+  background: #141414;
+  border-color: #333333;
+  color: #f4f4f5;
+}
+
+.gpt-admin-text-input:focus,
+.gpt-admin-select-input:focus {
+  border-color: #10a37f;
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.2);
+}
+
+.gpt-admin-help-text {
+  font-size: 12px;
+  color: #71717a;
+  margin: 2px 0 0;
+}
+
+html.dark .gpt-admin-help-text {
+  color: #8e8e8e;
+}
+
+.text-success {
+  color: #10a37f !important;
+  font-weight: 500;
+}
+
+.text-warning {
+  color: #d97706 !important;
+  font-weight: 500;
+}
+
+.gpt-admin-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: #71717a;
+  padding: 4px 4px 0;
+}
+
+/* Toast Alerts */
+.gpt-admin-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.gpt-admin-toast.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+html.dark .gpt-admin-toast.success {
+  background: #064e3b;
+  border-color: #047857;
+  color: #6ee7b7;
+}
+
+.gpt-admin-toast.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+html.dark .gpt-admin-toast.error {
+  background: #391515;
+  border-color: #5c1d1d;
+  color: #fca5a5;
+}
+
+/* Tables */
+
+.gpt-admin-table-container {
+  background: var(--bg-modal, #ffffff);
+  border: 1px solid var(--border-color, #e4e4e7);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+html.dark .gpt-admin-table-container {
+  background: #1e1e1e;
+  border-color: #2e2e2e;
+}
+
+.gpt-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13.5px;
+}
+
+.gpt-admin-table th {
+  padding: 12px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8e8e8e;
+  background: #fbfbfb;
+  border-bottom: 1px solid var(--border-color, #e4e4e7);
+}
+
+html.dark .gpt-admin-table th {
+  background: #18181b;
+  border-bottom-color: #2e2e2e;
+}
+
+.gpt-admin-table td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color, #f4f4f5);
+  vertical-align: middle;
+}
+
+html.dark .gpt-admin-table td {
+  border-bottom-color: #27272a;
+}
+
+.gpt-table-code {
+  font-family: monospace;
+  font-size: 12.5px;
+  color: #666;
+}
+
+html.dark .gpt-table-code {
+  color: #a1a1aa;
+}
+
+.gpt-table-empty {
+  text-align: center;
+  padding: 36px !important;
+  color: #8e8e8e;
+}
+
+/* Badges */
+
+.gpt-icon-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #71717a;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.gpt-icon-action-btn:hover {
+  background: #f4f4f5;
+  color: #111111;
+}
+
+/* ==================== ccswitch Style Model Fetcher & Chips ==================== */
+.gpt-fetch-models-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid #d4d4d8;
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: #10a37f;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gpt-fetch-models-btn:hover:not(:disabled) {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.gpt-fetch-models-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+html.dark .gpt-fetch-models-btn {
+  border-color: #383838;
+  color: #34d399;
+}
+
+html.dark .gpt-fetch-models-btn:hover:not(:disabled) {
+  background: #064e3b;
+  border-color: #047857;
+}
+
+.gpt-model-picker-area {
+  margin-top: 10px;
+  padding: 12px;
+  background: #fbfbfb;
+  border: 1px solid var(--border-color, #e4e4e7);
+  border-radius: 10px;
+}
+
+html.dark .gpt-model-picker-area {
+  background: #141414;
+  border-color: #27272a;
+}
+
+.gpt-model-picker-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #71717a;
+  margin-bottom: 8px;
+}
+
+html.dark .gpt-model-picker-title {
+  color: #a1a1aa;
+}
+
+.gpt-model-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.gpt-model-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color, #d4d4d8);
+  background: var(--bg-modal, #ffffff);
+  color: var(--text-main, #111111);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gpt-model-chip:hover {
+  border-color: #888888;
+  background: #f4f4f5;
+}
+
+.gpt-model-chip.active {
+  border-color: #10a37f;
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 500;
+}
+
+html.dark .gpt-model-chip {
+  background: #1e1e1e;
+  border-color: #333333;
+  color: #e4e4e7;
+}
+
+html.dark .gpt-model-chip:hover {
+  background: #27272a;
+}
+
+html.dark .gpt-model-chip.active {
+  background: #064e3b;
+  border-color: #047857;
+  color: #34d399;
 }

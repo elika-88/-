@@ -3,7 +3,7 @@ import { ProviderConfigSchema, type ProviderConfig } from "@/lib/provider";
 import { validateGenerationInput } from "@/lib/input";
 
 vi.mock("server-only", () => ({}));
-import { readOpenAIEnvironment } from "@/lib/server/env";
+import { readApiFormat, readOpenAIEnvironment } from "@/lib/server/env";
 import { createOpenAIClient } from "@/lib/openai";
 
 const provider = { baseURL: "https://gateway.example/v1", apiKey: "test-only-user-key", model: "vendor/model-name" };
@@ -45,22 +45,48 @@ describe("custom provider validation", () => {
 });
 
 describe("server configuration isolation", () => {
-  it("uses environment defaults only when no custom config is supplied", () => {
+  it("reads the API format only from the server environment", async () => {
+    vi.stubEnv("OPENAI_API_FORMAT", undefined);
+    expect(await readApiFormat()).toBe("responses");
+    vi.stubEnv("OPENAI_API_FORMAT", "chat_completions");
+    expect(await readApiFormat()).toBe("chat_completions");
+    vi.stubEnv("OPENAI_API_FORMAT", "invalid");
+    await expect(readApiFormat()).rejects.toThrow();
+  });
+
+  it("connects to a server-configured relay with the exact gpt-5.5 model", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-only-relay-key");
+    vi.stubEnv("OPENAI_BASE_URL", "https://relay.example/proxy/v1/");
+    vi.stubEnv("OPENAI_MODEL", "gpt-5.5");
+    vi.stubEnv("OPENAI_API_FORMAT", "chat_completions");
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ index: 0, message: { role: "assistant", content: "Hello" }, finish_reason: "stop" }] }));
+    vi.stubGlobal("fetch", fetch);
+    const { client, model, apiFormat } = await createOpenAIClient();
+    expect(apiFormat).toBe("chat_completions");
+    await client.chat.completions.create({ model, messages: [{ role: "user", content: "Test transport only" }] });
+    const [url, options] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toBe("https://relay.example/proxy/v1/chat/completions");
+    expect(JSON.parse(options.body as string).model).toBe("gpt-5.5");
+    expect(new Headers(options.headers).get("Authorization")).toBe("Bearer test-only-relay-key");
+    expect(options.redirect).toBe("error");
+  });
+
+  it("uses environment defaults only when no custom config is supplied", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-only-server-key");
     vi.stubEnv("OPENAI_BASE_URL", undefined);
     vi.stubEnv("OPENAI_MODEL", undefined);
-    expect(readOpenAIEnvironment()).toEqual({ baseURL: "https://api.openai.com/v1", apiKey: "test-only-server-key", model: "gpt-5-mini" });
+    expect(await readOpenAIEnvironment()).toEqual({ baseURL: "https://api.openai.com/v1", apiKey: "test-only-server-key", model: "gpt-5.5" });
     vi.stubEnv("OPENAI_BASE_URL", "https://server.example/v1/");
     vi.stubEnv("OPENAI_MODEL", "server-model");
-    expect(readOpenAIEnvironment().baseURL).toBe("https://server.example/v1");
-    expect(readOpenAIEnvironment().model).toBe("server-model");
-    expect(readOpenAIEnvironment(provider)).toEqual(provider);
+    expect((await readOpenAIEnvironment()).baseURL).toBe("https://server.example/v1");
+    expect((await readOpenAIEnvironment()).model).toBe("server-model");
+    expect(await readOpenAIEnvironment(provider)).toEqual(provider);
   });
 
-  it("never fills a missing custom key with the server key", () => {
+  it("never fills a missing custom key with the server key", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-only-server-key");
-    expect(() => readOpenAIEnvironment({ baseURL: provider.baseURL, model: provider.model } as ProviderConfig))
-      .toThrow("OpenAI server configuration is missing or invalid.");
+    await expect(readOpenAIEnvironment({ baseURL: provider.baseURL, model: provider.model } as ProviderConfig))
+      .rejects.toThrow("OpenAI server configuration is missing or invalid.");
   });
 
   it("creates an isolated SDK client that sends the selected URL, key, and model", async () => {
@@ -70,7 +96,7 @@ describe("server configuration isolation", () => {
     vi.stubEnv("OPENAI_PROJECT_ID", "test-only-server-project");
     const fetch = vi.fn().mockResolvedValue(Response.json({ id: "test-only-response" }));
     vi.stubGlobal("fetch", fetch);
-    const { client, model } = createOpenAIClient(provider);
+    const { client, model } = await createOpenAIClient(provider);
     await client.responses.create({ model, input: "Test transport configuration only.", store: false });
     const [url, options] = fetch.mock.calls[0] as [string, RequestInit];
     expect(String(url)).toBe("https://gateway.example/v1/responses");

@@ -8,16 +8,11 @@ POST /api/generate，Content-Type 为 application/json：
 {
   "title": "",
   "lecture": "完整讲稿",
-  "outputLanguage": "auto",
-  "provider": {
-    "baseURL": "https://api.openai.com/v1",
-    "apiKey": "<用户提供的密钥>",
-    "model": "gpt-6-astra"
-  }
+  "outputLanguage": "auto"
 }
 ```
 
-provider 可省略，省略时使用服务器环境配置；提供时三个字段必须完整。自定义地址不继承服务器密钥。语言支持 auto/en/ru/zh。未知字段会被拒绝，原讲稿不会被自动trim。
+连接设置仅来自服务端 `.env`；请求中的 provider 覆盖被拒绝，返回 INVALID_PROVIDER_CONFIG。语言支持 auto/en/ru/zh。未知字段会被拒绝，原讲稿不会被自动trim。
 
 限制：标题200字符、讲稿60,000字符、至少80词单位和300非空白字符、16,000 o200k_base token、请求正文512KiB。中文词单位使用Intl.Segmenter。
 
@@ -57,6 +52,6 @@ provider 可省略，省略时使用服务器环境配置；提供时三个字�
 
 ## 配置和边界
 
-服务须支持Responses API与严格JSON Schema。根地址必须HTTPS或HTTP本机回环，禁止内嵌用户名密码、query、fragment。生产模式只接受默认地址、OPENAI_BASE_URL及ALLOWED_API_BASE_URLS允许列表；本地地址指服务端机器。重定向被禁用。
+服务须支持所选 Responses API 或 Chat Completions API 以及严格 JSON Schema。通过 OPENAI_BASE_URL、OPENAI_API_KEY、OPENAI_MODEL（默认 gpt-5.5）和 OPENAI_API_FORMAT（responses / chat_completions）配置。根地址必须 HTTPS 或 HTTP 本机回环，禁止内嵌用户名密码、query、fragment。本地地址指服务端机器，重定向被禁用。
 
 密钥不持久化、不回显，不得存入学习历史。默认请求15次调用上限、240秒整体时限。原文与成功材料可保存在本机历史，用户可删除。详情见backend-handoff.md。

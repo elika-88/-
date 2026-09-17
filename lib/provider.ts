@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const DEFAULT_API_BASE_URL = "https://api.openai.com/v1";
-export const DEFAULT_MODEL = "gpt-5-mini";
+export const DEFAULT_MODEL = "gpt-5.5";
 
 export const ApiBaseUrlSchema = z.string().trim().min(1).max(2048).superRefine((value, context) => {
   try {

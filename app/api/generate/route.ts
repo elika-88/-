@@ -66,12 +66,12 @@ export async function POST(request: Request) {
   // Public deployments only forward credentials to explicitly configured bases.
   if (process.env.NODE_ENV === 'production' && validation.data.provider) {
     let adminBase: string | undefined;
-    try { adminBase = readStoredSettings()?.settings.baseURL; } catch { return errorResponse({ code: 'SERVER_CONFIG', message: 'Cannot read server configuration.', retryable: false }); }
+    try { adminBase = (await readStoredSettings())?.settings.baseURL; } catch { return errorResponse({ code: 'SERVER_CONFIG', message: 'Cannot read server configuration.', retryable: false }); }
     const allowed = [DEFAULT_API_BASE_URL, adminBase, process.env.OPENAI_BASE_URL, ...(process.env.ALLOWED_API_BASE_URLS ?? '').split(',')].filter(Boolean).map((url) => url!.trim().replace(/\/+$/, ''));
     if (!allowed.includes(validation.data.provider.baseURL)) return errorResponse({ code: 'INVALID_PROVIDER_CONFIG', message: 'This API base URL is not enabled by the server administrator.', retryable: false });
   }
-  let connection: ReturnType<typeof createOpenAIClient>;
-  try { connection = createOpenAIClient(validation.data.provider); } catch {
+  let connection: Awaited<ReturnType<typeof createOpenAIClient>>;
+  try { connection = await createOpenAIClient(validation.data.provider); } catch {
     return errorResponse({ code: 'SERVER_CONFIG', message: 'Configure an API key, base URL and model before generating.', retryable: false });
   }
   const runId = crypto.randomUUID();

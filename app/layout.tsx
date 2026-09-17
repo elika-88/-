@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import "@/app/globals.css";
+import "./globals.css";
+import { SettingsProvider } from "@/lib/i18n/SettingsContext";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 
 export const metadata: Metadata = {
   title: "Lumina | Lecture Study Materials",
@@ -7,5 +9,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <SettingsProvider><AuthProvider>{children}</AuthProvider></SettingsProvider>
+      </body>
+    </html>
+  );
 }

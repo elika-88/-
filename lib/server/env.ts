@@ -1,11 +1,18 @@
 import "server-only";
-import { readStoredSettings } from './admin-db';
+import { z } from "zod";
+import { readStoredSettings } from "./admin-db";
 import { DEFAULT_API_BASE_URL, DEFAULT_MODEL, ProviderConfigSchema, type ProviderConfig } from "@/lib/provider";
+import type { AdminSettings } from "@/lib/admin-schema";
 
-// Call only when the AI pipeline is invoked, so builds never require a secret.
-export function readOpenAIEnvironment(provider?: ProviderConfig): ProviderConfig {
-  const stored = provider ? null : readStoredSettings();
-  const settings = stored?.settings;
+export const ApiFormatSchema = z.enum(["responses", "chat_completions"]);
+export type ApiFormat = z.infer<typeof ApiFormatSchema>;
+
+export async function readOpenAIEnvironment(provider?: ProviderConfig): Promise<ProviderConfig> {
+  const stored = provider ? null : await readStoredSettings();
+  return parseEnvironment(provider, stored?.settings);
+}
+
+function parseEnvironment(provider?: ProviderConfig, settings?: AdminSettings): ProviderConfig {
   const parsed = ProviderConfigSchema.safeParse(provider ?? (settings ? { baseURL: settings.baseURL, apiKey: settings.apiKey, model: settings.model } : {
     apiKey: process.env.OPENAI_API_KEY,
     baseURL: process.env.OPENAI_BASE_URL ?? DEFAULT_API_BASE_URL,
@@ -17,8 +24,16 @@ export function readOpenAIEnvironment(provider?: ProviderConfig): ProviderConfig
   return parsed.data;
 }
 
-export function readApiFormat(custom = false): 'responses' | 'chat_completions' {
-  const format = custom ? 'responses' : readStoredSettings()?.settings.apiFormat ?? process.env.OPENAI_API_FORMAT ?? 'responses';
-  if (format !== 'responses' && format !== 'chat_completions') throw new Error('Invalid API format.');
-  return format;
+export async function readApiFormat(custom = false): Promise<ApiFormat> {
+  const format = custom ? 'responses' : (await readStoredSettings())?.settings.apiFormat ?? process.env.OPENAI_API_FORMAT ?? 'responses';
+  return ApiFormatSchema.parse(format);
+}
+
+// Credentials and protocol must come from the same committed settings revision.
+export async function readOpenAIConfiguration(provider?: ProviderConfig) {
+  const settings = provider ? undefined : (await readStoredSettings())?.settings;
+  return {
+    ...parseEnvironment(provider, settings),
+    apiFormat: ApiFormatSchema.parse(provider ? 'responses' : settings?.apiFormat ?? process.env.OPENAI_API_FORMAT ?? 'responses'),
+  };
 }

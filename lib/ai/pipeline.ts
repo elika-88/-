@@ -28,7 +28,7 @@ const NotesSchema = GeneratedMaterialsSchema.pick({ lectureTitle: true, overview
 const QuizSchema = GeneratedMaterialsSchema.pick({ quiz: true });
 const CardsSchema = GeneratedMaterialsSchema.pick({ flashcards: true });
 
-export async function generateStudyKit(input: GenerateRequest, connection: ReturnType<typeof createOpenAIClient>, runId: string, signal: AbortSignal, emit: (event: GenerationEvent) => void) {
+export async function generateStudyKit(input: GenerateRequest, connection: Awaited<ReturnType<typeof createOpenAIClient>>, runId: string, signal: AbortSignal, emit: (event: GenerationEvent) => void) {
   const { client, model, apiFormat = 'responses' } = connection;
   const segments = segmentLecture(input.lecture);
   const source = JSON.stringify({ title: input.title, language: input.outputLanguage, segments });
