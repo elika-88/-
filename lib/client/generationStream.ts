@@ -12,13 +12,13 @@ export type GenerationClientErrorCode = ErrorCode | "NETWORK_ERROR" | "INVALID_R
 
 const messages: Record<GenerationClientErrorCode, string> = {
   INVALID_REQUEST: "The request could not be accepted. Check the lecture and try again.",
-  INVALID_PROVIDER_CONFIG: "Check the custom API address, key, and model.",
+  INVALID_PROVIDER_CONFIG: "API connection settings must be configured on the server.",
   UNSUPPORTED_MEDIA_TYPE: "The server could not read this request format.",
   EMPTY_INPUT: "Enter lecture text before generating study materials.",
   INPUT_TOO_SHORT: "The lecture needs at least 80 words and 300 non-whitespace characters.",
   INPUT_TOO_LONG: "The lecture exceeds the supported input size.",
   INSUFFICIENT_CONTENT: "The lecture does not contain enough information to generate study materials.",
-  SERVER_CONFIG: "Open API settings and check your API key, base URL, and model access.",
+  SERVER_CONFIG: "The AI connection is unavailable. Check the server URL, API key, and model access.",
   RATE_LIMITED: "The AI service is busy. Try again later.",
   UPSTREAM_FAILURE: "The AI service could not complete the request.",
   MODEL_REFUSAL: "The AI service could not generate materials for this lecture.",

@@ -44,13 +44,12 @@ describe("generation endpoint foundation", () => {
     expect(response.status).toBe(400);
   });
 
-  it("accepts a complete nested provider without echoing its key", async () => {
+  it("rejects client provider overrides without echoing the key", async () => {
     const response = await POST(request({ title: "", lecture: "evidence ".repeat(80), outputLanguage: "auto", provider: { baseURL: "https://gateway.example/v1", apiKey: "test-only-private-value", model: "custom-model" } }));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
     const body = await response.text();
     expect(body).not.toContain("test-only-private-value");
-    const events = body.trim().split('\n').map((line) => JSON.parse(line));
-    expect(events.at(-1).error.code).toBe("UPSTREAM_FAILURE");
+    expect(JSON.parse(body).error.code).toBe("INVALID_PROVIDER_CONFIG");
   });
 
   it("rejects partial provider settings with a dedicated error", async () => {

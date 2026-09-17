@@ -1,5 +1,7 @@
 # 后端接入说明
 
+当前连接设置仅来自服务端 `.env`：`OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL=gpt-5.5`、`OPENAI_API_FORMAT=responses` 或 `chat_completions`。两种接口均需严格 JSON Schema 支持；下方旧版示例中的 `provider` 参数不再允许从浏览器提交。
+
 后端已经实现真实 Responses API 调用：讲稿分段 → 分析 → 四类材料生成 → 引用校验 → 独立审核 → 最多两轮修复。最终结果保持原 `StudyKit` 字段。页面文件未修改，由前端负责人接入。
 
 ## 最快接入

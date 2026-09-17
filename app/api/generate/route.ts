@@ -4,7 +4,6 @@ import { createOpenAIClient } from '@/lib/openai';
 import { generateStudyKit, publicError } from '@/lib/ai/pipeline';
 import { encodeGenerationEvent, type GenerationEvent } from '@/lib/contracts/generation';
 import { getEncoding } from 'js-tiktoken';
-import { DEFAULT_API_BASE_URL } from '@/lib/provider';
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -57,18 +56,16 @@ export async function POST(request: Request) {
 
   const validation = validateGenerationInput(input);
   if (!validation.success) return errorResponse(validation.error);
+  if (validation.data.provider) {
+    return errorResponse({ code: 'INVALID_PROVIDER_CONFIG', message: 'API connection settings are configured on the server.', retryable: false });
+  }
 
   tokenizer ??= getEncoding('o200k_base');
   if (tokenizer.encode(validation.data.lecture).length > INPUT_LIMITS.maxInputTokens) {
     return errorResponse({ code: 'INPUT_TOO_LONG', message: 'The lecture exceeds 16,000 input tokens.', retryable: false });
   }
-  // Public deployments only forward credentials to explicitly configured bases.
-  if (process.env.NODE_ENV === 'production' && validation.data.provider) {
-    const allowed = [DEFAULT_API_BASE_URL, process.env.OPENAI_BASE_URL, ...(process.env.ALLOWED_API_BASE_URLS ?? '').split(',')].filter(Boolean).map((url) => url!.trim().replace(/\/+$/, ''));
-    if (!allowed.includes(validation.data.provider.baseURL)) return errorResponse({ code: 'INVALID_PROVIDER_CONFIG', message: 'This API base URL is not enabled by the server administrator.', retryable: false });
-  }
   let connection: ReturnType<typeof createOpenAIClient>;
-  try { connection = createOpenAIClient(validation.data.provider); } catch {
+  try { connection = createOpenAIClient(); } catch {
     return errorResponse({ code: 'SERVER_CONFIG', message: 'Configure an API key, base URL and model before generating.', retryable: false });
   }
   const runId = crypto.randomUUID();

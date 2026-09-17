@@ -88,9 +88,6 @@ button svg { flex-shrink: 0; }
 .field-heading span { font-size: 12px; color: #666; font-variant-numeric: tabular-nums; }
 #lecture { display: block; width: 100%; min-height: 150px; height: 170px; padding: 16px; background: #fafafa; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; line-height: 1.75; }
 #lecture:focus { background: white; border-color: #888; }
-.api-options { font-size: 13px; color: #555; }
-.api-options > summary { cursor: pointer; width: fit-content; padding: 4px 0; }
-.api-settings-body { margin-top: 16px; color: #111; }
 .input-toolbar { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding-top: 20px; margin-top: 16px; border-top: 1px solid var(--border); }
 .language-field { width: 170px; }
 .language-field label { display: flex; gap: 6px; align-items: center; font-size: 12px; margin-bottom: 8px; }

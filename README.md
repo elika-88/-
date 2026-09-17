@@ -23,7 +23,7 @@
 
 技术栈：Next.js App Router、React、TypeScript、Tailwind CSS、shadcn/ui 配置与按钮基础组件、Lucide、Zod；已安装 OpenAI SDK，Responses API 生成流程将在 E04 接入，目标部署为 Vercel。
 
-演示讲稿可以预置，生成结果必须现场处理。服务器默认密钥保存在服务端环境变量中；用户自定义密钥仅在当前页面内存和请求处理中使用，不持久化、不提交到 GitHub。
+演示讲稿可以预置，生成结果必须现场处理。API 地址、密钥、模型和接口格式全部保存在服务端 `.env` 中；网页不提供 API 设置，也不会发送或保存密钥。
 
 ## 本地运行
 
@@ -36,23 +36,29 @@ npm run dev
 
 打开 `http://127.0.0.1:3000`。端口被占用时运行 `npm run dev -- --port 3001` 并访问对应端口。
 
-基础安装、启动、测试和构建不需要 OpenAI 密钥。后续 AI 接入时，在本地 `.env.local` 或部署平台配置以下服务端变量；模板见 `.env.example`：
+基础安装、启动、测试和构建不需要 OpenAI 密钥。真实生成需要在项目根目录 `.env` 或部署平台配置以下服务端变量：
 
 | 变量 | 用途 |
 | --- | --- |
-| `OPENAI_API_KEY` | E04 起用于真实生成；不传给浏览器，不使用 NEXT_PUBLIC 前缀 |
+| `OPENAI_API_KEY` | 中转站或 OpenAI 的 API 密钥；不传给浏览器，不使用 NEXT_PUBLIC 前缀 |
 | `OPENAI_BASE_URL` | 服务器默认 API 根地址，默认 `https://api.openai.com/v1` |
-| `OPENAI_MODEL` | 默认 `gpt-5-mini` |
+| `OPENAI_MODEL` | 默认 `gpt-5.5`，须与服务商提供的模型 ID 一致 |
+| `OPENAI_API_FORMAT` | `responses` 或 `chat_completions`，匹配服务商支持的接口 |
 
-`.env.local` 等本地环境文件已加入 `.gitignore`，仅 `.env.example` 可提交。
+`.env` 等本地环境文件已加入 `.gitignore`。不要把真实密钥填写到可提交的 `.env.example`。已有 `.env.local` 时，其同名变量会优先于 `.env`。
 
-## 自定义 API 设置
+## 第三方中转站
 
-页面的“Настройки API”中开启“Свой API”，即可填写 **API Base URL、API key、模型 ID**，支持显示/隐藏密钥和重置。未开启时使用服务器默认配置。自定义配置必须完整，不会借用服务器密钥。
+在 `.env` 中填写配置，修改后重启 `npm run dev`：
 
-URL 填写 API 根地址，例如 `https://api.openai.com/v1`，模型可自由输入。支持 HTTPS 和 HTTP 本地回环地址；localhost 指服务端机器。所有设置仅保留在当前页面内存中，刷新后清空；关闭自定义模式也会清空密钥。未来接入的服务需要支持 Responses API 和结构化输出。
+```dotenv
+OPENAI_BASE_URL=https://your-relay.example/v1
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-5.5
+OPENAI_API_FORMAT=chat_completions
+```
 
-当前已实现配置输入、请求校验和独立 SDK 客户端工厂，尚未接入 AI 生成或真实连接测试；合法请求仍返回 501。
+URL 填 API 根地址，通常以 `/v1` 结尾，不要附加 `/chat/completions` 或 `/responses`。`chat_completions` 使用 Chat Completions；`responses` 使用 Responses。两种格式都要求服务商支持严格 JSON Schema 结构化输出，材料仍需通过原文引用校验和审核。请求中的 `provider` 覆盖配置会被拒绝，部署时也只使用服务端配置的中转站。
 
 ## 检查与构建
 

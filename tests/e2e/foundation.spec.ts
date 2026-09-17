@@ -30,26 +30,14 @@ test("renders without overflow and restores the single workspace", async ({ page
   await page.screenshot({ path: `test-results/foundation-${test.info().project.name}.png`, fullPage: true });
 });
 
-test("submits custom settings without persisting the key", async ({ page }) => {
+test("uses server settings without exposing connection controls", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByLabel("API key", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("API Base URL", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Use custom API", { exact: true })).toHaveCount(0);
   await page.getByLabel("Lecture text", { exact: true }).fill("This is an input validation test only. ".repeat(15));
-  await page.locator(".api-options > summary").click();
-  await page.getByLabel("Use custom API", { exact: true }).check();
-  await page.getByRole("button", { name: "Generate materials", exact: true }).click();
-  await expect(page.locator("#form-error")).toContainText("custom API address");
-  await page.getByLabel("API Base URL", { exact: true }).fill("https://gateway.example/proxy/v1/");
-  await page.getByLabel("API key", { exact: true }).fill("test-only-browser-key");
-  await page.getByLabel("Model", { exact: true }).fill("vendor/custom-model");
-  await page.getByRole("button", { name: "Show API key", exact: true }).click();
-  await expect(page.getByLabel("API key", { exact: true })).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "Hide API key", exact: true }).click();
   const submitted = page.waitForRequest((request) => request.url().endsWith("/api/generate"));
   await page.getByRole("button", { name: "Generate materials", exact: true }).click();
-  expect((await submitted).postDataJSON().provider).toEqual({ baseURL: "https://gateway.example/proxy/v1", apiKey: "test-only-browser-key", model: "vendor/custom-model" });
+  expect((await submitted).postDataJSON()).not.toHaveProperty("provider");
   await expect(page.locator("#form-error")).toBeVisible();
-  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, cookies: document.cookie }))).not.toContain("test-only-browser-key");
-  await page.reload();
-  await page.locator(".api-options > summary").click();
-  await page.getByLabel("Use custom API", { exact: true }).check();
-  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("");
 });

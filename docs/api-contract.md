@@ -1,5 +1,7 @@
 # E02 生成接口与共享类型 v1.1
 
+最新配置变更：API 连接改为服务端 `.env` 配置。页面只发送 `title`、`lecture`、`outputLanguage`；路由拒绝 `provider` 覆盖并返回 `INVALID_PROVIDER_CONFIG`。下文 v1.1 的浏览器自定义配置说明是旧版行为。`OPENAI_MODEL` 默认 `gpt-5.5`；`OPENAI_API_FORMAT` 支持 `responses` / `chat_completions`。
+
 更新：后端已实现生成与审核，合法请求不再返回 501。默认响应为下面定义的 NDJSON；发送 `Accept: application/json` 时成功响应直接为 `StudyKit`，失败为 JSON 错误包。真实接入与部署限制见 [后端接入说明](backend-handoff.md)。早期骨架描述仅为历史记录。
 
 本文件对应项目骨架的接口定义。`POST /api/generate` 已实现请求校验和 JSON 错误响应；合法输入目前返回 **HTTP 501 / `NOT_IMPLEMENTED`**。AI 生成、流式传输、原文分段、语义审核和结果页尚未实现，不应把这个版本作为比赛完成版。
