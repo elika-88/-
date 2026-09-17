@@ -23,5 +23,5 @@ for (const [name, value] of Object.entries({ ADMIN_PASSWORD: randomBytes(24).toS
 }
 if (changed) writeFileSync(file, text, { mode: 0o600 });
 console.log('Admin credentials are configured in .env.local or the process environment. Restart the application if values changed. Existing credentials were preserved.');
-console.log('Open /admin and enter the configured password to enroll Google Authenticator. Administrator access requires a verified six-digit code.');
-console.log('For deployment, configure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN together. Keep ADMIN_ENCRYPTION_KEY stable to preserve encrypted settings and authenticator enrollment.');
+console.log('Open /admin and enter the configured password to manage the application.');
+console.log('For deployment, configure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN together. Keep ADMIN_ENCRYPTION_KEY stable to preserve encrypted settings.');

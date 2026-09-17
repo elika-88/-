@@ -6,7 +6,7 @@ import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 import { POST } from '@/app/api/admin/route';
-import { adminTotp, confirmAdminTotp, loginAdmin, saveStoredSettings } from '@/lib/server/admin-db';
+import { loginAdmin, saveStoredSettings } from '@/lib/server/admin-db';
 
 let directory: string;
 let token: string;
@@ -20,9 +20,7 @@ beforeEach(async () => {
   vi.stubEnv('ADMIN_ENCRYPTION_KEY', 'ab'.repeat(32));
   vi.stubEnv('OPENAI_BASE_URL', baseURL);
   vi.stubEnv('OPENAI_API_KEY', 'test-only-environment-key');
-  const enrollment = await loginAdmin('test-only-admin-password');
-  if (!('enrollment' in enrollment)) throw new Error('Enrollment failed');
-  const login = await confirmAdminTotp(enrollment.enrollmentToken, adminTotp(enrollment.enrollment.secret).generate());
+  const login = await loginAdmin('test-only-admin-password');
   if (!('token' in login)) throw new Error('Login failed');
   token = login.token;
   fetchMock.mockReset().mockResolvedValue(Response.json({ data: [{ id: 'test-model' }] }));
@@ -36,7 +34,7 @@ afterEach(() => {
   try { rmSync(directory, { recursive: true, force: true }); }
   catch (error) {
     // Native libSQL on Windows may retain a closed file handle until process exit.
-    if (process.platform !== 'win32' || (error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+    if (process.platform !== 'win32' || !['EBUSY', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
   }
 });
 

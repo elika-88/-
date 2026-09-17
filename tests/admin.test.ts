@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 import { GET, POST } from '@/app/api/admin/route';
-import { adminTotp, confirmAdminTotp, loginAdmin, readStoredSettings, saveStoredSettings, validAdminSession } from '@/lib/server/admin-db';
+import { loginAdmin, readStoredSettings, saveStoredSettings, validAdminSession } from '@/lib/server/admin-db';
 import { readOpenAIEnvironment, readApiFormat } from '@/lib/server/env';
 let directory: string;
 beforeEach(() => {
@@ -20,7 +20,7 @@ afterEach(() => {
   try { rmSync(directory, { recursive: true, force: true }); }
   catch (error) {
     // Native libSQL on Windows may retain a closed file handle until process exit.
-    if (process.platform !== 'win32' || (error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+    if (process.platform !== 'win32' || !['EBUSY', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
   }
 });
 const settings = { baseURL: 'https://example.com/v1', apiKey: 'test-only-confidential-key', model: 'test-model', apiFormat: 'responses' as const };
@@ -28,9 +28,9 @@ function request(body: unknown, token = '', origin = 'http://localhost') {
   return new NextRequest('http://localhost/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: `lumina_admin=${token}` }, body: JSON.stringify(body) });
 }
 describe('admin database', () => {
-  it('accepts an existing nine-character administrator password for enrollment only', async () => {
+  it('accepts an existing nine-character administrator password', async () => {
     vi.stubEnv('ADMIN_PASSWORD', 'test-1234');
-    expect(await loginAdmin('test-1234')).toHaveProperty('enrollment');
+    expect(await loginAdmin('test-1234')).toHaveProperty('token');
   });
   it('rejects administrator passwords shorter than six characters', async () => {
     vi.stubEnv('ADMIN_PASSWORD', 'short');
@@ -57,12 +57,7 @@ describe('admin database', () => {
     expect((await POST(req)).status).toBe(200);
   });
   it('logs in, saves, masks credentials, keeps a blank key, and revokes logout', async () => {
-    const enrollment = await POST(request({ action: 'login', password: 'test-only-admin-password' }));
-    const setup = await enrollment.json();
-    expect(setup.authenticated).toBe(false);
-    const confirmRequest = request({ action: 'confirm_totp', code: adminTotp(setup.enrollment.secret).generate() });
-    confirmRequest.cookies.set('lumina_admin_enrollment', enrollment.cookies.get('lumina_admin_enrollment')!.value);
-    const login = await POST(confirmRequest);
+    const login = await POST(request({ action: 'login', password: 'test-only-admin-password' }));
     expect(login.status).toBe(200);
     expect(login.headers.get('set-cookie')).toContain('HttpOnly');
     const token = login.cookies.get('lumina_admin')!.value;
@@ -86,9 +81,7 @@ describe('admin database', () => {
     expect(await validAdminSession(token)).toBe(false);
   });
   it('limits repeated login failures and invalidates sessions after password change', async () => {
-    const setup = await loginAdmin('test-only-admin-password');
-    if (!('enrollment' in setup)) throw new Error('Enrollment failed');
-    const login = await confirmAdminTotp(setup.enrollmentToken, adminTotp(setup.enrollment.secret).generate());
+    const login = await loginAdmin('test-only-admin-password');
     if (!('token' in login)) throw new Error('Login failed');
     expect(await validAdminSession(login.token)).toBe(true);
     vi.stubEnv('ADMIN_PASSWORD', 'changed-test-only-password');

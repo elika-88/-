@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AdminSettingsSchema, SaveAdminSettingsSchema } from '@/lib/admin-schema';
-import { adminReady, adminSetupIssue, adminTotpEnabled, confirmAdminTotp, loginAdmin, logoutAdmin, readStoredSettings, saveStoredSettings, validAdminSession, withAdminDb, type AdminLoginResult } from '@/lib/server/admin-db';
+import { adminReady, adminSetupIssue, loginAdmin, logoutAdmin, readStoredSettings, saveStoredSettings, validAdminSession, withAdminDb, type AdminLoginResult } from '@/lib/server/admin-db';
 import { ApiBaseUrlSchema, DEFAULT_API_BASE_URL, DEFAULT_MODEL } from '@/lib/provider';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const cookieName = 'lumina_admin';
-const enrollmentCookie = 'lumina_admin_enrollment';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 async function authorized(request: NextRequest) { return validAdminSession(request.cookies.get(cookieName)?.value ?? ''); }
 function sameOrigin(request: NextRequest) {
@@ -29,7 +28,7 @@ async function settingsView() {
 }
 export async function GET(request: NextRequest) {
   try {
-    if (!await authorized(request)) return json({ authenticated: false, configured: adminReady(), setupError: adminSetupIssue(), totpEnabled: await adminTotpEnabled() }, 401);
+    if (!await authorized(request)) return json({ authenticated: false, configured: adminReady(), setupError: adminSetupIssue() }, 401);
     return json({ authenticated: true, settings: await settingsView(), audit: await withAdminDb(async (db) => (await db.execute('SELECT event,created_at FROM audit ORDER BY id DESC LIMIT 20')).rows) });
   } catch { return json({ error: 'Cannot read admin configuration.' }, 503); }
 }
@@ -39,21 +38,12 @@ function loginResponse(request: NextRequest, result: AdminLoginResult) {
       LIMITED: 'Too many attempts. Wait five minutes.',
       UNCONFIGURED: 'Run admin setup first.',
       INVALID: 'Incorrect administrator credentials.',
-      MFA_REQUIRED: 'Enter the six-digit code from Google Authenticator.',
-      INVALID_CODE: 'The authenticator code is invalid or already used. Wait for a new code.',
-      ENROLLMENT_EXPIRED: 'Authenticator setup expired. Sign in again to restart setup.',
     };
     return json({ error: messages[result.error], code: result.error }, result.error === 'LIMITED' ? 429 : result.error === 'UNCONFIGURED' ? 503 : 401);
   }
   const options = { httpOnly: true, sameSite: 'strict' as const, secure: request.headers.get('origin')?.startsWith('https:') ?? false, path: '/api/admin' };
-  if ('enrollment' in result) {
-    const response = json({ authenticated: false, enrollment: result.enrollment });
-    response.cookies.set(enrollmentCookie, result.enrollmentToken, { ...options, maxAge: 300 });
-    return response;
-  }
   const response = json({ authenticated: true });
   response.cookies.set(cookieName, result.token, { ...options, maxAge: 8 * 3600 });
-  response.cookies.set(enrollmentCookie, '', { ...options, maxAge: 0 });
   return response;
 }
 export async function POST(request: NextRequest) {
@@ -68,19 +58,13 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== 'object') return json({ error: 'Invalid request.' }, 400);
     if (body.action === 'login') {
       if (typeof body.password !== 'string' || body.password.length > 1024) return json({ error: 'Invalid password.' }, 400);
-      if (body.code !== undefined && (typeof body.code !== 'string' || body.code.length > 6)) return json({ error: 'Invalid authenticator code.' }, 400);
-      return loginResponse(request, await loginAdmin(body.password, body.code));
-    }
-    if (body.action === 'confirm_totp') {
-      if (typeof body.code !== 'string' || !/^\d{6}$/.test(body.code)) return json({ error: 'Enter a six-digit authenticator code.' }, 400);
-      return loginResponse(request, await confirmAdminTotp(request.cookies.get(enrollmentCookie)?.value ?? '', body.code));
+      return loginResponse(request, await loginAdmin(body.password));
     }
     if (!await authorized(request)) return json({ error: 'Please log in.' }, 401);
     if (body.action === 'logout') {
       await logoutAdmin(request.cookies.get(cookieName)?.value ?? '');
       const response = json({ authenticated: false });
       response.cookies.set(cookieName, '', { path: '/api/admin', maxAge: 0 });
-      response.cookies.set(enrollmentCookie, '', { path: '/api/admin', maxAge: 0 });
       return response;
     }
     if (body.action === 'fetch_models') {

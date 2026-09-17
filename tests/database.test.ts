@@ -26,7 +26,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   try { rmSync(directory, { recursive: true, force: true }); }
   catch (error) {
-    if (process.platform !== 'win32' || (error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+    if (process.platform !== 'win32' || !['EBUSY', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
   }
 });
 
