@@ -126,11 +126,7 @@ export default function AdminPage() {
         </div>
 
         <div className="gpt-auth-box">
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-            <div className="gpt-admin-shield-badge">
-              <ShieldCheck size={28} />
-            </div>
-          </div>
+          
           <h1 className="gpt-auth-title">System Admin</h1>
           <p className="gpt-auth-subtitle">Enter administrator password to manage AI relays</p>
 
