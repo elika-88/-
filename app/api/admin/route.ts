@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AdminSettingsSchema, SaveAdminSettingsSchema } from '@/lib/admin-schema';
-import { adminReady, loginAdmin, logoutAdmin, readStoredSettings, saveStoredSettings, validAdminSession, withAdminDb } from '@/lib/server/admin-db';
+import { adminReady, adminSetupIssue, loginAdmin, logoutAdmin, readStoredSettings, saveStoredSettings, validAdminSession, withAdminDb } from '@/lib/server/admin-db';
 import { DEFAULT_API_BASE_URL, DEFAULT_MODEL } from '@/lib/provider';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +28,7 @@ function settingsView() {
 }
 export async function GET(request: NextRequest) {
   try {
-    if (!authorized(request)) return json({ authenticated: false, configured: adminReady() }, 401);
+    if (!authorized(request)) return json({ authenticated: false, configured: adminReady(), setupError: adminSetupIssue() }, 401);
     return json({ authenticated: true, settings: settingsView(), audit: withAdminDb((db) => db.prepare('SELECT event,created_at FROM audit ORDER BY id DESC LIMIT 20').all()) });
   } catch { return json({ error: 'Cannot read admin configuration.' }, 503); }
 }

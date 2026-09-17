@@ -6,6 +6,7 @@ type Settings = { baseURL: string; model: string; apiFormat: 'responses' | 'chat
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [configured, setConfigured] = useState(true);
+  const [setupError, setSetupError] = useState('');
   const [password, setPassword] = useState('');
   const [settings, setSettings] = useState<Settings | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -17,6 +18,7 @@ export default function AdminPage() {
     const data = await response.json();
     setAuthenticated(data.authenticated === true);
     if (data.configured !== undefined) setConfigured(data.configured);
+    setSetupError(data.setupError ?? '');
     setSettings(data.settings ?? null); setAudit(data.audit ?? []);
     if (response.status !== 401 && !response.ok) throw new Error(data.error ?? 'Could not load settings.');
   }
@@ -25,6 +27,7 @@ export default function AdminPage() {
     fetch('/api/admin', { cache: 'no-store', signal: controller.signal }).then((response) => response.json()).then((data) => {
       setAuthenticated(data.authenticated === true);
       if (data.configured !== undefined) setConfigured(data.configured);
+      setSetupError(data.setupError ?? '');
       setSettings(data.settings ?? null); setAudit(data.audit ?? []);
       if (data.error) setMessage(data.error);
     }).catch(() => { if (!controller.signal.aborted) setMessage('Could not load administration.'); }).finally(() => { if (!controller.signal.aborted) setBusy(false); });
@@ -47,7 +50,7 @@ export default function AdminPage() {
     <p style={{ marginBottom: 24 }}>Manage the default AI connection for this installation.</p>
     {message && <p role="alert" style={{ padding: 16, background: '#f1f5f3', marginBottom: 20 }}>{message}</p>}
     {!authenticated ? <form onSubmit={(event) => action(event, 'login')}>
-      {!configured && <p role="status">Run <code>npm run admin:setup</code> on the server, then restart the app.</p>}
+      {!configured && <p role="status">{setupError || 'Administration is not configured.'}</p>}
       <label htmlFor="admin-password">Administrator password</label>
       <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="text-field" required maxLength={1024} disabled={busy} />
       <Button type="submit" disabled={busy || !configured} className="mt-4">{busy ? 'Loading…' : 'Sign in'}</Button>

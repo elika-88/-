@@ -21,6 +21,14 @@ function request(body: unknown, token = '', origin = 'http://localhost') {
   return new NextRequest('http://localhost/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: `lumina_admin=${token}` }, body: JSON.stringify(body) });
 }
 describe('admin database', () => {
+  it('accepts an existing nine-character administrator password', () => {
+    vi.stubEnv('ADMIN_PASSWORD', 'test-1234');
+    expect(loginAdmin('test-1234')).toHaveProperty('token');
+  });
+  it('rejects administrator passwords shorter than eight characters', () => {
+    vi.stubEnv('ADMIN_PASSWORD', 'short');
+    expect(loginAdmin('short')).toEqual({ error: 'UNCONFIGURED' });
+  });
   it('encrypts saved secrets and feeds them to the generator', () => {
     saveStoredSettings(settings, 0);
     expect(readFileSync(join(directory, 'admin.sqlite')).includes(Buffer.from(settings.apiKey))).toBe(false);
