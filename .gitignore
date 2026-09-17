@@ -1,4 +1,6 @@
 node_modules/
+.data/
+*.sqlite*
 .next/
 next-env.d.ts
 out/

@@ -5,6 +5,7 @@ import { generateStudyKit, publicError } from '@/lib/ai/pipeline';
 import { encodeGenerationEvent, type GenerationEvent } from '@/lib/contracts/generation';
 import { getEncoding } from 'js-tiktoken';
 import { DEFAULT_API_BASE_URL } from '@/lib/provider';
+import { readStoredSettings } from '@/lib/server/admin-db';
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -64,7 +65,9 @@ export async function POST(request: Request) {
   }
   // Public deployments only forward credentials to explicitly configured bases.
   if (process.env.NODE_ENV === 'production' && validation.data.provider) {
-    const allowed = [DEFAULT_API_BASE_URL, process.env.OPENAI_BASE_URL, ...(process.env.ALLOWED_API_BASE_URLS ?? '').split(',')].filter(Boolean).map((url) => url!.trim().replace(/\/+$/, ''));
+    let adminBase: string | undefined;
+    try { adminBase = readStoredSettings()?.settings.baseURL; } catch { return errorResponse({ code: 'SERVER_CONFIG', message: 'Cannot read server configuration.', retryable: false }); }
+    const allowed = [DEFAULT_API_BASE_URL, adminBase, process.env.OPENAI_BASE_URL, ...(process.env.ALLOWED_API_BASE_URLS ?? '').split(',')].filter(Boolean).map((url) => url!.trim().replace(/\/+$/, ''));
     if (!allowed.includes(validation.data.provider.baseURL)) return errorResponse({ code: 'INVALID_PROVIDER_CONFIG', message: 'This API base URL is not enabled by the server administrator.', retryable: false });
   }
   let connection: ReturnType<typeof createOpenAIClient>;

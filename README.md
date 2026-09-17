@@ -13,6 +13,8 @@
 
 ## 安装和运行
 
+新增管理后台与SQLite数据库：运行 `npm run admin:setup` 后重启，访问 `/admin`。密码在本机 `.env.local` 的 `ADMIN_PASSWORD` 中。后台可保存加密API配置、模型及接口类型，立即供后续生成使用。详见 [管理说明](docs/admin.md)。此数据库方案需要持久化磁盘，不能直接用于无持久化磁盘的多实例部署。
+
 Node.js 22.15+，npm。
 
 ```bash

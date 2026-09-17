@@ -1,7 +1,7 @@
 import "server-only";
 import OpenAI from "openai";
 import type { ProviderConfig } from "@/lib/provider";
-import { readOpenAIEnvironment } from "@/lib/server/env";
+import { readApiFormat, readOpenAIEnvironment } from "@/lib/server/env";
 
 // Construct per request; a custom endpoint must never inherit server credentials.
 export function createOpenAIClient(provider?: ProviderConfig) {
@@ -18,5 +18,5 @@ export function createOpenAIClient(provider?: ProviderConfig) {
     logLevel: "off",
     fetchOptions: { redirect: "error" },
   });
-  return { client, model };
+  return { client, model, apiFormat: readApiFormat(Boolean(provider)) };
 }

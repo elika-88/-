@@ -1,6 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
-import { zodTextFormat } from 'openai/helpers/zod';
+import { zodResponseFormat, zodTextFormat } from 'openai/helpers/zod';
 import type { createOpenAIClient } from '../openai';
 import { AnalysisSchema, GeneratedMaterialsSchema, StudyKitSchema, VerificationResponseSchema } from '../schemas/studyMaterials';
 import type { GenerateRequest } from '../input';
@@ -29,7 +29,7 @@ const QuizSchema = GeneratedMaterialsSchema.pick({ quiz: true });
 const CardsSchema = GeneratedMaterialsSchema.pick({ flashcards: true });
 
 export async function generateStudyKit(input: GenerateRequest, connection: ReturnType<typeof createOpenAIClient>, runId: string, signal: AbortSignal, emit: (event: GenerationEvent) => void) {
-  const { client, model } = connection;
+  const { client, model, apiFormat = 'responses' } = connection;
   const segments = segmentLecture(input.lecture);
   const source = JSON.stringify({ title: input.title, language: input.outputLanguage, segments });
   let calls = 0;
@@ -37,6 +37,18 @@ export async function generateStudyKit(input: GenerateRequest, connection: Retur
     const started = Date.now();
     signal.throwIfAborted();
     if (++calls > 15) throw new PipelineError('INVALID_OUTPUT', 'Generation exceeded its retry budget. Please try a shorter lecture.');
+    if (apiFormat === 'chat_completions') {
+      const completion = await client.chat.completions.parse({
+        model, store: false, max_completion_tokens: 4000,
+        ...(/^gpt-(5|6)/.test(model) ? { reasoning_effort: 'low' as const } : {}),
+        messages: [{ role: 'developer', content: `${rules}\n${prompt}` }, { role: 'user', content: data }],
+        response_format: zodResponseFormat(schema, name),
+      }, { signal });
+      const choice = completion.choices[0];
+      if (choice?.message.refusal) throw new PipelineError('MODEL_REFUSAL', 'The model declined this lecture.');
+      if (completion.choices.length !== 1 || choice?.finish_reason !== 'stop' || !choice.message.parsed) throw new Error('Incomplete structured output.');
+      return schema.parse(choice.message.parsed);
+    }
     const response = await client.responses.parse({
       model, store: false, max_output_tokens: 4000,
       ...(/^gpt-(5|6)/.test(model) ? { reasoning: { effort: 'low' as const } } : {}),

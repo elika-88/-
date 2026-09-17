@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Link from 'next/link';
 import { AlertCircle, BookOpen, Check, Languages, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HistorySidebar } from "@/components/HistorySidebar";
@@ -187,6 +188,7 @@ export function StudyWorkspace() {
         <div className="logo"><span className="logo-mark" aria-hidden="true" />Lumina</div><span className="workspace-title">{active.title || "New lecture"}</span>
       </div></header>
       <main className="workspace-main">
+        <nav aria-label="Administration" style={{ textAlign: 'right', marginBottom: 12 }}><Link href="/admin" className="text-sm text-muted-foreground">Administration</Link></nav>
         {storageError && <div className="notice warning" role="alert"><AlertCircle aria-hidden="true" /><p>{storageError}</p></div>}
         <section className="input-section" aria-labelledby="input-heading">
           <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1><Button type="button" variant="ghost" disabled={!ready || pending || demoLoading} onClick={loadDemo}>{demoLoading ? 'Loading lecture…' : 'Load demo lecture'}</Button></div>
