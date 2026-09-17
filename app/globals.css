@@ -139,3 +139,25 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+/* Official Lumina brand asset supplied by the team. */
+.logo-mark {
+  background: #000 url("/ChatGPT_Image_2026%E5%B9%B49%E6%9C%8817%E6%97%A5_23_28_48_-_%E5%89%AF%E6%9C%AC-removebg-preview.png") center / contain no-repeat;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 7px;
+}
+.sidebar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.sidebar-brand::before {
+  content: "";
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  background: #000 url("/ChatGPT_Image_2026%E5%B9%B49%E6%9C%8817%E6%97%A5_23_28_48_-_%E5%89%AF%E6%9C%AC-removebg-preview.png") center / contain no-repeat;
+  border-radius: 7px;
+}
