@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -175,6 +176,9 @@ export default function AdminPage() {
         </div>
 
         <div className="gpt-auth-box">
+          <div className="gpt-admin-login-brand" aria-hidden="true">
+            <Image src="/brand/lumina-logo.png" alt="" width={56} height={56} priority />
+          </div>
           <h1 className="gpt-auth-title">{t.adminConsole}</h1>
           <p className="gpt-auth-subtitle">Enter administrator credentials to manage workspace</p>
 
@@ -221,7 +225,10 @@ export default function AdminPage() {
             <span>{t.backToStudy}</span>
           </Link>
           <span className="gpt-admin-divider">/</span>
-          <span className="gpt-admin-current-brand">{t.adminConsole}</span>
+          <span className="gpt-admin-current-brand">
+            <Image src="/brand/lumina-logo.png" alt="" width={24} height={24} priority />
+            <span>{t.adminConsole}</span>
+          </span>
         </div>
 
         <div className="gpt-admin-topbar-right">

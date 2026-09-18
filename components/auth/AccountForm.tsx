@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff, LoaderCircle } from "lucide-react";
@@ -39,7 +40,10 @@ export function AccountForm({ mode }: { mode: "login" | "signup" }) {
   return <main className="gpt-auth-page">
     <Link href="/" className="account-back"><ArrowLeft size={16} aria-hidden="true" />Back to study</Link>
     <div className="gpt-auth-box">
-      <p className="account-brand">Lumina</p>
+      <p className="account-brand">
+        <Image src="/brand/lumina-logo.png" alt="" width={42} height={42} priority />
+        <span>Lumina</span>
+      </p>
       <h1 className="gpt-auth-title">{registering ? "Create an account" : "Welcome back"}</h1>
       <p className="gpt-auth-subtitle">{registering ? "Save your lectures and study across devices." : "Sign in to open your saved lectures."}</p>
       {error && <p role="alert" className="gpt-auth-error">{error}</p>}

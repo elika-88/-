@@ -153,10 +153,26 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   padding: 4px 6px 12px;
 }
 
+.gpt-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.gpt-brand-lockup img,
+.gpt-rail-btn.brand img,
+.account-brand img,
+.gpt-admin-login-brand img,
+.gpt-admin-current-brand img {
+  display: block;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
 .gpt-brand-title {
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.02em;
 }
 
 .gpt-brand-icons {
@@ -374,13 +390,29 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   align-items: stretch;
 }
 
+.account-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0d0d0d;
+}
+
+.account-brand img {
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+}
+
 .gpt-auth-title {
   font-size: 32px;
   font-weight: 700;
   text-align: center;
   margin: 0 0 8px;
   color: #0d0d0d;
-  letter-spacing: -0.02em;
 }
 
 .gpt-auth-subtitle {
@@ -512,6 +544,11 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 
 .gpt-rail-btn.brand {
   color: #0d0d0d;
+}
+
+.gpt-rail-btn.brand img {
+  width: 28px;
+  height: 28px;
 }
 
 .gpt-user-avatar.small {
@@ -1292,6 +1329,10 @@ html.dark .gpt-auth-title {
   color: #ffffff !important;
 }
 
+html.dark .account-brand {
+  color: #ffffff !important;
+}
+
 html.dark .gpt-auth-subtitle {
   color: #a3a3a3 !important;
 }
@@ -1405,8 +1446,29 @@ html.dark .gpt-admin-divider {
 }
 
 .gpt-admin-current-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
   color: var(--text-main, #0d0d0d);
+}
+
+.gpt-admin-current-brand img {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.gpt-admin-login-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.gpt-admin-login-brand img {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
 }
 
 .gpt-admin-topbar-right {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Ellipsis, PanelLeftClose, Pencil, Search, SquarePen, Trash2, Sparkles, Settings } from "lucide-react";
+import Image from "next/image";
+import { Ellipsis, PanelLeftClose, Pencil, Search, SquarePen, Trash2, Settings } from "lucide-react";
 import type { StudySession } from "@/lib/client/sessions";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
@@ -51,7 +52,7 @@ export function HistorySidebar({
             aria-label="Expand sidebar"
             onClick={onToggleCollapse}
           >
-            <Sparkles size={20} />
+            <Image src="/brand/lumina-logo.png" alt="" width={28} height={28} priority />
           </button>
 
           <div className="gpt-rail-icons">
@@ -89,7 +90,10 @@ export function HistorySidebar({
         {/* 2. Full Expanded Sidebar View */}
         <div className="gpt-expanded-content" aria-hidden={collapsed} inert={collapsed}>
           <div className="gpt-brand-row">
-            <span className="gpt-brand-title">Lumina</span>
+            <span className="gpt-brand-lockup">
+              <Image src="/brand/lumina-logo.png" alt="" width={30} height={30} priority />
+              <span className="gpt-brand-title">Lumina</span>
+            </span>
             <div className="gpt-brand-icons">
               <button
                 className="gpt-icon-btn"
