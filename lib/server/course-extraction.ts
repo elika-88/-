@@ -176,6 +176,59 @@ export function parseYouTubeCaptionXml(xml: string) {
     .join(" ");
 }
 
+function collapseRepeatedWordGroups(value: string) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const result: string[] = [];
+  for (let index = 0; index < words.length;) {
+    let repeatedLength = 0;
+    const maxLength = Math.min(80, Math.floor((words.length - index) / 2));
+    for (let length = maxLength; length >= 3; length -= 1) {
+      if (words.slice(index, index + length).every((word, offset) => word === words[index + length + offset])) {
+        repeatedLength = length;
+        break;
+      }
+    }
+    if (!repeatedLength) {
+      result.push(words[index]);
+      index += 1;
+      continue;
+    }
+    result.push(...words.slice(index, index + repeatedLength));
+    index += repeatedLength;
+    while (
+      index + repeatedLength <= words.length
+      && words.slice(index, index + repeatedLength).every((word, offset) => word === result[result.length - repeatedLength + offset])
+    ) index += repeatedLength;
+  }
+  return result.join(" ");
+}
+
+export function parseYouTubeTranscriptMarkdown(markdown: string, videoId: string) {
+  const title = markdown.match(/^# Transcript:\s*(.+)$/m)?.[1]?.trim() || `YouTube video ${videoId}`;
+  const transcript = markdown.split(/^## Transcript\s*$/m)[1];
+  if (!transcript) throw new Error("Transcript section is missing.");
+  const text = transcript
+    .split(/\n{2,}/)
+    .map((paragraph) => collapseRepeatedWordGroups(paragraph.trim().replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, "")))
+    .filter(Boolean)
+    .join("\n\n");
+  if (!text) throw new Error("Transcript is empty.");
+  return { title, text };
+}
+
+async function fetchPublicYouTubeTranscript(videoId: string, diagnostics: string[]) {
+  const response = await fetch(`https://youtube-transcript.ai/transcript/${videoId}.txt`, {
+    headers: { Accept: "text/markdown,text/plain;q=0.9" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > 2 * 1024 * 1024) throw new Error("Transcript response is too large.");
+  const markdown = await response.text();
+  diagnostics.push(`public:${response.status}:${markdown.length}`);
+  if (!response.ok || markdown.length > 2 * 1024 * 1024) throw new Error("Public transcript request failed.");
+  return parseYouTubeTranscriptMarkdown(markdown, videoId);
+}
+
 export function getYouTubeCaptionUrls(baseUrl: string) {
   const captionUrl = new URL(baseUrl);
   if (captionUrl.protocol !== "https:" || !(captionUrl.hostname === "youtube.com" || captionUrl.hostname.endsWith(".youtube.com"))) {
@@ -255,6 +308,12 @@ export async function extractYouTubeTranscript(sourceUrl: string, debug = false)
     const transcript = await fetchYouTubePlayerTranscript(videoId, diagnostics);
     return { title: transcript.title.slice(0, 200), text: ensureUsableText(transcript.text, "this YouTube video"), sourceLabel: "YouTube captions" };
   } catch {
+    try {
+      const transcript = await fetchPublicYouTubeTranscript(videoId, diagnostics);
+      return { title: transcript.title.slice(0, 200), text: ensureUsableText(transcript.text, "this YouTube video"), sourceLabel: "YouTube transcript" };
+    } catch (publicError) {
+      diagnostics.push(`public-fallback:${publicError instanceof Error ? publicError.name : "unknown"}`);
+    }
     try {
       const { fetchTranscript } = await import("youtube-transcript");
       const transcript = await fetchTranscript(videoId, { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(20_000) }) });

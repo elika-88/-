@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { CourseExtractionError, extractCourseFile, getCourseFileKind, getYouTubeCaptionUrls, parseYouTubeCaptionXml, parseYouTubeVideoId } from "@/lib/server/course-extraction";
+import { CourseExtractionError, extractCourseFile, getCourseFileKind, getYouTubeCaptionUrls, parseYouTubeCaptionXml, parseYouTubeTranscriptMarkdown, parseYouTubeVideoId } from "@/lib/server/course-extraction";
 import { POST } from "@/app/api/extract-course/route";
 
 describe("course source extraction", () => {
@@ -47,6 +47,24 @@ describe("course source extraction", () => {
       expect(url.searchParams.get("signature")).toBe("abc=123");
       expect(url.searchParams.get("fmt")).toBe("srv3");
     }
+  });
+
+  it("parses and removes repeated phrases from the public transcript fallback", () => {
+    const markdown = [
+      "# Transcript: Example lesson",
+      "",
+      "Source video: https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "",
+      "## Transcript",
+      "[0:01] Learn this useful concept Learn this useful concept before the exercise before the exercise",
+      "",
+      "[1:02] Now apply it to a practical example.",
+    ].join("\n");
+
+    expect(parseYouTubeTranscriptMarkdown(markdown, "dQw4w9WgXcQ")).toEqual({
+      title: "Example lesson",
+      text: "Learn this useful concept before the exercise\n\nNow apply it to a practical example.",
+    });
   });
 
   it("accepts a browser multipart upload through the extraction route", async () => {
