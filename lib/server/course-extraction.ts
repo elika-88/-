@@ -8,6 +8,10 @@ export const COURSE_FILE_LIMITS = {
 export type SupportedCourseFile = "pdf" | "pptx" | "docx" | "text";
 export type ExtractedCourse = { title: string; text: string; sourceLabel: string };
 
+const YOUTUBE_PLAYER_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
+const YOUTUBE_ANDROID_VERSION = "20.10.38";
+const YOUTUBE_ANDROID_AGENT = `com.google.android.youtube/${YOUTUBE_ANDROID_VERSION} (Linux; U; Android 15) gzip`;
+
 export class CourseExtractionError extends Error {
   constructor(
     public readonly status: 400 | 413 | 415 | 422 | 502,
@@ -128,15 +132,73 @@ export function parseYouTubeVideoId(value: string) {
   return videoId;
 }
 
+function decodeXmlText(value: string) {
+  return value
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)));
+}
+
+export function parseYouTubeCaptionXml(xml: string) {
+  const paragraphs = [...xml.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/g)]
+    .map((match) => decodeXmlText(match[1]).trim())
+    .filter(Boolean);
+  if (paragraphs.length) return paragraphs.join(" ");
+  return [...xml.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)]
+    .map((match) => decodeXmlText(match[1]).trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+async function fetchYouTubePlayerTranscript(videoId: string) {
+  const signal = AbortSignal.timeout(20_000);
+  const playerResponse = await fetch(YOUTUBE_PLAYER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": YOUTUBE_ANDROID_AGENT },
+    body: JSON.stringify({
+      context: { client: { clientName: "ANDROID", clientVersion: YOUTUBE_ANDROID_VERSION, androidSdkVersion: 35, hl: "en", gl: "US" } },
+      videoId,
+    }),
+    signal,
+  });
+  if (!playerResponse.ok) throw new Error("YouTube player request failed.");
+  const player: unknown = await playerResponse.json();
+  const data = player as {
+    videoDetails?: { title?: unknown };
+    captions?: { playerCaptionsTracklistRenderer?: { captionTracks?: Array<{ baseUrl?: unknown }> } };
+  };
+  const title = typeof data.videoDetails?.title === "string" ? data.videoDetails.title : `YouTube video ${videoId}`;
+  const baseUrl = data.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find((track) => typeof track.baseUrl === "string")?.baseUrl;
+  if (typeof baseUrl !== "string") throw new Error("YouTube captions are unavailable.");
+  const captionUrl = new URL(baseUrl);
+  if (captionUrl.protocol !== "https:" || !(captionUrl.hostname === "youtube.com" || captionUrl.hostname.endsWith(".youtube.com"))) throw new Error("Invalid YouTube caption URL.");
+  captionUrl.searchParams.set("fmt", "srv3");
+  const captionResponse = await fetch(captionUrl, { headers: { "User-Agent": YOUTUBE_ANDROID_AGENT }, signal });
+  if (!captionResponse.ok) throw new Error("YouTube caption request failed.");
+  const text = parseYouTubeCaptionXml(await captionResponse.text());
+  if (!text) throw new Error("YouTube returned empty captions.");
+  return { title, text };
+}
+
 export async function extractYouTubeTranscript(sourceUrl: string): Promise<ExtractedCourse> {
   const videoId = parseYouTubeVideoId(sourceUrl.trim());
   try {
-    const { fetchTranscript } = await import("youtube-transcript");
-    const transcript = await fetchTranscript(videoId);
-    const text = ensureUsableText(transcript.map((item) => item.text).join(" "), "this YouTube video");
-    return { title: `YouTube video ${videoId}`, text, sourceLabel: "YouTube captions" };
-  } catch (error) {
-    if (error instanceof CourseExtractionError) throw error;
-    throw new CourseExtractionError(422, "YouTube captions could not be retrieved. Check that the video is public and has captions, then try again.");
+    const transcript = await fetchYouTubePlayerTranscript(videoId);
+    return { title: transcript.title.slice(0, 200), text: ensureUsableText(transcript.text, "this YouTube video"), sourceLabel: "YouTube captions" };
+  } catch {
+    try {
+      const { fetchTranscript } = await import("youtube-transcript");
+      const transcript = await fetchTranscript(videoId, { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(20_000) }) });
+      const text = ensureUsableText(transcript.map((item) => item.text).join(" "), "this YouTube video");
+      return { title: `YouTube video ${videoId}`, text, sourceLabel: "YouTube captions" };
+    } catch (error) {
+      if (error instanceof CourseExtractionError) throw error;
+      throw new CourseExtractionError(422, "YouTube captions could not be retrieved. Check that the video is public and has captions, then try again.");
+    }
   }
 }

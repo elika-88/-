@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { CourseExtractionError, extractCourseFile, getCourseFileKind, parseYouTubeVideoId } from "@/lib/server/course-extraction";
+import { CourseExtractionError, extractCourseFile, getCourseFileKind, parseYouTubeCaptionXml, parseYouTubeVideoId } from "@/lib/server/course-extraction";
 import { POST } from "@/app/api/extract-course/route";
 
 describe("course source extraction", () => {
@@ -23,6 +23,11 @@ describe("course source extraction", () => {
     expect(parseYouTubeVideoId("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
     expect(parseYouTubeVideoId("https://youtu.be/dQw4w9WgXcQ?t=4")).toBe("dQw4w9WgXcQ");
     expect(() => parseYouTubeVideoId("https://example.com/watch?v=dQw4w9WgXcQ")).toThrow(CourseExtractionError);
+  });
+
+  it("extracts and decodes text from YouTube caption XML", () => {
+    const xml = '<timedtext><body><p t="0" d="1000"><s>Hello &amp; </s><s>world</s></p><p t="1000" d="900">Second &#39;line&#39;</p></body></timedtext>';
+    expect(parseYouTubeCaptionXml(xml)).toBe("Hello & world Second 'line'");
   });
 
   it("accepts a browser multipart upload through the extraction route", async () => {
