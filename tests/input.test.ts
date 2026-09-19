@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countWords, INPUT_LIMITS, validateGenerationInput, validateLecture } from "@/lib/input";
+import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput, validateLecture } from "@/lib/input";
 
 describe("shared input validation", () => {
   it.each(["", " \n\t "])("rejects empty input %j", (text) => {
@@ -28,6 +28,13 @@ describe("shared input validation", () => {
   it("preserves source whitespace and accepts an optional empty title", () => {
     const input = { title: "", lecture: `\n${"evidence ".repeat(80)}\n`, outputLanguage: "auto" };
     expect(validateGenerationInput(input)).toEqual({ success: true, data: input });
+  });
+
+  it("normalizes HTML entities left in imported transcripts", () => {
+    expect(normalizeLectureText("AI&nbsp;&nbsp;models &amp; safety&#160;research &amp;nbsp;today\u00a0now"))
+      .toBe("AI models & safety research today now");
+    expect(validateGenerationInput({ title: "", lecture: "evidence&nbsp;&nbsp;".repeat(80), outputLanguage: "auto" }))
+      .toMatchObject({ success: true, data: { lecture: "evidence ".repeat(80) } });
   });
 
   it.each([

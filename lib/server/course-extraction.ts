@@ -1,4 +1,5 @@
 import "server-only";
+import { normalizeLectureText } from "@/lib/input";
 
 export const COURSE_FILE_LIMITS = {
   maxBytes: 15 * 1024 * 1024,
@@ -203,23 +204,13 @@ function collapseRepeatedWordGroups(value: string) {
   return result.join(" ");
 }
 
-function decodeTranscriptEntities(value: string) {
-  return value
-    .replace(/&nbsp;|&#160;|&#xA0;/gi, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;|&#34;/g, '"')
-    .replace(/&#39;|&apos;/g, "'");
-}
-
 export function parseYouTubeTranscriptMarkdown(markdown: string, videoId: string) {
   const title = markdown.match(/^# Transcript:\s*(.+)$/m)?.[1]?.trim() || `YouTube video ${videoId}`;
   const transcript = markdown.split(/^## Transcript\s*$/m)[1];
   if (!transcript) throw new Error("Transcript section is missing.");
   const text = transcript
     .split(/\n{2,}/)
-    .map((paragraph) => collapseRepeatedWordGroups(decodeTranscriptEntities(paragraph.trim().replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, ""))))
+    .map((paragraph) => collapseRepeatedWordGroups(normalizeLectureText(paragraph.trim().replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, ""))))
     .filter(Boolean)
     .join("\n\n");
   if (!text) throw new Error("Transcript is empty.");

@@ -14,6 +14,18 @@ export const INPUT_LIMITS = {
 export const OutputLanguageSchema = z.enum(["auto", "ru", "en", "zh"]);
 export type OutputLanguage = z.infer<typeof OutputLanguageSchema>;
 
+export function normalizeLectureText(text: string) {
+  return text
+    .replace(/&(?:amp;)?(?:nbsp|#160|#xA0);/gi, " ")
+    .replace(/\u00a0/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;|&#34;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/[\t\f\v ]+/g, " ");
+}
+
 // Structural validation is separate so length failures have stable error codes.
 export const GenerateRequestSchema = z.strictObject({
   title: z.string().max(INPUT_LIMITS.maxTitleCharacters),
@@ -69,6 +81,7 @@ export function validateGenerationInput(input: unknown): InputValidationResult {
       error: { code: "INVALID_REQUEST", message: "Provide a title, lecture, and supported output language.", retryable: false },
     };
   }
-  const error = validateLecture(parsed.data.lecture);
-  return error ? { success: false, error } : { success: true, data: parsed.data };
+  const data = { ...parsed.data, lecture: normalizeLectureText(parsed.data.lecture) };
+  const error = validateLecture(data.lecture);
+  return error ? { success: false, error } : { success: true, data };
 }

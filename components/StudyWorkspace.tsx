@@ -8,7 +8,7 @@ import { HistorySidebar } from "@/components/HistorySidebar";
 import { StudyDashboard } from "@/components/StudyDashboard";
 import { GenerationClientError, requestGeneration } from "@/lib/client/generationStream";
 import { createSession, emptyHistory, parseHistory, serializeHistory, STORAGE_KEY, type SessionHistory, type StudySession, type SessionTab } from "@/lib/client/sessions";
-import { countWords, INPUT_LIMITS, validateGenerationInput } from "@/lib/input";
+import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
 
 const stages: Record<GenerationStage, string> = {
@@ -54,8 +54,15 @@ export function StudyWorkspace() {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         const restored = saved ? parseHistory(saved) : emptyHistory();
-        historyRef.current = restored;
-        setHistory(restored);
+        const migrated = {
+          ...restored,
+          sessions: restored.sessions.map((session) => ({ ...session, lecture: normalizeLectureText(session.lecture) })),
+        };
+        historyRef.current = migrated;
+        setHistory(migrated);
+        if (saved && migrated.sessions.some((session, index) => session.lecture !== restored.sessions[index].lecture)) {
+          localStorage.setItem(STORAGE_KEY, serializeHistory(migrated));
+        }
       } catch {
         storageBlocked.current = true;
         setStorageError("Saved history could not be opened. This session will stay in memory; existing saved data has not been overwritten.");
@@ -176,7 +183,9 @@ export function StudyWorkspace() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (pending || !ready) return;
-    const validation = validateGenerationInput({ title: active.title, lecture: active.lecture, outputLanguage: active.outputLanguage });
+    const normalizedLecture = normalizeLectureText(active.lecture);
+    if (normalizedLecture !== active.lecture) updateSession({ lecture: normalizedLecture });
+    const validation = validateGenerationInput({ title: active.title, lecture: normalizedLecture, outputLanguage: active.outputLanguage });
     if (!validation.success) { setError(new GenerationClientError(validation.error.code, validation.error.retryable)); lectureInput.current?.focus(); return; }
     setError(null); setPending(true); setProgress("Sending lecture");
     const current: Operation = { controller: new AbortController(), sessionId: active.id };
