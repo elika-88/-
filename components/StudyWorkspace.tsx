@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, BookOpen, Check, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square } from "lucide-react";
+import { AlertCircle, BookOpen, Check, FileText, Link, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square, Upload } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { CustomLanguageSelect } from '@/components/CustomLanguageSelect';
 import { HistorySidebar } from "@/components/HistorySidebar";
@@ -32,10 +32,14 @@ export function StudyWorkspace() {
   const [rename, setRename] = useState("");
   const [error, setError] = useState<GenerationClientError | null>(null);
   const [pending, setPending] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   
   const [progress, setProgress] = useState("");
   const operation = useRef<Operation | null>(null);
   const lectureInput = useRef<HTMLTextAreaElement>(null);
+  const courseFileInput = useRef<HTMLInputElement>(null);
   const active = history.sessions.find((session) => session.id === history.activeId) ?? draft;
   useEffect(() => {
     if (lectureInput.current) {
@@ -82,7 +86,7 @@ export function StudyWorkspace() {
     setProgress("");
     const current = historyRef.current.sessions.find((session) => session.id === historyRef.current.activeId) ?? draft;
     let next = { ...current, ...patch, updatedAt: Date.now() };
-    if (patch.lecture !== undefined && !next.customTitle) next.title = patch.lecture.trim().split(/\r?\n/)[0].slice(0, INPUT_LIMITS.maxTitleCharacters);
+    if (patch.lecture !== undefined && !next.customTitle && patch.title === undefined) next.title = patch.lecture.trim().split(/\r?\n/)[0].slice(0, INPUT_LIMITS.maxTitleCharacters);
     if (current.id === "draft") {
       if (!next.title.trim() && !next.lecture.trim()) { setDraft(next); return; }
       next = { ...next, id: createSession().id };
@@ -90,6 +94,38 @@ export function StudyWorkspace() {
     } else {
       save({ ...historyRef.current, sessions: historyRef.current.sessions.map((session) => session.id === next.id ? next : session) });
     }
+  }
+
+  async function importCourse(form: FormData) {
+    if (!ready || pending || importing) return;
+    setImportError(null); setError(null); setProgress("Extracting course content"); setImporting(true);
+    try {
+      const response = await fetch("/api/extract-course", { method: "POST", body: form });
+      const body: unknown = await response.json();
+      const message = typeof body === "object" && body !== null && "error" in body && typeof body.error === "object" && body.error !== null && "message" in body.error && typeof body.error.message === "string" ? body.error.message : "Course content could not be extracted.";
+      if (!response.ok) throw new Error(message);
+      if (typeof body !== "object" || body === null || !("text" in body) || !("title" in body) || typeof body.text !== "string" || typeof body.title !== "string") throw new Error("The extracted course content was invalid.");
+      updateSession({ lecture: body.text, title: active.customTitle ? active.title : body.title });
+      setYoutubeUrl("");
+      setProgress("Course content imported. Review it, then generate materials.");
+      requestAnimationFrame(() => lectureInput.current?.focus());
+    } catch (caught) {
+      setProgress("");
+      setImportError(caught instanceof Error ? caught.message : "Course content could not be extracted.");
+    } finally { setImporting(false); }
+  }
+
+  function importFile(file: File | undefined) {
+    if (!file) return;
+    const form = new FormData(); form.set("file", file);
+    void importCourse(form);
+  }
+
+  function importYouTube() {
+    const sourceUrl = youtubeUrl.trim();
+    if (!sourceUrl) { setImportError("Paste a YouTube link first."); return; }
+    const form = new FormData(); form.set("youtubeUrl", sourceUrl);
+    void importCourse(form);
   }
 
   function newLecture() {
@@ -180,16 +216,28 @@ export function StudyWorkspace() {
         {storageError && <div className="notice warning" role="alert"><AlertCircle aria-hidden="true" /><p>{storageError}</p></div>}
         <section className="input-section" aria-labelledby="input-heading">
           <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1></div>
-          <form onSubmit={submit} noValidate aria-busy={pending}>
-            <fieldset disabled={!ready || pending} className="lecture-fields">
+          <form onSubmit={submit} noValidate aria-busy={pending || importing}>
+            <fieldset disabled={!ready || pending || importing} className="lecture-fields">
               <div><label htmlFor="lecture-title">Lecture title <span className="optional">(optional)</span></label><input className="text-field" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder="Untitled lecture" /></div>
+              <div className="course-import" aria-label="Import course source">
+                <div className="course-import-heading"><FileText aria-hidden="true" /><div><strong>Import course content</strong><span>PDF, PPTX, DOCX, TXT or Markdown up to 15 MB</span></div></div>
+                <div className="course-import-controls">
+                  <div className="file-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); importFile(event.dataTransfer.files[0]); }}>
+                    <input ref={courseFileInput} id="course-file" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={(event) => { importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                    <label htmlFor="course-file"><Upload aria-hidden="true" />Drop a course file here or browse</label>
+                  </div>
+                  <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">YouTube video link</label><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="Paste a YouTube link" inputMode="url" /><Button type="button" variant="outline" onClick={importYouTube} title="Import YouTube captions"><Link aria-hidden="true" />Import captions</Button></div>
+                </div>
+                <p className="course-import-note">YouTube videos must be public and have captions. Save legacy PowerPoint files as .pptx first.</p>
+              </div>
               <div><div className="field-heading"><label htmlFor="lecture">Lecture text</label><span id="lecture-count">{countWords(active.lecture).toLocaleString("en-US")} words · {active.lecture.length.toLocaleString("en-US")} / 60,000</span></div>
                 <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder="Lecture text" /></div>
             </fieldset>
             <div className="input-toolbar"><CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending} onChange={(val) => updateSession({ outputLanguage: val })} />
-              <div className="generate-actions">{pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}<Button type="submit" disabled={!ready || pending}>{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : active.kit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{pending ? "Generating" : active.kit ? "Regenerate materials" : "Generate materials"}</Button></div>
+              <div className="generate-actions">{pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}<Button type="submit" disabled={!ready || pending || importing}>{pending || importing ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : active.kit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? "Importing" : pending ? "Generating" : active.kit ? "Regenerate materials" : "Generate materials"}</Button></div>
             </div>
             {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}
+            {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
             <div className="form-footer"><span className={storageError ? "save-failed" : ""}>{!ready ? "Opening workspace" : storageError ? "Not saved" : history.activeId ? "Saved on this device" : "Draft"}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}{error ? "" : progress}</span></div>
           </form>
         </section>
