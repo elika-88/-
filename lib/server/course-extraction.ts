@@ -11,6 +11,7 @@ export type ExtractedCourse = { title: string; text: string; sourceLabel: string
 const YOUTUBE_PLAYER_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
 const YOUTUBE_ANDROID_VERSION = "20.10.38";
 const YOUTUBE_ANDROID_AGENT = `com.google.android.youtube/${YOUTUBE_ANDROID_VERSION} (Linux; U; Android 15) gzip`;
+const YOUTUBE_CAPTION_HOSTS = ["www.youtube.com", "www.youtube-nocookie.com", "m.youtube.com"] as const;
 
 export class CourseExtractionError extends Error {
   constructor(
@@ -155,8 +156,21 @@ export function parseYouTubeCaptionXml(xml: string) {
     .join(" ");
 }
 
+export function getYouTubeCaptionUrls(baseUrl: string) {
+  const captionUrl = new URL(baseUrl);
+  if (captionUrl.protocol !== "https:" || !(captionUrl.hostname === "youtube.com" || captionUrl.hostname.endsWith(".youtube.com"))) {
+    throw new Error("Invalid YouTube caption URL.");
+  }
+  captionUrl.searchParams.set("fmt", "srv3");
+
+  return YOUTUBE_CAPTION_HOSTS.map((hostname) => {
+    const candidate = new URL(captionUrl);
+    candidate.hostname = hostname;
+    return candidate;
+  }).filter((candidate, index, candidates) => candidates.findIndex((other) => other.href === candidate.href) === index);
+}
+
 async function fetchYouTubePlayerTranscript(videoId: string) {
-  const signal = AbortSignal.timeout(20_000);
   const playerResponse = await fetch(YOUTUBE_PLAYER_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "User-Agent": YOUTUBE_ANDROID_AGENT },
@@ -164,7 +178,7 @@ async function fetchYouTubePlayerTranscript(videoId: string) {
       context: { client: { clientName: "ANDROID", clientVersion: YOUTUBE_ANDROID_VERSION, androidSdkVersion: 35, hl: "en", gl: "US" } },
       videoId,
     }),
-    signal,
+    signal: AbortSignal.timeout(20_000),
   });
   if (!playerResponse.ok) throw new Error("YouTube player request failed.");
   const player: unknown = await playerResponse.json();
@@ -175,14 +189,25 @@ async function fetchYouTubePlayerTranscript(videoId: string) {
   const title = typeof data.videoDetails?.title === "string" ? data.videoDetails.title : `YouTube video ${videoId}`;
   const baseUrl = data.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find((track) => typeof track.baseUrl === "string")?.baseUrl;
   if (typeof baseUrl !== "string") throw new Error("YouTube captions are unavailable.");
-  const captionUrl = new URL(baseUrl);
-  if (captionUrl.protocol !== "https:" || !(captionUrl.hostname === "youtube.com" || captionUrl.hostname.endsWith(".youtube.com"))) throw new Error("Invalid YouTube caption URL.");
-  captionUrl.searchParams.set("fmt", "srv3");
-  const captionResponse = await fetch(captionUrl, { headers: { "User-Agent": YOUTUBE_ANDROID_AGENT }, signal });
-  if (!captionResponse.ok) throw new Error("YouTube caption request failed.");
-  const text = parseYouTubeCaptionXml(await captionResponse.text());
-  if (!text) throw new Error("YouTube returned empty captions.");
-  return { title, text };
+
+  for (const captionUrl of getYouTubeCaptionUrls(baseUrl)) {
+    try {
+      const captionResponse = await fetch(captionUrl, {
+        headers: {
+          "User-Agent": YOUTUBE_ANDROID_AGENT,
+          Referer: "https://www.youtube.com/",
+        },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!captionResponse.ok) continue;
+      const text = parseYouTubeCaptionXml(await captionResponse.text());
+      if (text) return { title, text };
+    } catch {
+      // A YouTube edge may reject or time out in some hosting regions; try the next official host.
+    }
+  }
+
+  throw new Error("YouTube caption request failed.");
 }
 
 export async function extractYouTubeTranscript(sourceUrl: string): Promise<ExtractedCourse> {

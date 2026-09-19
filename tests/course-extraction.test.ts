@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { CourseExtractionError, extractCourseFile, getCourseFileKind, parseYouTubeCaptionXml, parseYouTubeVideoId } from "@/lib/server/course-extraction";
+import { CourseExtractionError, extractCourseFile, getCourseFileKind, getYouTubeCaptionUrls, parseYouTubeCaptionXml, parseYouTubeVideoId } from "@/lib/server/course-extraction";
 import { POST } from "@/app/api/extract-course/route";
 
 describe("course source extraction", () => {
@@ -28,6 +28,20 @@ describe("course source extraction", () => {
   it("extracts and decodes text from YouTube caption XML", () => {
     const xml = '<timedtext><body><p t="0" d="1000"><s>Hello &amp; </s><s>world</s></p><p t="1000" d="900">Second &#39;line&#39;</p></body></timedtext>';
     expect(parseYouTubeCaptionXml(xml)).toBe("Hello & world Second 'line'");
+  });
+
+  it("preserves signed caption parameters across official YouTube host fallbacks", () => {
+    const urls = getYouTubeCaptionUrls("https://www.youtube.com/api/timedtext?v=video123456&expire=1234567890&signature=abc%3D123&fmt=json3");
+
+    expect(urls.map((url) => url.hostname)).toEqual(["www.youtube.com", "www.youtube-nocookie.com", "m.youtube.com"]);
+    for (const url of urls) {
+      expect(url.protocol).toBe("https:");
+      expect(url.pathname).toBe("/api/timedtext");
+      expect(url.searchParams.get("v")).toBe("video123456");
+      expect(url.searchParams.get("expire")).toBe("1234567890");
+      expect(url.searchParams.get("signature")).toBe("abc=123");
+      expect(url.searchParams.get("fmt")).toBe("srv3");
+    }
   });
 
   it("accepts a browser multipart upload through the extraction route", async () => {
