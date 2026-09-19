@@ -1,10 +1,5 @@
 import "server-only";
 
-import JSZip from "jszip";
-import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
-import { fetchTranscript } from "youtube-transcript";
-
 export const COURSE_FILE_LIMITS = {
   maxBytes: 15 * 1024 * 1024,
   maxCharacters: 60_000,
@@ -76,6 +71,7 @@ function xmlText(xml: string) {
 }
 
 async function extractPptx(buffer: Buffer) {
+  const { default: JSZip } = await import("jszip");
   const archive = await JSZip.loadAsync(buffer, { createFolders: false });
   const slides = Object.entries(archive.files)
     .filter(([path, entry]) => !entry.dir && /^ppt\/slides\/slide\d+\.xml$/i.test(path))
@@ -99,12 +95,14 @@ export async function extractCourseFile(file: File): Promise<ExtractedCourse> {
   try {
     let text: string;
     if (kind === "pdf") {
+      const { PDFParse } = await import("pdf-parse");
       const parser = new PDFParse({ data: buffer });
       try { text = (await parser.getText()).text; }
       finally { await parser.destroy(); }
     } else if (kind === "pptx") {
       text = await extractPptx(buffer);
     } else if (kind === "docx") {
+      const { default: mammoth } = await import("mammoth");
       text = (await mammoth.extractRawText({ buffer })).value;
     } else {
       text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
@@ -133,6 +131,7 @@ export function parseYouTubeVideoId(value: string) {
 export async function extractYouTubeTranscript(sourceUrl: string): Promise<ExtractedCourse> {
   const videoId = parseYouTubeVideoId(sourceUrl.trim());
   try {
+    const { fetchTranscript } = await import("youtube-transcript");
     const transcript = await fetchTranscript(videoId);
     const text = ensureUsableText(transcript.map((item) => item.text).join(" "), "this YouTube video");
     return { title: `YouTube video ${videoId}`, text, sourceLabel: "YouTube captions" };

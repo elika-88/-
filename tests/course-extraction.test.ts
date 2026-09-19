@@ -32,4 +32,11 @@ describe("course source extraction", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ title: "outline", text: "A short course outline." });
   });
+
+  it("returns JSON for malformed multipart input without loading file parsers", async () => {
+    const response = await POST(new Request("http://localhost/api/extract-course", { method: "POST", body: new FormData() }));
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toEqual({ error: { message: "Choose a course file or paste a YouTube link." } });
+  });
 });

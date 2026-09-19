@@ -101,7 +101,12 @@ export function StudyWorkspace() {
     setImportError(null); setError(null); setProgress("Extracting course content"); setImporting(true);
     try {
       const response = await fetch("/api/extract-course", { method: "POST", body: form });
-      const body: unknown = await response.json();
+      const responseText = await response.text();
+      let body: unknown = null;
+      if (responseText) {
+        try { body = JSON.parse(responseText); }
+        catch { throw new Error("The server returned an invalid response while extracting this course. Try again shortly."); }
+      }
       const message = typeof body === "object" && body !== null && "error" in body && typeof body.error === "object" && body.error !== null && "message" in body.error && typeof body.error.message === "string" ? body.error.message : "Course content could not be extracted.";
       if (!response.ok) throw new Error(message);
       if (typeof body !== "object" || body === null || !("text" in body) || !("title" in body) || typeof body.text !== "string" || typeof body.title !== "string") throw new Error("The extracted course content was invalid.");
