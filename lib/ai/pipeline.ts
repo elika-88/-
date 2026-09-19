@@ -27,6 +27,7 @@ const VerdictsSchema = z.strictObject({ items: z.array(z.strictObject({ itemId: 
 const NotesSchema = GeneratedMaterialsSchema.pick({ lectureTitle: true, overview: true, summary: true, keyPoints: true, limitations: true });
 const QuizSchema = GeneratedMaterialsSchema.pick({ quiz: true });
 const CardsSchema = GeneratedMaterialsSchema.pick({ flashcards: true });
+const STRUCTURED_OUTPUT_TOKENS = 8_000;
 
 export async function generateStudyKit(input: GenerateRequest, connection: Awaited<ReturnType<typeof createOpenAIClient>>, runId: string, signal: AbortSignal, emit: (event: GenerationEvent) => void) {
   const { client, model, apiFormat = 'responses' } = connection;
@@ -39,7 +40,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
     if (++calls > 15) throw new PipelineError('INVALID_OUTPUT', 'Generation exceeded its retry budget. Please try a shorter lecture.');
     if (apiFormat === 'chat_completions') {
       const completion = await client.chat.completions.parse({
-        model, store: false, max_completion_tokens: 4000,
+        model, store: false, max_completion_tokens: STRUCTURED_OUTPUT_TOKENS,
         ...(/^gpt-(5|6)/.test(model) ? { reasoning_effort: 'low' as const } : {}),
         messages: [{ role: 'developer', content: `${rules}\n${prompt}` }, { role: 'user', content: data }],
         response_format: zodResponseFormat(schema, name),
@@ -50,7 +51,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       return schema.parse(choice.message.parsed);
     }
     const response = await client.responses.parse({
-      model, store: false, max_output_tokens: 4000,
+      model, store: false, max_output_tokens: STRUCTURED_OUTPUT_TOKENS,
       ...(/^gpt-(5|6)/.test(model) ? { reasoning: { effort: 'low' as const } } : {}),
       input: [{ role: 'developer', content: `${rules}\n${prompt}` }, { role: 'user', content: data }],
       text: { format: zodTextFormat(schema, name) },

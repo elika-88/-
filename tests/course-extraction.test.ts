@@ -56,7 +56,7 @@ describe("course source extraction", () => {
       "Source video: https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       "",
       "## Transcript",
-      "[0:01] Learn this useful concept Learn this useful concept before the exercise before the exercise",
+      "[0:01] Learn&nbsp;this useful concept Learn&nbsp;this useful concept before the exercise before the exercise",
       "",
       "[1:02] Now apply it to a practical example.",
     ].join("\n");
