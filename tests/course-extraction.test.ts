@@ -33,10 +33,15 @@ describe("course source extraction", () => {
   it("preserves signed caption parameters across official YouTube host fallbacks", () => {
     const urls = getYouTubeCaptionUrls("https://www.youtube.com/api/timedtext?v=video123456&expire=1234567890&signature=abc%3D123&fmt=json3");
 
-    expect(urls.map((url) => url.hostname)).toEqual(["www.youtube.com", "www.youtube-nocookie.com", "m.youtube.com"]);
+    expect(urls.map((url) => [url.hostname, url.pathname])).toEqual([
+      ["www.youtube.com", "/api/timedtext"],
+      ["www.youtube-nocookie.com", "/api/timedtext"],
+      ["m.youtube.com", "/api/timedtext"],
+      ["kids.youtube.com", "/api/timedtext"],
+      ["video.google.com", "/timedtext"],
+    ]);
     for (const url of urls) {
       expect(url.protocol).toBe("https:");
-      expect(url.pathname).toBe("/api/timedtext");
       expect(url.searchParams.get("v")).toBe("video123456");
       expect(url.searchParams.get("expire")).toBe("1234567890");
       expect(url.searchParams.get("signature")).toBe("abc=123");

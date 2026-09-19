@@ -11,7 +11,13 @@ export type ExtractedCourse = { title: string; text: string; sourceLabel: string
 const YOUTUBE_PLAYER_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
 const YOUTUBE_ANDROID_VERSION = "20.10.38";
 const YOUTUBE_ANDROID_AGENT = `com.google.android.youtube/${YOUTUBE_ANDROID_VERSION} (Linux; U; Android 15) gzip`;
-const YOUTUBE_CAPTION_HOSTS = ["www.youtube.com", "www.youtube-nocookie.com", "m.youtube.com"] as const;
+const YOUTUBE_CAPTION_ENDPOINTS = [
+  { hostname: "www.youtube.com" },
+  { hostname: "www.youtube-nocookie.com" },
+  { hostname: "m.youtube.com" },
+  { hostname: "kids.youtube.com" },
+  { hostname: "video.google.com", pathname: "/timedtext" },
+] as const;
 
 export class CourseExtractionError extends Error {
   constructor(
@@ -163,9 +169,10 @@ export function getYouTubeCaptionUrls(baseUrl: string) {
   }
   captionUrl.searchParams.set("fmt", "srv3");
 
-  return YOUTUBE_CAPTION_HOSTS.map((hostname) => {
+  return YOUTUBE_CAPTION_ENDPOINTS.map(({ hostname, ...endpoint }) => {
     const candidate = new URL(captionUrl);
     candidate.hostname = hostname;
+    if ("pathname" in endpoint) candidate.pathname = endpoint.pathname;
     return candidate;
   }).filter((candidate, index, candidates) => candidates.findIndex((other) => other.href === candidate.href) === index);
 }
