@@ -11,6 +11,20 @@ export type ExtractedCourse = { title: string; text: string; sourceLabel: string
 const YOUTUBE_PLAYER_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
 const YOUTUBE_ANDROID_VERSION = "20.10.38";
 const YOUTUBE_ANDROID_AGENT = `com.google.android.youtube/${YOUTUBE_ANDROID_VERSION} (Linux; U; Android 15) gzip`;
+const YOUTUBE_PLAYER_CLIENTS = [
+  {
+    name: "ANDROID",
+    version: YOUTUBE_ANDROID_VERSION,
+    userAgent: YOUTUBE_ANDROID_AGENT,
+    details: { androidSdkVersion: 35 },
+  },
+  {
+    name: "IOS",
+    version: "20.10.4",
+    userAgent: "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_1 like Mac OS X;)",
+    details: { deviceMake: "Apple", deviceModel: "iPhone16,2", osName: "iPhone", osVersion: "18.3.1.22D72" },
+  },
+] as const;
 const YOUTUBE_CAPTION_ENDPOINTS = [
   { hostname: "www.youtube.com" },
   { hostname: "www.youtube-nocookie.com" },
@@ -178,25 +192,37 @@ export function getYouTubeCaptionUrls(baseUrl: string) {
 }
 
 async function fetchYouTubePlayerTranscript(videoId: string, diagnostics: string[]) {
-  const playerResponse = await fetch(YOUTUBE_PLAYER_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": YOUTUBE_ANDROID_AGENT },
-    body: JSON.stringify({
-      context: { client: { clientName: "ANDROID", clientVersion: YOUTUBE_ANDROID_VERSION, androidSdkVersion: 35, hl: "en", gl: "US" } },
-      videoId,
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  diagnostics.push(`player:${playerResponse.status}`);
-  if (!playerResponse.ok) throw new Error("YouTube player request failed.");
-  const player: unknown = await playerResponse.json();
-  const data = player as {
+  type PlayerData = {
     videoDetails?: { title?: unknown };
+    playabilityStatus?: { status?: unknown };
     captions?: { playerCaptionsTracklistRenderer?: { captionTracks?: Array<{ baseUrl?: unknown }> } };
   };
-  const title = typeof data.videoDetails?.title === "string" ? data.videoDetails.title : `YouTube video ${videoId}`;
-  const baseUrl = data.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find((track) => typeof track.baseUrl === "string")?.baseUrl;
-  diagnostics.push(`track:${typeof baseUrl === "string" ? "yes" : "no"}`);
+
+  let title = `YouTube video ${videoId}`;
+  let baseUrl: unknown;
+  for (const client of YOUTUBE_PLAYER_CLIENTS) {
+    const playerResponse = await fetch(YOUTUBE_PLAYER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "User-Agent": client.userAgent },
+      body: JSON.stringify({
+        context: { client: { clientName: client.name, clientVersion: client.version, ...client.details, hl: "en", gl: "US" } },
+        videoId,
+        contentCheckOk: true,
+        racyCheckOk: true,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!playerResponse.ok) {
+      diagnostics.push(`player:${client.name}:${playerResponse.status}`);
+      continue;
+    }
+    const data = await playerResponse.json() as PlayerData;
+    if (typeof data.videoDetails?.title === "string") title = data.videoDetails.title;
+    baseUrl = data.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find((track) => typeof track.baseUrl === "string")?.baseUrl;
+    diagnostics.push(`player:${client.name}:${String(data.playabilityStatus?.status ?? "unknown")}:${typeof baseUrl === "string" ? "track" : "no-track"}`);
+    if (typeof baseUrl === "string") break;
+  }
+
   if (typeof baseUrl !== "string") throw new Error("YouTube captions are unavailable.");
 
   for (const captionUrl of getYouTubeCaptionUrls(baseUrl)) {
