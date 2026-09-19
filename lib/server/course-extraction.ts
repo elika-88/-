@@ -177,7 +177,7 @@ export function getYouTubeCaptionUrls(baseUrl: string) {
   }).filter((candidate, index, candidates) => candidates.findIndex((other) => other.href === candidate.href) === index);
 }
 
-async function fetchYouTubePlayerTranscript(videoId: string) {
+async function fetchYouTubePlayerTranscript(videoId: string, diagnostics: string[]) {
   const playerResponse = await fetch(YOUTUBE_PLAYER_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "User-Agent": YOUTUBE_ANDROID_AGENT },
@@ -187,6 +187,7 @@ async function fetchYouTubePlayerTranscript(videoId: string) {
     }),
     signal: AbortSignal.timeout(20_000),
   });
+  diagnostics.push(`player:${playerResponse.status}`);
   if (!playerResponse.ok) throw new Error("YouTube player request failed.");
   const player: unknown = await playerResponse.json();
   const data = player as {
@@ -195,6 +196,7 @@ async function fetchYouTubePlayerTranscript(videoId: string) {
   };
   const title = typeof data.videoDetails?.title === "string" ? data.videoDetails.title : `YouTube video ${videoId}`;
   const baseUrl = data.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find((track) => typeof track.baseUrl === "string")?.baseUrl;
+  diagnostics.push(`track:${typeof baseUrl === "string" ? "yes" : "no"}`);
   if (typeof baseUrl !== "string") throw new Error("YouTube captions are unavailable.");
 
   for (const captionUrl of getYouTubeCaptionUrls(baseUrl)) {
@@ -206,10 +208,13 @@ async function fetchYouTubePlayerTranscript(videoId: string) {
         },
         signal: AbortSignal.timeout(20_000),
       });
+      const body = await captionResponse.text();
+      diagnostics.push(`${captionUrl.hostname}:${captionResponse.status}:${captionResponse.headers.get("content-type") ?? "none"}:${body.length}`);
       if (!captionResponse.ok) continue;
-      const text = parseYouTubeCaptionXml(await captionResponse.text());
+      const text = parseYouTubeCaptionXml(body);
       if (text) return { title, text };
-    } catch {
+    } catch (error) {
+      diagnostics.push(`${captionUrl.hostname}:error:${error instanceof Error ? error.name : "unknown"}`);
       // A YouTube edge may reject or time out in some hosting regions; try the next official host.
     }
   }
@@ -217,10 +222,11 @@ async function fetchYouTubePlayerTranscript(videoId: string) {
   throw new Error("YouTube caption request failed.");
 }
 
-export async function extractYouTubeTranscript(sourceUrl: string): Promise<ExtractedCourse> {
+export async function extractYouTubeTranscript(sourceUrl: string, debug = false): Promise<ExtractedCourse> {
   const videoId = parseYouTubeVideoId(sourceUrl.trim());
+  const diagnostics: string[] = [];
   try {
-    const transcript = await fetchYouTubePlayerTranscript(videoId);
+    const transcript = await fetchYouTubePlayerTranscript(videoId, diagnostics);
     return { title: transcript.title.slice(0, 200), text: ensureUsableText(transcript.text, "this YouTube video"), sourceLabel: "YouTube captions" };
   } catch {
     try {
@@ -230,7 +236,8 @@ export async function extractYouTubeTranscript(sourceUrl: string): Promise<Extra
       return { title: `YouTube video ${videoId}`, text, sourceLabel: "YouTube captions" };
     } catch (error) {
       if (error instanceof CourseExtractionError) throw error;
-      throw new CourseExtractionError(422, "YouTube captions could not be retrieved. Check that the video is public and has captions, then try again.");
+      const detail = debug ? ` [${diagnostics.join(", ")}; fallback:${error instanceof Error ? error.name : "unknown"}]` : "";
+      throw new CourseExtractionError(422, `YouTube captions could not be retrieved. Check that the video is public and has captions, then try again.${detail}`);
     }
   }
 }

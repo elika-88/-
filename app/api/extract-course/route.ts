@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
   try {
     const sourceUrl = form.get("youtubeUrl");
-    if (typeof sourceUrl === "string" && sourceUrl.trim()) return Response.json(await extractYouTubeTranscript(sourceUrl), { headers: { "Cache-Control": "no-store" } });
+    if (typeof sourceUrl === "string" && sourceUrl.trim()) return Response.json(await extractYouTubeTranscript(sourceUrl, form.get("debug") === "1"), { headers: { "Cache-Control": "no-store" } });
     const file = form.get("file");
     if (!(file instanceof File)) return response("Choose a course file or paste a YouTube link.", 400);
     return Response.json(await extractCourseFile(file), { headers: { "Cache-Control": "no-store" } });
