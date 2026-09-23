@@ -26,6 +26,7 @@ test("validates input and preserves it after a generation failure", async ({ pag
 test("renders without overflow and restores the single workspace", async ({ page }) => {
   await page.goto("/results");
   await expect(page).toHaveURL("/");
+  await expect(page.getByRole("button", { name: "Generate materials", exact: true })).toBeEnabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `test-results/foundation-${test.info().project.name}.png`, fullPage: true });
 });

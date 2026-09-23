@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { UserProfileSchema } from "@/lib/contracts/auth";
 
 export type Account = { id: string; username: string; email: string; createdAt: string };
 type AuthContextValue = {
@@ -16,36 +17,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Account | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const accountVersion = useRef(0);
 
   const refresh = useCallback(async () => {
+    const version = ++accountVersion.current;
     try {
       const response = await fetch("/api/auth", { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Could not check your account.");
-      setUser(body.user);
+      const account = body.user === null ? null : UserProfileSchema.parse(body.user);
+      if (version !== accountVersion.current) return;
+      setUser(account);
       setError(null);
     } catch {
-      setError("Could not check your account. Refresh before editing saved lectures.");
-    } finally { setReady(true); }
+      if (version === accountVersion.current) setError("Could not check your account. Please retry.");
+    } finally { if (version === accountVersion.current) setReady(true); }
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
+    const version = ++accountVersion.current;
     fetch("/api/auth", { cache: "no-store", signal: controller.signal })
       .then(async response => {
         const body = await response.json();
         if (!response.ok) throw new Error("Account unavailable");
-        if (!controller.signal.aborted) { setUser(body.user); setError(null); }
+        const account = body.user === null ? null : UserProfileSchema.parse(body.user);
+        if (!controller.signal.aborted && version === accountVersion.current) { setUser(account); setError(null); }
       })
-      .catch(() => { if (!controller.signal.aborted) setError("Could not check your account. Refresh before editing saved lectures."); })
-      .finally(() => { if (!controller.signal.aborted) setReady(true); });
+      .catch(() => { if (!controller.signal.aborted && version === accountVersion.current) setError("Could not check your account. Please retry."); })
+      .finally(() => { if (!controller.signal.aborted && version === accountVersion.current) setReady(true); });
     return () => controller.abort();
   }, []);
 
   const signOut = useCallback(async () => {
     const response = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "logout" }) });
     if (!response.ok) throw new Error("Could not sign out. Try again.");
+    // Ignore checks started before logout completed: their cookie may be stale.
+    ++accountVersion.current;
     setUser(null);
+    setReady(true);
     setError(null);
     // Notify other open Lumina tabs without persisting credentials or profiles.
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("lumina-auth");
