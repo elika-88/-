@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   try {
     requireSameOrigin(request);
     const parsed = AuthRequestSchema.safeParse(await readAccountJson(request, 16 * 1024));
-    if (!parsed.success) throw new AccountError('INVALID_REQUEST', 'Check your account details and try again.', 400);
+    if (!parsed.success) throw new AccountError('INVALID_REQUEST', 'Check your username, email, and password. Usernames need 3–32 characters and passwords need 8–128 characters.', 400);
     const input = parsed.data;
     const cookieOptions = { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: request.headers.get('origin')?.startsWith('https:') ?? false };
     if (input.action === 'logout') {
@@ -27,12 +27,8 @@ export async function POST(request: Request) {
       response.cookies.set(USER_COOKIE, '', { ...cookieOptions, maxAge: 0 });
       return response;
     }
-    if (input.action === 'register') {
-      await registerUser(input, request);
-      return json({ pendingVerification: true, message: 'If this address can be registered, check its inbox for a verification link.' }, 202);
-    }
-    const result = await loginUser(input.identifier, input.password, request);
-    const response = json({ user: result.user });
+    const result = input.action === 'register' ? await registerUser(input, request) : await loginUser(input.identifier, input.password, request);
+    const response = json({ user: result.user }, input.action === 'register' ? 201 : 200);
     response.cookies.set(USER_COOKIE, result.token, { ...cookieOptions, maxAge: USER_SESSION_SECONDS });
     return response;
   } catch (error) { return failure(error); }

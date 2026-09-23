@@ -1,6 +1,6 @@
 # Frontend Integration
 
-> Historical integration snapshot. The current account, verification, and study-record behavior is documented in the repository README.
+> Historical integration snapshot. The current account and study-record behavior is documented in the repository README.
 
 The workspace now uses the Lumina layout, English UI, local lecture history,
 and the shared generation contract. There are no generated sample results in

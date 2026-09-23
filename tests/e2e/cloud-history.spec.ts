@@ -12,9 +12,9 @@ import { pathToFileURL } from 'node:url';
 const user = { id: 'a20e5041-118e-4de0-b7b6-6ecf279c5b23', username: 'CloudStudent', email: 'cloud@example.invalid', createdAt: '2026-09-23T00:00:00.000Z' };
 const otherUser = { ...user, id: '1a6c8cc9-8707-43b0-9072-3708383773c4', username: 'OtherStudent', email: 'other@example.invalid' };
 const blank = (id: string, title: string): StudySession => ({ id, title, customTitle: true, lecture: 'Private course text', outputLanguage: 'en', tab: 'summary', kit: null, updatedAt: 1 });
-async function verifiedFixtureAccount(name: string, email: string, contexts: BrowserContext[], baseURL: string) {
+async function fixtureAccount(name: string, email: string, contexts: BrowserContext[], baseURL: string) {
   // Initialize the isolated E2E database through the real auth route, then seed
-  // sessions directly. This test exercises study sync without sending email.
+  // sessions directly. This test exercises study sync independently of the registration UI.
   const bootstrap = await contexts[0].request.post('/api/auth', {
     headers: { Origin: baseURL }, data: { action: 'login', identifier: `setup-${randomUUID()}`, password: 'invalid' },
   });
@@ -153,8 +153,8 @@ test('real accounts sync create, generated materials, rename and delete across i
   const username = `cloud_${suffix}`;
   const second = await browser.newContext({ baseURL }); const third = await browser.newContext({ baseURL });
   try {
-    const accountId = await verifiedFixtureAccount(username, `${username}@example.invalid`, [page.context(), second], baseURL!);
-    await verifiedFixtureAccount(`b_${suffix}`, `b_${suffix}@example.invalid`, [third], baseURL!);
+    const accountId = await fixtureAccount(username, `${username}@example.invalid`, [page.context(), second], baseURL!);
+    await fixtureAccount(`b_${suffix}`, `b_${suffix}@example.invalid`, [third], baseURL!);
     const kit = studyKitFixture(); kit.source.text += '\n' + 'This lecture explains reliable learning and evidence. '.repeat(15);
     let job: GenerationJob | null = null;
     await page.route('**/api/generation-jobs**', async route => {

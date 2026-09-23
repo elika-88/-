@@ -18,7 +18,6 @@ export function AccountForm({ mode }: { mode: "login" | "signup" }) {
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const [verificationSent, setVerificationSent] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,11 +26,10 @@ export function AccountForm({ mode }: { mode: "login" | "signup" }) {
     try {
       const response = await fetch("/api/auth", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(registering ? { action: "register", username, email } : { action: "login", identifier: username, password }),
+        body: JSON.stringify(registering ? { action: "register", username, email, password } : { action: "login", identifier: username, password }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Could not complete sign-in.");
-      if (registering) { setVerificationSent(true); setPending(false); return; }
       // The root provider survives client navigation, even without BroadcastChannel.
       await refresh();
       notifyAuthChanged();
@@ -50,17 +48,15 @@ export function AccountForm({ mode }: { mode: "login" | "signup" }) {
         <span>Lumina</span>
       </p>
       <h1 className="gpt-auth-title">{registering ? "Create an account" : "Welcome back"}</h1>
-      <p className="gpt-auth-subtitle">{registering ? "Enter your username and email. We’ll send a link to finish setting up your account." : "Sign in to save lectures to your account and continue on another device. Guest history is imported only when you choose."}</p>
-      {verificationSent ? <div role="status" className="gpt-auth-verification"><h2>Check your inbox</h2><p>If this address can be registered, you’ll receive a link to verify it and set your password. The link expires in 30 minutes.</p><Link href="/login">Back to sign in</Link></div> : <>
+      <p className="gpt-auth-subtitle">{registering ? "Create your Lumina account." : "Sign in to your Lumina account."} Save lectures to your account and continue on another device. Guest history is imported only when you choose.</p>
       {error && <p role="alert" className="gpt-auth-error">{error}</p>}
       <form className="gpt-auth-form" onSubmit={submit} aria-busy={pending}>
         <div className="gpt-auth-field"><label htmlFor="account-username">{registering ? "Username" : "Username or email"}</label><input id="account-username" value={username} onChange={event => setUsername(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} required minLength={registering ? 3 : 1} maxLength={registering ? 32 : 254} disabled={pending} />{registering && <small>3–32 letters, numbers, underscores or hyphens.</small>}</div>
-        {!registering && <div className="gpt-auth-field"><label htmlFor="account-password">Password</label><div className="account-password"><input id="account-password" value={password} onChange={event => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" required maxLength={128} disabled={pending} /><button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></div>}
+        <div className="gpt-auth-field"><label htmlFor="account-password">Password</label><div className="account-password"><input id="account-password" value={password} onChange={event => setPassword(event.target.value)} type={showPassword ? "text" : "password"} autoComplete={registering ? "new-password" : "current-password"} required minLength={registering ? 8 : 1} maxLength={128} disabled={pending} /><button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>{registering && <small>Use at least 8 characters.</small>}</div>
         {registering && <div className="gpt-auth-field"><label htmlFor="account-email">Email</label><input id="account-email" type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" autoCapitalize="none" spellCheck={false} required maxLength={254} disabled={pending} /></div>}
         <button type="submit" className="gpt-auth-submit" disabled={pending}>{pending ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />Please wait</> : registering ? "Create account" : "Sign in"}</button>
       </form>
       <p className="account-switch">{registering ? "Already have an account? " : "New to Lumina? "}<Link href={registering ? "/login" : "/signup"}>{registering ? "Sign in" : "Create an account"}</Link></p>
-      </>}
     </div>
   </main>;
 }

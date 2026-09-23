@@ -78,41 +78,25 @@ test('a delayed account refresh cannot restore a signed-out account', async ({ p
   await expect(page.getByRole('link', { name: 'Sign in or register' })).toBeVisible();
 });
 
-test('registers by email, verifies the link, and signs in again without BroadcastChannel', async ({ page }) => {
+test('registers, restores the account, logs out and signs in by email without BroadcastChannel', async ({ page }) => {
   await page.addInitScript(() => { Object.defineProperty(window, 'BroadcastChannel', { value: undefined }); });
   const username = `portal_${Date.now()}_${test.info().project.name}`;
   const email = `${username}@example.invalid`;
   const password = 'Portal-test-only-482!';
-  const user = { id: 'a20e5041-118e-4de0-b7b6-6ecf279c5b23', username, email, createdAt: '2026-09-24T00:00:00.000Z' };
-  let signedIn = false;
-  await page.route('**/api/auth', route => {
-    const request = route.request();
-    if (request.method() === 'GET') return route.fulfill({ status: 200, json: { user: signedIn ? user : null } });
-    const body = request.postDataJSON() as { action: string; password?: string };
-    if (body.action === 'register') return route.fulfill({ status: 202, json: { pendingVerification: true } });
-    if (body.action === 'logout') { signedIn = false; return route.fulfill({ json: { user: null } }); }
-    if (body.password !== password) return route.fulfill({ status: 401, json: { error: 'Incorrect username, email, or password.' } });
-    signedIn = true;
-    return route.fulfill({ json: { user } });
-  });
-  await page.route('**/api/auth/verify', route => { signedIn = true; return route.fulfill({ status: 201, json: { user } }); });
-  await page.route('**/api/study-sessions', route => route.fulfill({ json: { userId: user.id, sessions: [], revisions: {}, storage: 'local' } }));
   await page.goto('/');
   await openSidebar(page);
   await page.getByRole('link', { name: 'Sign in or register' }).click();
   await page.getByRole('link', { name: 'Create an account', exact: true }).click();
   await page.getByLabel('Username', { exact: true }).fill(username);
+  await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
-  await page.goto(`/verify-email#token=${'a'.repeat(64)}`);
-  await page.getByLabel('Password', { exact: true }).fill(password);
-  await expect(page).toHaveURL('/verify-email');
-  await page.getByLabel('Confirm password').fill(password);
-  await page.getByRole('button', { name: 'Verify and create account' }).click();
   await expect(page).toHaveURL('/');
   await openSidebar(page);
   await expect(page.locator('.gpt-expanded-content[aria-hidden="false"] .account-identity:visible')).toContainText(username);
+  const cookie = (await page.context().cookies()).find(item => item.name === 'lumina_user');
+  expect(cookie?.httpOnly).toBe(true);
+  expect(cookie?.sameSite).toBe('Lax');
   expect((await page.request.get('/api/admin')).status()).toBe(401);
 
   await page.reload();
