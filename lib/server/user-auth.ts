@@ -78,7 +78,7 @@ function profile(row: Row): UserProfile {
 
 // Untrusted forwarded headers must not let a caller rotate IPs to evade limits.
 // Vercel overwrites x-vercel-forwarded-for; a self-hosted proxy must explicitly
-// opt in and overwrite x-real-ip. Direct/local requests share a conservative bucket.
+// opt in and overwrite x-real-ip. Without a trusted IP, account limits still apply.
 export function authClientAddress(request: Request) {
   const vercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
   const raw = vercel ? request.headers.get('x-vercel-forwarded-for')
@@ -105,16 +105,6 @@ async function reserveAttempt(buckets: { key: string; limit: number; window: num
       }
       await tx.commit();
     } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
-  });
-}
-
-async function checkAttemptLimit(bucket: { key: string; limit: number }) {
-  await withDatabase(async (db) => {
-    await initializeUserTables(db);
-    const row = (await db.execute({ sql: 'SELECT count, resets_at FROM user_auth_limits WHERE bucket = ?', args: [digest(bucket.key)] })).rows[0];
-    if (row && Number(row.resets_at) > Date.now() && Number(row.count) >= bucket.limit) {
-      throw new AccountError('RATE_LIMITED', 'Too many attempts. Please try again later.', 429);
-    }
   });
 }
 
@@ -209,23 +199,25 @@ export async function verifyEmailToken(token: string, password: string) {
 export async function loginUser(identifier: string, password: string, request: Request) {
   const key = identityKey(identifier);
   const address = authClientAddress(request);
-  if (address) await checkAttemptLimit({ key: `login:ip:${address}`, limit: 60 });
   const row = await withDatabase(async (db) => {
     await initializeUserTables(db);
     return (await db.execute({ sql: `SELECT * FROM app_users WHERE ${key.includes('@') ? 'email_key' : 'username_key'} = ?`, args: [key] })).rows[0];
   });
+  // Reserve atomically before hashing, including concurrent requests. Username
+  // and email share the same account budget, even when the source IP changes.
+  const bucket = row ? `login:user:${row.id}` : `login:identity:${key}`;
+  await reserveAttempt([
+    { key: bucket, limit: 10, window: LOGIN_WINDOW },
+    ...(address ? [{ key: `login:ip:${address}`, limit: 60, window: LOGIN_WINDOW }] : []),
+  ]);
   if (!await verifyPassword(password, row ? String(row.password_hash) : undefined) || !row) {
-    await reserveAttempt([
-      { key: `login:identity:${key}`, limit: 10, window: LOGIN_WINDOW },
-      ...(address ? [{ key: `login:ip:${address}`, limit: 60, window: LOGIN_WINDOW }] : []),
-    ]);
     throw new AccountError('INVALID_CREDENTIALS', 'Incorrect username, email, or password.', 401);
   }
   return withDatabase(async (db) => {
     const tx = await db.transaction('write');
     try {
       const token = await issueSession(tx, String(row.id));
-      await tx.execute({ sql: 'DELETE FROM user_auth_limits WHERE bucket = ?', args: [digest(`login:identity:${key}`)] });
+      await tx.execute({ sql: 'DELETE FROM user_auth_limits WHERE bucket = ?', args: [digest(bucket)] });
       await tx.commit();
       return { user: profile(row), token };
     } finally { if (!tx.closed) await tx.rollback(); tx.close(); }

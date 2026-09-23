@@ -14,6 +14,7 @@ import { StudySyncStatus } from './StudySyncStatus';
 import { useGenerationJob } from './useGenerationJob';
 import { GenerationJobStatus } from './GenerationJobStatus';
 import { isActiveJob } from '@/lib/client/generation-jobs';
+import { displayedStudyKit } from '@/lib/client/displayed-study-kit';
 import { AccountMenu } from './auth/AccountMenu';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
@@ -56,7 +57,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
   const task = useGenerationJob({ userId, sessionId: active.id, ready, ensureSaved: sync.ensureSaved, refreshCloud: sync.refreshCloud, refreshAuth });
   const backgroundBusy = Boolean(userId && (task.action || task.restoring || isActiveJob(task.job)));
   const submitting = Boolean(task.action === 'saving' || task.action === 'submitting' || task.action === 'retrying');
-  const displayedKit = task.result ?? active.kit;
+  const displayedKit = displayedStudyKit(active, sync.revisionFor(active.id), task.job, task.result);
   useEffect(() => {
     if (lectureInput.current) {
       lectureInput.current.style.height = "auto";

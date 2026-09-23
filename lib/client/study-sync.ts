@@ -49,6 +49,8 @@ export class StudySync {
   constructor(private options: Options) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
+  // The visible record can still be a local conflict copy after a cloud GET.
+  revisionFor = (id: string) => this.changes.get(id)?.baseRevision ?? this.revisions[id] ?? 0;
   private emit(patch: Partial<SyncSnapshot> = {}) {
     if (this.disposed) return;
     this.snapshot = { ...this.snapshot, ...patch, pending: this.changes.size };

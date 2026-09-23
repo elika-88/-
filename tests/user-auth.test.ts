@@ -134,10 +134,33 @@ describe('real account database and HTTP boundaries', () => {
     expect(authClientAddress(req)).toBe('203.0.113.3'); vi.stubEnv('VERCEL', '');
     await register();
     for (let i = 0; i < 10; i++) expect((await POST(request({ action: 'login', identifier: 'Alice', password: 'wrong-password' }))).status).toBe(401);
-    expect((await POST(request({ action: 'login', identifier: 'Alice', password }))).status).toBe(200);
+    expect((await POST(request({ action: 'login', identifier: 'Alice', password }))).status).toBe(429);
     for (let i = 0; i < 10; i++) expect((await POST(request({ action: 'login', identifier: 'Nobody', password }))).status).toBe(401);
     const limited = await POST(request({ action: 'login', identifier: 'NOBODY', password }));
     expect(limited.status).toBe(429); expect((await limited.json()).code).toBe('RATE_LIMITED');
+    const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 15 * 60 * 1000 + 1);
+    expect((await POST(request({ action: 'login', identifier: 'Alice', password }))).status).toBe(200);
+  });
+
+  it('shares the login budget across username, email and different source IPs', async () => {
+    await register(); vi.stubEnv('AUTH_TRUST_PROXY', 'true');
+    for (let i = 0; i < 10; i++) {
+      const req = request({ action: 'login', identifier: i % 2 ? 'ALICE@EXAMPLE.INVALID' : 'Alice', password: 'wrong-password' });
+      req.headers.set('x-real-ip', `203.0.113.${i + 1}`);
+      expect((await POST(req)).status).toBe(401);
+    }
+    const candidate = request({ action: 'login', identifier: 'alice@example.invalid', password });
+    candidate.headers.set('x-real-ip', '203.0.113.20');
+    const response = await POST(candidate);
+    expect(response.status).toBe(429);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('reserves the password verification budget atomically under concurrent requests', async () => {
+    await register();
+    const responses = await Promise.all(Array.from({ length: 12 }, () => POST(request({ action: 'login', identifier: 'Alice', password: 'wrong-password' }))));
+    expect(responses.filter(response => response.status === 401)).toHaveLength(10);
+    expect(responses.filter(response => response.status === 429)).toHaveLength(2);
   });
 
   it('requires a live email token and lets its owner choose the password', async () => {

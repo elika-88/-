@@ -48,6 +48,17 @@ function edit(sync: StudySync, item: StudySession) {
 }
 
 describe('account study synchronization', () => {
+  it('reports the visible local base revision until a cloud conflict is resolved', async () => {
+    const f = setup(); const item = session(); f.records.set(item.id, item); f.revisions[item.id] = 1;
+    await f.sync.start(); expect(f.sync.revisionFor(item.id)).toBe(1);
+    edit(f.sync, { ...item, title: 'Unsaved local edit' });
+    f.records.set(item.id, { ...item, title: 'Other device' }); f.revisions[item.id] = 2;
+    await f.sync.refresh();
+    expect(f.sync.getSnapshot().conflicts).toHaveLength(1);
+    expect(f.sync.revisionFor(item.id)).toBe(1);
+    f.sync.resolveConflict(item.id, false);
+    expect(f.sync.revisionFor(item.id)).toBe(2);
+  });
   it('confirms the newest revision after an in-flight save and subsequent edits', async () => {
     const f = setup(); await f.sync.start(); const first = session();
     const gate = deferred<{ session: StudySession; revision: number }>(); const actual = f.transport.save;

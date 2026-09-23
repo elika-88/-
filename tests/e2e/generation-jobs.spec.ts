@@ -132,6 +132,21 @@ test('preserves edits and refreshes the cloud copy while displaying the returned
   await expect(page.getByText(/These materials are from the previous version/)).toBeVisible();
 });
 
+test('cloud refresh replaces an older completed task result with another device’s newer result', async ({ page }) => {
+  const state = await background(page);
+  state.setJob({ id: state.kit.runId }); state.complete();
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: state.kit.lectureTitle })).toBeVisible();
+  state.kit.runId = 'c0913c04-e964-4aec-9104-a684fe6a6825';
+  state.kit.lectureTitle = 'New result from another device';
+  state.setJob({ id: state.kit.runId }); state.complete();
+  const refreshed = page.waitForResponse(response => response.url().endsWith('/api/study-sessions') && response.request().method() === 'GET');
+  await page.getByRole('button', { name: 'Refresh cloud', exact: true }).click();
+  const payload = await (await refreshed).json();
+  expect(payload.sessions[0].kit.lectureTitle).toBe('New result from another device');
+  await expect(page.getByRole('heading', { name: 'New result from another device', exact: true })).toBeVisible();
+});
+
 test('account changes abort old polling and ignore a late successful result', async ({ page }) => {
   const state = await background(page); await page.goto('/'); await generate(page);
   await expect(page.getByTestId('generation-job')).toContainText('Queued');
