@@ -6,6 +6,7 @@ import { Ellipsis, PanelLeftClose, Pencil, Search, SquarePen, Trash2, Settings }
 import type { StudySession } from "@/lib/client/sessions";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
+import { AccountMenu } from "@/components/auth/AccountMenu";
 
 type Props = {
   sessions: StudySession[];
@@ -84,7 +85,7 @@ export function HistorySidebar({
               <Settings size={18} />
             </button>
           </div>
-
+          <AccountMenu compact />
         </div>
 
         {/* 2. Full Expanded Sidebar View */}
@@ -197,6 +198,7 @@ export function HistorySidebar({
 
           {/* Preferences for the local workspace. */}
           <div className="gpt-sidebar-auth-footer">
+            <AccountMenu />
             <div className="gpt-footer-user-row">
               <button
                 className="gpt-nav-item"

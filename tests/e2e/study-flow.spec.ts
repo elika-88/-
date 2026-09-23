@@ -47,7 +47,7 @@ test('starts empty without demo controls or simulated account creation', async (
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Load demo lecture' })).toHaveCount(0);
   await expect(page.getByLabel('Lecture text', { exact: true })).toHaveValue('');
-  await expect(page.locator('a[href="/login"], a[href="/signup"]')).toHaveCount(0);
+  await expect(page.locator('a[href="/login"]').first()).toBeAttached();
   await expect(page.getByRole('heading', { name: 'No study materials yet' })).toBeVisible();
   expect((await page.request.get('/demo/research-methods.txt')).status()).toBe(404);
   expect(generated).toBe(false);

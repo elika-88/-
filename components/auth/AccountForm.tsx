@@ -5,9 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff, LoaderCircle } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export function AccountForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
+  const { refresh } = useAuth();
   const registering = mode === "signup";
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -27,10 +29,11 @@ export function AccountForm({ mode }: { mode: "login" | "signup" }) {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Could not complete sign-in.");
+      // The root provider survives client navigation, even without BroadcastChannel.
+      await refresh();
       const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("lumina-auth");
       channel?.postMessage("changed"); channel?.close();
-      // Full navigation starts the workspace with the server's authenticated cookie.
-      router.push("/");
+      router.replace("/");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Connection failed. Try again.");
       setPending(false);
@@ -45,7 +48,7 @@ export function AccountForm({ mode }: { mode: "login" | "signup" }) {
         <span>Lumina</span>
       </p>
       <h1 className="gpt-auth-title">{registering ? "Create an account" : "Welcome back"}</h1>
-      <p className="gpt-auth-subtitle">{registering ? "Save your lectures and study across devices." : "Sign in to open your saved lectures."}</p>
+      <p className="gpt-auth-subtitle">{registering ? "Create your Lumina account." : "Sign in to your Lumina account."} Lecture history is currently saved on this device.</p>
       {error && <p role="alert" className="gpt-auth-error">{error}</p>}
       <form className="gpt-auth-form" onSubmit={submit} aria-busy={pending}>
         <div className="gpt-auth-field"><label htmlFor="account-username">{registering ? "Username" : "Username or email"}</label><input id="account-username" value={username} onChange={event => setUsername(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} required minLength={registering ? 3 : 1} maxLength={registering ? 32 : 254} disabled={pending} />{registering && <small>3–32 letters, numbers, underscores or hyphens.</small>}</div>
