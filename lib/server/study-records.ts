@@ -9,7 +9,7 @@ export const STUDY_REQUEST_BYTES = 2 * 1024 * 1024;
 export const MAX_STUDY_RECORDS = 1000;
 export { DeleteStudySessionSchema, SaveStudySessionSchema, ServerStudySessionSchema };
 
-async function initializeStudyTables(db: Client) {
+export async function initializeStudyTables(db: Client) {
   await initializeUserTables(db);
   await db.batch([
     `CREATE TABLE IF NOT EXISTS study_records (

@@ -24,6 +24,7 @@
     "@radix-ui/react-slot": "1.3.3",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "inngest": "4.21.0",
     "js-tiktoken": "1.0.21",
     "jszip": "^3.10.2",
     "lucide-react": "1.47.0",
