@@ -17,6 +17,7 @@ test('a delayed account check cannot undo a newer login', async ({ page }) => {
     };
   });
   await page.route('**/api/auth', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user }) }));
+  await page.route('**/api/study-sessions', route => route.fulfill({ json: { userId: user.id, sessions: [], revisions: {}, storage: 'local' } }));
   await page.goto('/login');
   await page.getByLabel('Username or email').fill(user.username);
   await page.getByLabel('Password', { exact: true }).fill('Test-only-password');
@@ -33,6 +34,7 @@ test('a delayed account check cannot undo a newer login', async ({ page }) => {
 });
 
 async function openSidebar(page: Page) {
+  await expect(page.locator('.study-shell, .account-menu-error').first()).toBeVisible();
   const open = page.getByRole('button', { name: 'Open sidebar', exact: true });
   if (await open.isVisible()) await open.click();
 }
@@ -53,6 +55,7 @@ test('a delayed account refresh cannot restore a signed-out account', async ({ p
     };
   }, user);
   let signedOut = false;
+  await page.route('**/api/study-sessions', route => route.fulfill({ json: { userId: user.id, sessions: [], revisions: {}, storage: 'local' } }));
   await page.route('**/api/auth', route => {
     if (route.request().method() === 'POST') signedOut = true;
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: signedOut ? null : user }) });
@@ -66,6 +69,7 @@ test('a delayed account refresh cannot restore a signed-out account', async ({ p
   });
   await expect(page.locator('html')).toHaveAttribute('data-auth-delayed', 'true');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await openSidebar(page);
   await expect(page.getByRole('link', { name: 'Sign in or register' })).toBeVisible();
   await page.evaluate(async () => {
     window.dispatchEvent(new Event('release-auth'));
@@ -99,6 +103,7 @@ test('registers, restores the account, logs out and signs in by email without Br
   await openSidebar(page);
   await expect(page.locator('.gpt-expanded-content[aria-hidden="false"] .account-identity:visible')).toContainText(username);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await openSidebar(page);
   await expect(page.getByRole('link', { name: 'Sign in or register' })).toBeVisible();
   expect(await (await page.request.get('/api/auth')).json()).toEqual({ user: null });
 
@@ -127,5 +132,6 @@ test('shows account service failure and allows retry without pretending the user
   unavailable = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Could not check your account' })).toHaveCount(0);
+  await openSidebar(page);
   await expect(page.getByRole('link', { name: 'Sign in or register' })).toBeVisible();
 });

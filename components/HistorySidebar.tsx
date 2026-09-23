@@ -17,6 +17,7 @@ type Props = {
   onSelect: (id: string) => void;
   onEdit: (id: string, action: "rename" | "delete") => void;
   onClose: () => void;
+  onExport?: () => void;
 };
 
 export function HistorySidebar({
@@ -27,6 +28,7 @@ export function HistorySidebar({
   onNew,
   onSelect,
   onEdit,
+  onExport,
 }: Props) {
   const { t } = useSettings();
   const [search, setSearch] = useState("");
@@ -216,7 +218,7 @@ export function HistorySidebar({
       </div>
 
       {/* Settings Modal Component */}
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onExport={onExport} />
     </>
   );
 }

@@ -18,11 +18,12 @@ import { parseHistory, serializeHistory, STORAGE_KEY } from "@/lib/client/sessio
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  onExport?: () => void;
 };
 
 type Tab = "general" | "appearance" | "data";
 
-export function SettingsModal({ isOpen, onClose }: Props) {
+export function SettingsModal({ isOpen, onClose, onExport }: Props) {
   const {
     language,
     setLanguage,
@@ -39,6 +40,7 @@ export function SettingsModal({ isOpen, onClose }: Props) {
   const handleExportData = () => {
     setExportFailed(false);
     try {
+      if (onExport) { onExport(); return; }
       const data = serializeHistory(parseHistory(localStorage.getItem(STORAGE_KEY)));
       const blob = new Blob([data], { type: "application/json" });
       const url = URL.createObjectURL(blob);

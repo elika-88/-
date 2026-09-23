@@ -37,6 +37,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
       <p>{failure || error}</p>
       {error && <button type="button" onClick={() => void refresh()}>Retry</button>}
     </div>}
-    {!compact && <small>{t.savedLocally}</small>}
+    {!compact && <small>{user ? 'Account cloud storage' : t.savedLocally}</small>}
   </div>;
 }

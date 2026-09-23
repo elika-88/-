@@ -7,7 +7,11 @@ import { CustomLanguageSelect } from '@/components/CustomLanguageSelect';
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { StudyDashboard } from "@/components/StudyDashboard";
 import { GenerationClientError, requestGeneration } from "@/lib/client/generationStream";
-import { createSession, emptyHistory, parseHistory, serializeHistory, STORAGE_KEY, type SessionHistory, type StudySession, type SessionTab } from "@/lib/client/sessions";
+import { createSession, type StudySession, type SessionTab } from "@/lib/client/sessions";
+import { useAuth } from '@/components/auth/AuthProvider';
+import { useStudyHistory } from './useStudyHistory';
+import { StudySyncStatus } from './StudySyncStatus';
+import { AccountMenu } from './auth/AccountMenu';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
 
@@ -19,12 +23,16 @@ const emptyDraft: StudySession = { id: "draft", title: "", lecture: "", outputLa
 type Operation = { controller: AbortController; sessionId: string };
 
 export function StudyWorkspace() {
-  const [history, setHistory] = useState<SessionHistory>(emptyHistory);
-  const historyRef = useRef(history);
+  const { user, ready, verified, error, recheckIdentity } = useAuth();
+  if (!ready || !verified || error) return <main className="workspace-main"><div className="study-sync" role="status"><p>{error ? 'Account verification is unavailable. Your lectures are hidden until your account can be checked.' : 'Checking your account before opening lectures…'}</p><AccountMenu /></div></main>;
+  // Remount synchronously on identity changes: no frame can render the old account's data.
+  return <AccountWorkspace key={user?.id ?? 'guest'} userId={user?.id ?? null} username={user?.username ?? null} refreshAuth={recheckIdentity} />;
+}
+
+function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | null; username: string | null; refreshAuth: () => Promise<void> }) {
+  const sync = useStudyHistory(userId, refreshAuth);
+  const { history, historyRef, ready, save } = sync;
   const [draft, setDraft] = useState<StudySession>(emptyDraft);
-  const [ready, setReady] = useState(false);
-  const [storageError, setStorageError] = useState<string | null>(null);
-  const storageBlocked = useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const mobileSidebar = useRef<HTMLDialogElement>(null);
   const editDialog = useRef<HTMLDialogElement>(null);
@@ -38,6 +46,7 @@ export function StudyWorkspace() {
   
   const [progress, setProgress] = useState("");
   const operation = useRef<Operation | null>(null);
+  const extraction = useRef<AbortController | null>(null);
   const lectureInput = useRef<HTMLTextAreaElement>(null);
   const courseFileInput = useRef<HTMLInputElement>(null);
   const active = history.sessions.find((session) => session.id === history.activeId) ?? draft;
@@ -49,40 +58,15 @@ export function StudyWorkspace() {
   }, [active.lecture]);
   const staleKit = Boolean(active.kit && active.kit.source.text !== active.lecture);
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        const restored = saved ? parseHistory(saved) : emptyHistory();
-        const migrated = {
-          ...restored,
-          sessions: restored.sessions.map((session) => ({ ...session, lecture: normalizeLectureText(session.lecture) })),
-        };
-        historyRef.current = migrated;
-        setHistory(migrated);
-        if (saved && migrated.sessions.some((session, index) => session.lecture !== restored.sessions[index].lecture)) {
-          localStorage.setItem(STORAGE_KEY, serializeHistory(migrated));
-        }
-      } catch {
-        storageBlocked.current = true;
-        setStorageError("Saved history could not be opened. This session will stay in memory; existing saved data has not been overwritten.");
-      }
-      setReady(true);
-    });
-    return () => { cancelAnimationFrame(frame); operation.current?.controller.abort(); operation.current = null; };
+  useEffect(() => () => {
+    operation.current?.controller.abort(); operation.current = null;
+    extraction.current?.abort(); extraction.current = null;
   }, []);
-
-  function save(next: SessionHistory) {
-    historyRef.current = next;
-    setHistory(next);
-    if (storageBlocked.current) return;
-    try { localStorage.setItem(STORAGE_KEY, serializeHistory(next)); setStorageError(null); }
-    catch { setStorageError("Changes could not be saved on this device. Keep this page open to retain this session."); }
-  }
 
   function cancel(message = "Generation canceled.") {
     operation.current?.controller.abort();
     operation.current = null;
+    extraction.current?.abort(); extraction.current = null; setImporting(false);
     setPending(false);
     setProgress(message);
   }
@@ -105,10 +89,13 @@ export function StudyWorkspace() {
 
   async function importCourse(form: FormData) {
     if (!ready || pending || importing) return;
+    const controller = new AbortController(); extraction.current = controller;
+    const targetId = historyRef.current.activeId;
     setImportError(null); setError(null); setProgress("Extracting course content"); setImporting(true);
     try {
-      const response = await fetch("/api/extract-course", { method: "POST", body: form });
+      const response = await fetch("/api/extract-course", { method: "POST", body: form, signal: controller.signal });
       const responseText = await response.text();
+      if (extraction.current !== controller || historyRef.current.activeId !== targetId) return;
       let body: unknown = null;
       if (responseText) {
         try { body = JSON.parse(responseText); }
@@ -122,9 +109,10 @@ export function StudyWorkspace() {
       setProgress("Course content imported. Review it, then generate materials.");
       requestAnimationFrame(() => lectureInput.current?.focus());
     } catch (caught) {
+      if (extraction.current !== controller) return;
       setProgress("");
       setImportError(caught instanceof Error ? caught.message : "Course content could not be extracted.");
-    } finally { setImporting(false); }
+    } finally { if (extraction.current === controller) { extraction.current = null; setImporting(false); } }
   }
 
   function importFile(file: File | undefined) {
@@ -170,7 +158,7 @@ export function StudyWorkspace() {
     if (!edit || (edit.action === "rename" && !rename.trim())) return;
     let next = historyRef.current;
     if (edit.action === "rename") {
-      next = { ...next, sessions: next.sessions.map((session) => session.id === edit.id ? { ...session, title: rename.trim(), customTitle: true } : session) };
+      next = { ...next, sessions: next.sessions.map((session) => session.id === edit.id ? { ...session, title: rename.trim(), customTitle: true, updatedAt: Date.now() } : session) };
     } else {
       if (operation.current?.sessionId === edit.id) cancel("");
       const remaining = next.sessions.filter((session) => session.id !== edit.id);
@@ -217,7 +205,7 @@ export function StudyWorkspace() {
     }
   }
 
-  const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit };
+  const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit, onExport: sync.download };
   return <div className={`study-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
     <aside className={`lecture-sidebar ${sidebarCollapsed ? "rail" : ""}`} aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} onClose={() => setSidebarCollapsed(true)} /></aside>
     <dialog ref={mobileSidebar} className="mobile-sidebar" aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={false} onToggleCollapse={() => mobileSidebar.current?.close()} onClose={() => mobileSidebar.current?.close()} /></dialog>
@@ -227,7 +215,7 @@ export function StudyWorkspace() {
         <span className="workspace-title">{active.title || "New lecture"}</span>
       </div></header>
       <main className="workspace-main">
-        {storageError && <div className="notice warning" role="alert"><AlertCircle aria-hidden="true" /><p>{storageError}</p></div>}
+        <StudySyncStatus sync={sync} username={username} />
         <section className="input-section" aria-labelledby="input-heading">
           <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1></div>
           <form onSubmit={submit} noValidate aria-busy={pending || importing}>
@@ -252,7 +240,7 @@ export function StudyWorkspace() {
             </div>
             {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
-            <div className="form-footer"><span className={storageError ? "save-failed" : ""}>{!ready ? "Opening workspace" : storageError ? "Not saved" : history.activeId ? "Saved on this device" : "Draft"}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}{error ? "" : progress}</span></div>
+            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}{error ? "" : progress}</span></div>
           </form>
         </section>
         {staleKit && <div className="notice warning" role="status"><AlertCircle aria-hidden="true" /><p>These materials are from the previous version of this lecture. Regenerate to update them.</p></div>}
@@ -261,7 +249,7 @@ export function StudyWorkspace() {
     </div>
     <dialog className="history-dialog" ref={editDialog} aria-labelledby="edit-title" onClose={() => setEdit(null)}>
       <form onSubmit={submitEdit}><h2 id="edit-title">{edit?.action === "delete" ? "Delete lecture?" : "Rename lecture"}</h2>
-        {edit?.action === "delete" ? <p>This removes the lecture and its study materials from this device.</p> : <><label className="sr-only" htmlFor="rename-title">Lecture title</label><input className="text-field" id="rename-title" value={rename} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => setRename(event.target.value)} required /></>}
+        {edit?.action === "delete" ? <p>{userId ? 'This deletes the lecture and its study materials from your account on all devices. If syncing fails, the deletion remains pending until you retry.' : 'This removes the lecture and its study materials from this device.'}</p> : <><label className="sr-only" htmlFor="rename-title">Lecture title</label><input className="text-field" id="rename-title" value={rename} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => setRename(event.target.value)} required /></>}
         <div className="dialog-actions"><Button type="button" variant="outline" onClick={() => editDialog.current?.close()}>Cancel</Button><Button type="submit" disabled={edit?.action === "rename" && !rename.trim()}>{edit?.action === "delete" ? "Delete" : "Save"}</Button></div>
       </form>
     </dialog>

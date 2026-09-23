@@ -1,22 +1,23 @@
-# 学习记录接入服务端数据库：开发交接
+# 学习记录云同步：实现与维护交接
 
 ## 要完成什么
 
 登录用户的讲稿、生成结果和学习历史应按账号保存在服务端数据库。用户在另一台设备登录同一账号后，应能看到自己的记录；切换账号时，不能看到上一个账号的记录。访客可以继续使用当前浏览器的本地历史。
 
-这是**待实现需求**，不是已经完成的功能。账号系统和学习记录 API 已存在，主要工作是把前端工作区接入该 API，并处理首次迁移、同步失败和多设备冲突。
+工作区已接入账号学习记录 API，并实现访客导入、保存恢复、多设备冲突处理。以下记录实现边界与验收要求；部署状态以相应提交的 CI/Vercel 结果为准。
 
 ## 当前实现
 
-- `components/StudyWorkspace.tsx` 启动时读取 `localStorage` 中的 `lumina.sessions.v1`，编辑、生成、重命名和删除后也只写回这个键。它目前没有使用 `useAuth()` 或请求 `/api/study-sessions`。
+- `components/StudyWorkspace.tsx` 等待认证完成后，以账号 ID 为 key 挂载独立工作区；未确认身份时不展示课程。`components/useStudyHistory.ts` 接入同步引擎。
+- `lib/client/study-sync.ts` 管理防抖/串行保存、恢复日志、冲突、显式访客导入、跨标签通知和重新读取。`lib/client/study-records.ts` 对服务端响应做严格校验和超时控制。
 - `lib/client/sessions.ts` 定义 `StudySession`、本地历史格式和序列化逻辑。记录包含讲稿原文和完整生成材料。
 - `components/auth/AuthProvider.tsx` 已提供当前用户、账号加载状态、刷新和退出功能。
 - `app/api/study-sessions/route.ts` 已实现需要登录的 `GET`、`PUT`、`DELETE`。`lib/server/study-records.ts` 将记录写入按 `user_id` 隔离的 `study_records` 表，并用 `revision` 检测过期写入。
 - 本地开发使用 SQLite；Vercel 部署必须配置持久化的 Turso 数据库。数据库连接由 `lib/server/database.ts` 决定。
 
-因此，当前“注册/登录成功”**不会**使学习历史自动同步。相同浏览器切换账号仍共用原来的本地历史；清理浏览器数据或换设备也会失去对这份历史的访问。
+登录用户读取账号数据库；访客继续使用 `lumina.sessions.v1`。登录不会自动上传访客材料。账号未保存编辑暂存于当前标签页 `sessionStorage` 的账号专用键，不写入访客历史；刷新后须重新确认同一账号并读取云端版本后才能恢复。浏览器禁止存储或容量不足时明确警告，提供 JSON 下载。关闭标签页前应完成同步或下载，暂存不是永久备份，也不是完整离线模式。
 
-## 建议的前端行为
+## 已实现的前端行为
 
 1. **区分访客和账号记录。** 等 `AuthProvider.ready` 后再确定记录来源。访客继续使用现有本地历史；登录用户从 `GET /api/study-sessions` 加载。账号加载失败时显示重试操作，不能把访客历史误当作该账号的数据。
 2. **切换身份时清空旧视图。** 登录、退出、切换账号或跨标签页账号变化时，取消在途加载和生成，清空上一身份的内存状态，再加载新身份的数据。旧请求的响应不得覆盖新账号的页面。
@@ -31,11 +32,19 @@
 
 | 操作 | 请求 | 成功响应 |
 | --- | --- | --- |
-| 列表 | `GET /api/study-sessions` | `{ sessions, revisions, storage }`；`revisions` 也包含已删除记录的版本 |
+| 列表 | `GET /api/study-sessions` | `{ userId, sessions, revisions, storage }`；`revisions` 也包含已删除记录的版本 |
 | 保存 | `PUT /api/study-sessions`，JSON：`{ session, expectedRevision }` | `{ session, revision }`；新记录使用版本 `0` |
 | 删除 | `DELETE /api/study-sessions`，JSON：`{ id, expectedRevision }` | `{ deleted: true, revision }` |
 
 写请求需要同源 `Origin` 和有效登录 Cookie；未登录返回 401，版本冲突返回 409。服务端目前限制单条请求为 2 MiB、每个账号最多 1,000 条未删除记录。不要绕开现有鉴权、字段校验和版本检查。
+
+前端的 GET/PUT/DELETE 均发送 `X-Lumina-Account`，服务端将其与 Cookie 解析出的用户 ID 比较，不匹配返回 `409 ACCOUNT_CHANGED`，防止旧标签页误写新登录账号。该标头不是身份凭据，不能替代 Cookie 权限检查。`409 STORAGE_LIMIT` 与 `409 CONFLICT` 分别处理。
+
+保存前记录本次尝试的内容和 revision；若响应丢失，重试先读取云端，判断之前的保存是否已提交，避免丢失后续编辑。冲突时保留本地内容，让用户另存为带“local copy”标题的新 ID，或确认放弃本地更改后使用云端版本；不自动恢复云端已删除记录。
+
+访客导入 ID 使用账号 ID 与源记录 ID 的 SHA-256 确定性摘要，部分成功后重试不会重复导入。导入逐条显示成功进度，保留本机原件；不同账号导入同一访客记录也不会共用课程 ID。
+
+跨标签页通过 BroadcastChannel 刷新课程；账号事件另有 storage-event 降级路径。可见页面每 30 秒刷新云端，回到页面/网络恢复时重新检查，另提供“刷新云端”。不是实时协作编辑。
 
 ## 验收标准
 

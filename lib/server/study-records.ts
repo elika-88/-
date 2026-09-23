@@ -1,28 +1,13 @@
 import 'server-only';
 import type { Client } from '@libsql/client';
-import { z } from 'zod';
-import { INPUT_LIMITS, OutputLanguageSchema } from '@/lib/input';
 import type { StudySession } from '@/lib/client/sessions';
-import { StudyKitSchema } from '@/lib/schemas/studyMaterials';
+import { DeleteStudySessionSchema, SaveStudySessionSchema, ServerStudySessionSchema } from '@/lib/contracts/study-records';
 import { databaseConfiguration, withDatabase } from '@/lib/server/database';
 import { AccountError, initializeUserTables } from '@/lib/server/user-auth';
 
 export const STUDY_REQUEST_BYTES = 2 * 1024 * 1024;
 export const MAX_STUDY_RECORDS = 1000;
-const recordId = z.string().min(1).max(100);
-const revision = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1);
-export const ServerStudySessionSchema = z.strictObject({
-  id: recordId,
-  title: z.string().max(INPUT_LIMITS.maxTitleCharacters),
-  customTitle: z.boolean(),
-  lecture: z.string().max(INPUT_LIMITS.maxCharacters),
-  outputLanguage: OutputLanguageSchema,
-  tab: z.enum(['summary', 'keypoints', 'quiz', 'flashcards']),
-  kit: StudyKitSchema.nullable(),
-  updatedAt: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER),
-});
-export const SaveStudySessionSchema = z.strictObject({ session: ServerStudySessionSchema, expectedRevision: revision });
-export const DeleteStudySessionSchema = z.strictObject({ id: recordId, expectedRevision: revision });
+export { DeleteStudySessionSchema, SaveStudySessionSchema, ServerStudySessionSchema };
 
 async function initializeStudyTables(db: Client) {
   await initializeUserTables(db);
@@ -47,7 +32,7 @@ export async function listStudySessions(userId: string) {
       revisions[String(row.id)] = Number(row.revision);
       if (!Number(row.deleted)) sessions.push(ServerStudySessionSchema.parse(JSON.parse(String(row.document))));
     }
-    return { sessions, revisions, storage: databaseConfiguration().mode };
+    return { userId, sessions, revisions, storage: databaseConfiguration().mode };
   });
 }
 

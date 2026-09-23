@@ -2,6 +2,7 @@ node_modules/
 .data/
 *.sqlite*
 .next/
+.next-e2e/
 next-env.d.ts
 out/
 coverage/

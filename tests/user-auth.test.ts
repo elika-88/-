@@ -113,6 +113,14 @@ describe('account study record isolation and concurrent edits', () => {
     expect((await list(request(undefined, '', path))).status).toBe(401);
     expect((await save(request({ session, expectedRevision: 0 }, '', path, 'PUT'))).status).toBe(401);
     expect((await save(request({ session, expectedRevision: 0 }, alice.cookie, path, 'PUT'))).status).toBe(200);
+    const switched = request({ session: { ...session, id: 'old-tab-record' }, expectedRevision: 0 }, bob.cookie, path, 'PUT');
+    switched.headers.set('x-lumina-account', alice.user.id);
+    expect((await save(switched)).status).toBe(409);
+    const staleRead = request(undefined, bob.cookie, path); staleRead.headers.set('x-lumina-account', alice.user.id);
+    expect((await list(staleRead)).status).toBe(409);
+    const staleDelete = request({ id: session.id, expectedRevision: 1 }, bob.cookie, path, 'DELETE'); staleDelete.headers.set('x-lumina-account', alice.user.id);
+    expect((await remove(staleDelete)).status).toBe(409);
+    expect((await (await list(request(undefined, alice.cookie, path))).json()).userId).toBe(alice.user.id);
     expect((await (await list(request(undefined, bob.cookie, path))).json()).sessions).toEqual([]);
     expect((await save(request({ session, expectedRevision: 1 }, bob.cookie, path, 'PUT'))).status).toBe(404);
     expect((await remove(request({ id: session.id, expectedRevision: 1 }, bob.cookie, path, 'DELETE'))).status).toBe(404);

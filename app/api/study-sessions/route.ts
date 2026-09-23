@@ -12,6 +12,10 @@ function failure(error: unknown) {
 async function authenticated(request: Request) {
   const user = await getUserFromRequest(request);
   if (!user) throw new AccountError('UNAUTHENTICATED', 'Sign in to access your saved lectures.', 401);
+  // A different tab may have replaced the cookie since the editor was opened.
+  // The header is a consistency guard, never a substitute for authentication.
+  const expectedUser = request.headers.get('x-lumina-account');
+  if (expectedUser && expectedUser !== user.id) throw new AccountError('ACCOUNT_CHANGED', 'Your account changed. Reopen your workspace before saving.', 409);
   return user;
 }
 export async function GET(request: Request) {

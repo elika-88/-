@@ -20,5 +20,10 @@ export default defineConfig({
     url: "http://127.0.0.1:3100",
     reuseExistingServer: false,
     timeout: 120_000,
+    env: {
+      LUMINA_E2E: '1',
+      ADMIN_DATABASE_PATH: `.data/e2e-${process.pid}-${Date.now()}.sqlite`,
+      TURSO_DATABASE_URL: '', TURSO_AUTH_TOKEN: '', VERCEL: '', AUTH_TRUST_PROXY: '',
+    },
   },
 });

@@ -1928,6 +1928,15 @@ html:root .history-dialog { color: var(--foreground); background: var(--surface)
 html:root .history-dialog p { color: var(--muted-foreground); }
 html:root .notice.error, html:root .save-failed { color: var(--destructive); }
 html:root .notice.warning { color: var(--warning); }
+.study-sync { margin-bottom: 18px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text-body); font-size: 13px; }
+.study-sync-heading, .study-sync-heading > div, .study-sync-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.study-sync-heading { justify-content: space-between; }
+.study-sync-heading > div { min-width: 0; }
+.study-sync-owner { color: var(--muted-foreground); overflow-wrap: anywhere; }
+.study-sync-message { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.study-sync-message p { margin: 0 0 10px; }
+.study-sync-message strong { display: block; margin-bottom: 6px; color: var(--foreground); }
+@media (max-width: 480px) { .study-sync { padding: 12px; } .study-sync-actions > button { white-space: normal; height: auto; min-height: 36px; } }
 html:root :is(.gpt-auth-submit, .gpt-settings-done-btn, .gpt-pill-btn.primary) { background: var(--primary); color: var(--primary-foreground); border-radius: 10px; }
 html:root :is(.gpt-auth-submit:hover, .gpt-settings-done-btn:hover, .gpt-pill-btn.primary:hover:not(:disabled)) { background: var(--primary); opacity: .92; }
 html:root .gpt-auth-box { max-width: 400px; }
