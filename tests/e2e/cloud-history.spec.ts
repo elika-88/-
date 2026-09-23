@@ -2,10 +2,42 @@ import { expect, test, type Page, type BrowserContext } from '@playwright/test';
 import type { StudySession } from '../../lib/client/sessions';
 import { studyKitFixture } from '../fixtures/studyKit';
 import { readFile } from 'node:fs/promises';
+import { createClient } from '@libsql/client';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const user = { id: 'a20e5041-118e-4de0-b7b6-6ecf279c5b23', username: 'CloudStudent', email: 'cloud@example.invalid', createdAt: '2026-09-23T00:00:00.000Z' };
 const otherUser = { ...user, id: '1a6c8cc9-8707-43b0-9072-3708383773c4', username: 'OtherStudent', email: 'other@example.invalid' };
 const blank = (id: string, title: string): StudySession => ({ id, title, customTitle: true, lecture: 'Private course text', outputLanguage: 'en', tab: 'summary', kit: null, updatedAt: 1 });
+async function verifiedFixtureAccount(name: string, email: string, contexts: BrowserContext[], baseURL: string) {
+  // Initialize the isolated E2E database through the real auth route, then seed
+  // sessions directly. This test exercises study sync without sending email.
+  const bootstrap = await contexts[0].request.post('/api/auth', {
+    headers: { Origin: baseURL }, data: { action: 'login', identifier: `setup-${randomUUID()}`, password: 'invalid' },
+  });
+  expect(bootstrap.status()).toBe(401);
+  const path = process.env.LUMINA_E2E_DATABASE_PATH;
+  if (!path) throw new Error('E2E database path is missing.');
+  const db = createClient({ url: pathToFileURL(resolve(path)).href });
+  const id = randomUUID();
+  const now = Date.now();
+  try {
+    await db.execute('PRAGMA busy_timeout = 5000');
+    await db.execute({
+      sql: 'INSERT INTO app_users (id, username, username_key, email, email_key, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [id, name, name.toLowerCase(), email, email.toLowerCase(), 'disabled-e2e-password', new Date(now).toISOString()],
+    });
+    for (const context of contexts) {
+      const token = randomBytes(32).toString('hex');
+      await db.execute({
+        sql: 'INSERT INTO user_sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
+        args: [createHash('sha256').update(token).digest('hex'), id, now + 7 * 24 * 60 * 60 * 1000, now],
+      });
+      await context.addCookies([{ name: 'lumina_user', value: token, url: baseURL, httpOnly: true, sameSite: 'Lax' }]);
+    }
+  } finally { db.close(); }
+}
 async function sidebar(page: Page) {
   const open = page.getByRole('button', { name: 'Open sidebar', exact: true });
   if (await open.isVisible()) await open.click();
@@ -114,16 +146,11 @@ test('switching account hides old data and ignores an old generation response', 
 
 test('real accounts sync create, generated materials, rename and delete across independent devices', async ({ page, browser, baseURL }) => {
   const suffix = `${Date.now()}_${test.info().project.name === 'mobile' ? 'm' : 'd'}`;
-  const username = `cloud_${suffix}`; const password = 'Cloud-test-only-3948!';
+  const username = `cloud_${suffix}`;
   const second = await browser.newContext({ baseURL }); const third = await browser.newContext({ baseURL });
-  async function auth(context: BrowserContext, body: unknown) {
-    const response = await context.request.post('/api/auth', { headers: { Origin: baseURL! }, data: body });
-    expect(response.ok(), await response.text()).toBe(true);
-  }
   try {
-    await auth(page.context(), { action: 'register', username, email: `${username}@example.invalid`, password });
-    await auth(second, { action: 'login', identifier: username, password });
-    await auth(third, { action: 'register', username: `b_${suffix}`, email: `b_${suffix}@example.invalid`, password });
+    await verifiedFixtureAccount(username, `${username}@example.invalid`, [page.context(), second], baseURL!);
+    await verifiedFixtureAccount(`b_${suffix}`, `b_${suffix}@example.invalid`, [third], baseURL!);
     const kit = studyKitFixture(); kit.source.text += '\n' + 'This lecture explains reliable learning and evidence. '.repeat(15);
     await page.route('**/api/generate', route => route.fulfill({ contentType: 'application/x-ndjson', body: JSON.stringify({ type: 'result', runId: kit.runId, data: kit }) + '\n' }));
     await page.goto('/');

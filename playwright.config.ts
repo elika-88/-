@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const e2eDatabasePath = process.env.LUMINA_E2E_DATABASE_PATH ?? `.data/e2e-${process.pid}-${Date.now()}.sqlite`;
+process.env.LUMINA_E2E_DATABASE_PATH = e2eDatabasePath;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -22,7 +25,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       LUMINA_E2E: '1',
-      ADMIN_DATABASE_PATH: `.data/e2e-${process.pid}-${Date.now()}.sqlite`,
+      ADMIN_DATABASE_PATH: e2eDatabasePath,
       TURSO_DATABASE_URL: '', TURSO_AUTH_TOKEN: '', VERCEL: '', AUTH_TRUST_PROXY: '',
     },
   },

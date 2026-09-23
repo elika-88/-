@@ -4,13 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 vi.mock('server-only', () => ({}));
 import { GET, POST } from '@/app/api/auth/route';
+import { POST as VERIFY } from '@/app/api/auth/verify/route';
 import { GET as list, PUT as save, DELETE as remove } from '@/app/api/study-sessions/route';
 import { authClientAddress, USER_SESSION_SECONDS } from '@/lib/server/user-auth';
 import { withDatabase } from '@/lib/server/database';
 
 let directory: string;
 const password = 'Unit-test-password-48!';
-const account = { action: 'register', username: 'Alice', email: 'alice@example.invalid', password };
+const account = { action: 'register', username: 'Alice', email: 'alice@example.invalid' };
+let sentTokens: string[];
 function request(body?: unknown, cookie = '', path = '/api/auth', method = body ? 'POST' : 'GET') {
   return new Request(`https://lumina.test${path}`, { method,
     headers: { Origin: 'https://lumina.test', 'Content-Type': 'application/json', Cookie: cookie },
@@ -19,17 +21,35 @@ function request(body?: unknown, cookie = '', path = '/api/auth', method = body 
 }
 async function register(username = 'Alice') {
   const response = await POST(request({ ...account, username, email: `${username}@example.invalid` }));
-  expect(response.status).toBe(201);
-  return { user: (await response.json()).user, cookie: response.headers.get('set-cookie')!.split(';')[0] };
+  expect(response.status).toBe(202);
+  expect(response.headers.get('set-cookie')).toBeNull();
+  const token = sentTokens.at(-1);
+  expect(token).toMatch(/^[a-f0-9]{64}$/);
+  const verified = await VERIFY(request({ token, password }, '', '/api/auth/verify'));
+  expect(verified.status).toBe(201);
+  return { user: (await verified.json()).user, cookie: verified.headers.get('set-cookie')!.split(';')[0], token: token! };
 }
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'lumina-account-'));
   vi.stubEnv('ADMIN_DATABASE_PATH', join(directory, 'test.sqlite'));
   vi.stubEnv('TURSO_DATABASE_URL', ''); vi.stubEnv('TURSO_AUTH_TOKEN', ''); vi.stubEnv('VERCEL', '');
   vi.stubEnv('AUTH_TRUST_PROXY', '');
+  vi.stubEnv('RESEND_API_KEY', 're_test_only');
+  vi.stubEnv('RESEND_FROM_EMAIL', 'verify@lumina.test');
+  vi.stubEnv('APP_BASE_URL', 'https://lumina.test');
+  sentTokens = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    expect(url).toBe('https://api.resend.com/emails');
+    expect(init?.headers).toMatchObject({ Authorization: 'Bearer re_test_only' });
+    const message = JSON.parse(String(init?.body)) as { text: string; to: string[] };
+    const token = message.text.match(/#token=([a-f0-9]{64})/)?.[1];
+    expect(token).toBeTruthy();
+    sentTokens.push(token!);
+    return Response.json({ id: 'test-email' });
+  }));
 });
 afterEach(() => {
-  vi.restoreAllMocks(); vi.unstubAllEnvs();
+  vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals();
   try { rmSync(directory, { recursive: true, force: true }); }
   catch (error) {
     if (process.platform !== 'win32' || !['EBUSY', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
@@ -38,7 +58,14 @@ afterEach(() => {
 
 describe('real account database and HTTP boundaries', () => {
   it('stores password/session hashes, sets secure cookies, restores identity and revokes logout', async () => {
-    const response = await POST(request(account));
+    const signup = await POST(request(account));
+    expect(signup.status).toBe(202);
+    expect(signup.headers.get('set-cookie')).toBeNull();
+    expect((await GET(request())).status).toBe(200);
+    expect(await (await GET(request())).json()).toEqual({ user: null });
+    const pending = await withDatabase(async db => (await db.execute('SELECT token_hash FROM pending_registrations')).rows[0]);
+    expect(pending.token_hash).not.toBe(sentTokens[0]);
+    const response = await VERIFY(request({ token: sentTokens[0], password }, '', '/api/auth/verify'));
     expect(response.status).toBe(201);
     const header = response.headers.get('set-cookie')!;
     expect(header).toContain('HttpOnly'); expect(header).toContain('Secure'); expect(header).toContain('SameSite=lax');
@@ -56,12 +83,15 @@ describe('real account database and HTTP boundaries', () => {
     const logout = await POST(request({ action: 'logout' }, cookie));
     expect(logout.status).toBe(200); expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
     expect(await (await GET(request(undefined, cookie))).json()).toEqual({ user: null });
+    expect((await VERIFY(request({ token: sentTokens[0], password }, '', '/api/auth/verify'))).status).toBe(400);
   });
 
-  it('normalizes identities and rejects duplicate names/emails and wrong passwords', async () => {
+  it('normalizes identities, gives generic duplicate responses, and rejects wrong passwords', async () => {
     const { user } = await register();
-    expect((await POST(request({ ...account, username: 'ＡＬＩＣＥ', email: 'another@example.invalid' }))).status).toBe(409);
-    expect((await POST(request({ ...account, username: 'another', email: ' ALICE@EXAMPLE.INVALID ' }))).status).toBe(409);
+    const sent = sentTokens.length;
+    expect((await POST(request({ ...account, username: 'ＡＬＩＣＥ', email: 'another@example.invalid' }))).status).toBe(202);
+    expect((await POST(request({ ...account, username: 'another', email: ' ALICE@EXAMPLE.INVALID ' }))).status).toBe(202);
+    expect(sentTokens).toHaveLength(sent);
     for (const identifier of [' alice ', 'ALICE@EXAMPLE.INVALID']) {
       const response = await POST(request({ action: 'login', identifier, password }));
       expect(response.status).toBe(200); expect((await response.json()).user.id).toBe(user.id);
@@ -89,6 +119,9 @@ describe('real account database and HTTP boundaries', () => {
     expect((await POST(foreign)).status).toBe(403);
     expect((await POST(request({ ...account, role: 'admin' }))).status).toBe(400);
     expect((await POST(request({ ...account, password: 'short' }))).status).toBe(400);
+    const foreignVerification = request({ token: 'a'.repeat(64), password }, '', '/api/auth/verify');
+    foreignVerification.headers.set('origin', 'https://attacker.test');
+    expect((await VERIFY(foreignVerification)).status).toBe(403);
     expect((await POST(request({ ...account, username: 'x'.repeat(20_000) }))).status).toBe(413);
     const invalid = new Request('https://lumina.test/api/auth', { method: 'POST', headers: { Origin: 'https://lumina.test', 'Content-Type': 'application/json' }, body: '{' });
     expect((await POST(invalid)).status).toBe(400);
@@ -96,12 +129,57 @@ describe('real account database and HTTP boundaries', () => {
 
   it('limits password guessing and ignores untrusted forwarded IP headers', async () => {
     const req = request(); req.headers.set('x-forwarded-for', '203.0.113.1'); req.headers.set('x-real-ip', '203.0.113.2');
-    expect(authClientAddress(req)).toBe('direct');
+    expect(authClientAddress(req)).toBeNull();
     vi.stubEnv('VERCEL', '1'); req.headers.set('x-vercel-forwarded-for', '203.0.113.3');
     expect(authClientAddress(req)).toBe('203.0.113.3'); vi.stubEnv('VERCEL', '');
+    await register();
+    for (let i = 0; i < 10; i++) expect((await POST(request({ action: 'login', identifier: 'Alice', password: 'wrong-password' }))).status).toBe(401);
+    expect((await POST(request({ action: 'login', identifier: 'Alice', password }))).status).toBe(200);
     for (let i = 0; i < 10; i++) expect((await POST(request({ action: 'login', identifier: 'Nobody', password }))).status).toBe(401);
     const limited = await POST(request({ action: 'login', identifier: 'NOBODY', password }));
     expect(limited.status).toBe(429); expect((await limited.json()).code).toBe('RATE_LIMITED');
+  });
+
+  it('requires a live email token and lets its owner choose the password', async () => {
+    await POST(request(account));
+    const token = sentTokens[0];
+    expect((await POST(request({ action: 'login', identifier: account.username, password }))).status).toBe(401);
+    expect((await VERIFY(request({ token, password: 'short' }, '', '/api/auth/verify'))).status).toBe(400);
+    const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 31 * 60 * 1000);
+    expect((await VERIFY(request({ token, password }, '', '/api/auth/verify'))).status).toBe(400);
+  });
+
+  it('invalidates an earlier link when the mailbox owner requests a new registration', async () => {
+    await POST(request(account));
+    const first = sentTokens[0];
+    await POST(request({ action: 'register', username: 'NewAlice', email: account.email }));
+    const second = sentTokens[1];
+    expect(second).not.toBe(first);
+    expect((await VERIFY(request({ token: first, password }, '', '/api/auth/verify'))).status).toBe(400);
+    const response = await VERIFY(request({ token: second, password }, '', '/api/auth/verify'));
+    expect(response.status).toBe(201);
+    expect((await response.json()).user.username).toBe('NewAlice');
+  });
+
+  it('fails closed when Resend is not configured', async () => {
+    vi.stubEnv('RESEND_API_KEY', '');
+    const response = await POST(request(account));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('does not create an account when Resend fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: 'unavailable' }, { status: 503 })));
+    expect((await POST(request(account))).status).toBe(503);
+    const rows = await withDatabase(async db => ({ users: (await db.execute('SELECT COUNT(*) AS count FROM app_users')).rows[0], pending: (await db.execute('SELECT COUNT(*) AS count FROM pending_registrations')).rows[0] }));
+    expect(Number(rows.users.count)).toBe(0); expect(Number(rows.pending.count)).toBe(0);
+  });
+
+  it('does not impose a shared direct-client registration bucket', async () => {
+    for (let i = 0; i < 12; i++) {
+      const response = await POST(request({ action: 'register', username: `Student${i}`, email: `student${i}@example.invalid` }));
+      expect(response.status).toBe(202);
+    }
   });
 });
 

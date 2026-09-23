@@ -5,18 +5,20 @@ import type { Client, Row, Transaction } from '@libsql/client';
 import { z } from 'zod';
 import type { UserProfile } from '@/lib/contracts/auth';
 import { withDatabase } from '@/lib/server/database';
+import { requireVerificationEmailConfiguration, sendVerificationEmail } from '@/lib/server/verification-email';
 
 export const USER_COOKIE = 'lumina_user';
 export const USER_SESSION_SECONDS = 7 * 24 * 60 * 60;
 const LOGIN_WINDOW = 15 * 60 * 1000;
 const REGISTER_WINDOW = 60 * 60 * 1000;
+const VERIFICATION_WINDOW = 30 * 60 * 1000;
 const usernameSchema = z.string().transform((value) => value.normalize('NFKC').trim())
   .pipe(z.string().min(3).max(32).regex(/^[\p{L}\p{M}\p{N}_.-]+$/u));
 const emailSchema = z.string().transform((value) => value.normalize('NFKC').trim().toLowerCase())
   .pipe(z.string().email().max(254));
 const passwordSchema = z.string().min(8).max(128);
 export const AuthRequestSchema = z.discriminatedUnion('action', [
-  z.strictObject({ action: z.literal('register'), username: usernameSchema, email: emailSchema, password: passwordSchema }),
+  z.strictObject({ action: z.literal('register'), username: usernameSchema, email: emailSchema }),
   z.strictObject({ action: z.literal('login'), identifier: z.string().min(1).max(254), password: z.string().min(1).max(128) }),
   z.strictObject({ action: z.literal('logout') }),
 ]);
@@ -39,6 +41,11 @@ export async function initializeUserTables(db: Client) {
     'CREATE INDEX IF NOT EXISTS user_sessions_owner ON user_sessions(user_id)',
     `CREATE TABLE IF NOT EXISTS user_auth_limits (
       bucket TEXT PRIMARY KEY, count INTEGER NOT NULL, resets_at INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS pending_registrations (
+      email_key TEXT PRIMARY KEY, username TEXT NOT NULL, username_key TEXT NOT NULL,
+      email TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
+      expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
     )`,
   ], 'write');
 }
@@ -77,7 +84,7 @@ export function authClientAddress(request: Request) {
   const raw = vercel ? request.headers.get('x-vercel-forwarded-for')
     : process.env.AUTH_TRUST_PROXY === 'true' ? request.headers.get('x-real-ip') : null;
   const address = raw?.split(',')[0].trim();
-  return address && isIP(address) ? address : 'direct';
+  return address && isIP(address) ? address : null;
 }
 
 async function reserveAttempt(buckets: { key: string; limit: number; window: number }[]) {
@@ -101,6 +108,16 @@ async function reserveAttempt(buckets: { key: string; limit: number; window: num
   });
 }
 
+async function checkAttemptLimit(bucket: { key: string; limit: number }) {
+  await withDatabase(async (db) => {
+    await initializeUserTables(db);
+    const row = (await db.execute({ sql: 'SELECT count, resets_at FROM user_auth_limits WHERE bucket = ?', args: [digest(bucket.key)] })).rows[0];
+    if (row && Number(row.resets_at) > Date.now() && Number(row.count) >= bucket.limit) {
+      throw new AccountError('RATE_LIMITED', 'Too many attempts. Please try again later.', 429);
+    }
+  });
+}
+
 async function issueSession(tx: Transaction, userId: string) {
   const token = randomBytes(32).toString('hex');
   const now = Date.now();
@@ -112,29 +129,77 @@ async function issueSession(tx: Transaction, userId: string) {
   return token;
 }
 
-export async function registerUser(input: { username: string; email: string; password: string }, request: Request) {
+export async function registerUser(input: { username: string; email: string }, request: Request) {
   const parsed = AuthRequestSchema.safeParse({ ...input, action: 'register' });
-  if (!parsed.success || parsed.data.action !== 'register') throw new AccountError('INVALID_REQUEST', 'Use a 3–32 character username, a valid email, and an 8–128 character password.', 400);
-  await reserveAttempt([{ key: `register:ip:${authClientAddress(request)}`, limit: 10, window: REGISTER_WINDOW }]);
-  const { username, email, password } = parsed.data;
+  if (!parsed.success || parsed.data.action !== 'register') throw new AccountError('INVALID_REQUEST', 'Use a 3–32 character username and a valid email.', 400);
+  try { requireVerificationEmailConfiguration(); }
+  catch { throw new AccountError('EMAIL_UNAVAILABLE', 'Email verification is unavailable. Contact the site administrator.', 503); }
+  const address = authClientAddress(request);
+  const { username, email } = parsed.data;
+  await reserveAttempt([
+    { key: `register:email:${identityKey(email)}`, limit: 5, window: REGISTER_WINDOW },
+    ...(address ? [{ key: `register:ip:${address}`, limit: 20, window: REGISTER_WINDOW }] : []),
+  ]);
+  const token = randomBytes(32).toString('hex');
+  const pending = await withDatabase(async (db) => {
+    await initializeUserTables(db);
+    const tx = await db.transaction('write');
+    try {
+      const now = Date.now();
+      await tx.execute({ sql: 'DELETE FROM pending_registrations WHERE expires_at <= ?', args: [now] });
+      const exists = await tx.execute({ sql: 'SELECT id FROM app_users WHERE username_key = ? OR email_key = ?', args: [identityKey(username), identityKey(email)] });
+      if (exists.rows.length) { await tx.commit(); return false; }
+      await tx.execute({
+        sql: `INSERT INTO pending_registrations (email_key, username, username_key, email, token_hash, expires_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(email_key) DO UPDATE SET
+          username=excluded.username, username_key=excluded.username_key, email=excluded.email,
+          token_hash=excluded.token_hash,
+          expires_at=excluded.expires_at, created_at=excluded.created_at`,
+        args: [identityKey(email), username, identityKey(username), email, digest(token), now + VERIFICATION_WINDOW, now],
+      });
+      await tx.commit();
+      return true;
+    } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
+  });
+  if (pending) {
+    try { await sendVerificationEmail(email, token); }
+    catch {
+      await withDatabase(async (db) => db.execute({ sql: 'DELETE FROM pending_registrations WHERE token_hash = ?', args: [digest(token)] }));
+      throw new AccountError('EMAIL_UNAVAILABLE', 'Verification email could not be sent. Try again later.', 503);
+    }
+  }
+  return { pendingVerification: true as const };
+}
+
+export async function verifyEmailToken(token: string, password: string) {
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new AccountError('INVALID_VERIFICATION', 'This verification link is invalid or expired.', 400);
+  if (!passwordSchema.safeParse(password).success) throw new AccountError('INVALID_REQUEST', 'Use an 8–128 character password.', 400);
+  const exists = await withDatabase(async (db) => {
+    await initializeUserTables(db);
+    return (await db.execute({ sql: 'SELECT 1 FROM pending_registrations WHERE token_hash = ? AND expires_at > ?', args: [digest(token), Date.now()] })).rows.length > 0;
+  });
+  if (!exists) throw new AccountError('INVALID_VERIFICATION', 'This verification link is invalid or expired.', 400);
   const passwordHash = await hashPassword(password);
-  const user: UserProfile = { id: randomUUID(), username, email, createdAt: new Date().toISOString() };
   return withDatabase(async (db) => {
     await initializeUserTables(db);
     const tx = await db.transaction('write');
     try {
-      const exists = await tx.execute({ sql: 'SELECT id FROM app_users WHERE username_key = ? OR email_key = ?', args: [identityKey(username), identityKey(email)] });
-      if (exists.rows.length) throw new AccountError('ACCOUNT_EXISTS', 'That username or email is already registered.', 409);
+      const row = (await tx.execute({ sql: 'SELECT * FROM pending_registrations WHERE token_hash = ? AND expires_at > ?', args: [digest(token), Date.now()] })).rows[0];
+      if (!row) throw new AccountError('INVALID_VERIFICATION', 'This verification link is invalid or expired.', 400);
+      const user: UserProfile = { id: randomUUID(), username: String(row.username), email: String(row.email), createdAt: new Date().toISOString() };
+      const taken = await tx.execute({ sql: 'SELECT id FROM app_users WHERE username_key = ? OR email_key = ?', args: [row.username_key, row.email_key] });
+      if (taken.rows.length) throw new AccountError('INVALID_VERIFICATION', 'This verification link is no longer valid. Register again.', 400);
       await tx.execute({
         sql: 'INSERT INTO app_users (id, username, username_key, email, email_key, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        args: [user.id, username, identityKey(username), email, identityKey(email), passwordHash, user.createdAt],
+        args: [user.id, user.username, row.username_key, user.email, row.email_key, passwordHash, user.createdAt],
       });
-      const token = await issueSession(tx, user.id);
+      await tx.execute({ sql: 'DELETE FROM pending_registrations WHERE email_key = ?', args: [row.email_key] });
+      const session = await issueSession(tx, user.id);
       await tx.commit();
-      return { user, token };
+      return { user, token: session };
     } catch (error) {
       if (!(error instanceof AccountError) && error instanceof Error && /UNIQUE constraint failed: app_users\.(username_key|email_key)/.test(error.message)) {
-        throw new AccountError('ACCOUNT_EXISTS', 'That username or email is already registered.', 409);
+        throw new AccountError('INVALID_VERIFICATION', 'This verification link is no longer valid. Register again.', 400);
       }
       throw error;
     } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
@@ -143,15 +208,17 @@ export async function registerUser(input: { username: string; email: string; pas
 
 export async function loginUser(identifier: string, password: string, request: Request) {
   const key = identityKey(identifier);
-  await reserveAttempt([
-    { key: `login:identity:${key}`, limit: 10, window: LOGIN_WINDOW },
-    { key: `login:ip:${authClientAddress(request)}`, limit: 60, window: LOGIN_WINDOW },
-  ]);
+  const address = authClientAddress(request);
+  if (address) await checkAttemptLimit({ key: `login:ip:${address}`, limit: 60 });
   const row = await withDatabase(async (db) => {
     await initializeUserTables(db);
     return (await db.execute({ sql: `SELECT * FROM app_users WHERE ${key.includes('@') ? 'email_key' : 'username_key'} = ?`, args: [key] })).rows[0];
   });
   if (!await verifyPassword(password, row ? String(row.password_hash) : undefined) || !row) {
+    await reserveAttempt([
+      { key: `login:identity:${key}`, limit: 10, window: LOGIN_WINDOW },
+      ...(address ? [{ key: `login:ip:${address}`, limit: 60, window: LOGIN_WINDOW }] : []),
+    ]);
     throw new AccountError('INVALID_CREDENTIALS', 'Incorrect username, email, or password.', 401);
   }
   return withDatabase(async (db) => {

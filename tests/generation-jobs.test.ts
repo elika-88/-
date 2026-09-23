@@ -5,19 +5,24 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { POST as authPost } from '@/app/api/auth/route';
+import { initializeUserTables } from '@/lib/server/user-auth';
+import { withDatabase } from '@/lib/server/database';
 import { saveStudySession } from '@/lib/server/study-records';
 import { claimGenerationJob, completeGenerationJob, createGenerationJob, getGenerationJob, listGenerationJobs } from '@/lib/server/generation-jobs';
 import { studyKitFixture } from './fixtures/studyKit';
 
 let directory: string;
 const lecture = ('A schema defines a data structure. This paragraph provides enough source material for a durable generation task. ').repeat(12);
-function request(body: unknown) {
-  return new Request('https://lumina.test/api/auth', { method: 'POST', headers: { Origin: 'https://lumina.test', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-}
 async function register() {
-  const response = await authPost(request({ action: 'register', username: 'JobUser', email: 'jobs@example.invalid', password: 'Unit-test-password-48!' }));
-  return (await response.json()).user as { id: string };
+  const id = randomUUID();
+  await withDatabase(async db => {
+    await initializeUserTables(db);
+    await db.execute({
+      sql: 'INSERT INTO app_users (id, username, username_key, email, email_key, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [id, 'JobUser', 'jobuser', 'jobs@example.invalid', 'jobs@example.invalid', 'disabled-test-password', new Date().toISOString()],
+    });
+  });
+  return { id };
 }
 function resultFor(jobId: string) {
   const result = structuredClone(studyKitFixture());
