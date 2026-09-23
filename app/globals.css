@@ -1,16 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #111111;
-  --primary: #111111;
+  --background: #f7f8fa;
+  --foreground: #20252b;
+  --primary: #20252b;
   --primary-foreground: #ffffff;
-  --muted: #f1f1f1;
-  --muted-foreground: #666666;
-  --border: #eaeaea;
-  --input: #d8d8d8;
-  --ring: #287f5d;
-  --destructive: #ac3030;
+  --muted: #eef1f3;
+  --muted-foreground: #59636f;
+  --border: #dde2e7;
+  --input: #b8c1cb;
+  --ring: #08765e;
+  --destructive: #a52d37;
+  --surface: #ffffff;
+  --surface-subtle: #f2f4f6;
+  --surface-hover: #e7ecef;
+  --text-body: #394450;
+  --accent: #08765e;
+  --accent-soft: #e9f5ef;
+  --warning: #815513;
+  --warning-soft: #fff6e5;
+  --error-soft: #fff0f1;
+  --card-inverse: #202b31;
+  --card-inverse-text: #f7faf9;
+  --card-inverse-muted: #c0d0cc;
 }
 
 @theme inline {
@@ -32,9 +44,9 @@ body { margin: 0; background: var(--background); color: var(--foreground); font-
 button, input, textarea, select { font: inherit; }
 button:not(:disabled), select { cursor: pointer; }
 textarea { resize: vertical; }
-::selection { background: #d9ede2; }
+::selection { background: var(--accent); color: var(--surface); }
 [hidden] { display: none !important; }
-button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
 button, input, textarea, select { min-width: 0; }
 button svg { flex-shrink: 0; }
 .study-shell { min-height: 100dvh; }
@@ -672,102 +684,37 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 }
 /* ==================== ChatGPT Style Settings Modal & Multi-Theme ==================== */
 :root {
-  --bg-modal: #ffffff;
-  --text-main: #0d0d0d;
-  --text-sub: #666666;
-  --border-color: #e5e5e5;
-  --hover-bg: #f3f3f3;
-  --card-bg: #f9f9f9;
+  --bg-modal: var(--surface);
+  --text-main: var(--foreground);
+  --text-sub: var(--muted-foreground);
+  --border-color: var(--border);
+  --hover-bg: var(--surface-hover);
+  --card-bg: var(--surface-subtle);
 }
 
 html.dark {
-  --background: #171717;
-  --foreground: #ececec;
-  --muted: #212121;
-  --muted-foreground: #8e8e8e;
-  --border: #2e2e2e;
-  --input: #3e3e3e;
-  --bg-modal: #1e1e1e;
-  --text-main: #f5f5f5;
-  --text-sub: #a3a3a3;
-  --border-color: #333333;
-  --hover-bg: #2a2a2a;
-  --card-bg: #262626;
-}
-
-html.dark body {
-  background-color: #171717;
-  color: #ececec;
-}
-
-html.dark .chatgpt-sidebar-inner,
-html.dark .lecture-sidebar {
-  background-color: #171717 !important;
-  border-right-color: #2e2e2e !important;
-}
-
-html.dark .gpt-brand-row,
-html.dark .gpt-nav-item,
-html.dark .gpt-chat-btn {
-  color: #ececec !important;
-}
-
-html.dark .gpt-nav-item:hover,
-html.dark .gpt-chat-item:hover,
-html.dark .gpt-chat-item.active,
-html.dark .gpt-rail-btn:hover,
-html.dark .gpt-icon-btn:hover {
-  background-color: #212121 !important;
-  color: #ffffff !important;
-}
-
-html.dark .gpt-search-wrapper {
-  background-color: #212121 !important;
-}
-
-html.dark .gpt-search-wrapper input {
-  color: #ececec !important;
-}
-
-html.dark .workspace-header {
-  background: rgba(23, 23, 23, 0.85) !important;
-  border-bottom-color: #2e2e2e !important;
-}
-
-html.dark .input-section {
-  background-color: #212121 !important;
-  border-color: #2e2e2e !important;
-}
-
-html.dark #lecture {
-  background-color: #1a1a1a !important;
-  border-color: #333333 !important;
-  color: #f1f1f1 !important;
-}
-
-html.dark .text-field {
-  background-color: #1a1a1a !important;
-  border-color: #333333 !important;
-  color: #f1f1f1 !important;
-}
-
-html.dark .language-field select {
-  background-color: #1a1a1a !important;
-  border-color: #333333 !important;
-  color: #f1f1f1 !important;
-}
-
-html.dark .gpt-popover-menu {
-  background-color: #262626 !important;
-  border-color: #383838 !important;
-}
-
-html.dark .gpt-popover-menu button {
-  color: #ececec !important;
-}
-
-html.dark .gpt-popover-menu button:hover {
-  background-color: #333333 !important;
+  --background: #15191e;
+  --foreground: #edf1f5;
+  --primary: #edf1f5;
+  --primary-foreground: #192027;
+  --muted: #272f38;
+  --muted-foreground: #b0bbc7;
+  --border: #37424e;
+  --input: #536170;
+  --surface: #1d232b;
+  --surface-subtle: #181e25;
+  --surface-hover: #2d3742;
+  --text-body: #d2dae3;
+  --accent: #7bdcb5;
+  --accent-soft: #203c34;
+  --ring: #7bdcb5;
+  --destructive: #ffb1b6;
+  --error-soft: #40262d;
+  --warning: #ebcb86;
+  --warning-soft: #3b3223;
+  --card-inverse: #dceee7;
+  --card-inverse-text: #182b25;
+  --card-inverse-muted: #405d52;
 }
 
 /* Modal Dialog */
@@ -1216,92 +1163,6 @@ html.dark .gpt-custom-select-item.selected {
 .gpt-settings-select-item.selected {
   font-weight: 500;
   color: #10a37f;
-}
-html.dark .gpt-sidebar-auth-footer {
-  border-top-color: #2e2e2e !important;
-}
-/* ==================== ChatGPT Style Custom Rounded Inputs ==================== */
-.text-field {
-  width: 100%;
-  border: 1px solid #d4d4d8 !important;
-  border-radius: 9999px !important; /* Pill rounded for title input */
-  padding: 10px 18px !important;
-  font-size: 14.5px !important;
-  background: #ffffff !important;
-  color: #111111 !important;
-  outline: none !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1) !important;
-}
-
-.text-field:hover {
-  border-color: #888888 !important;
-}
-
-.text-field:focus {
-  border-color: #10a37f !important;
-  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.15) !important;
-}
-
-#lecture {
-  display: block;
-  width: 100%;
-  min-height: 180px;
-  height: 200px;
-  padding: 18px 20px !important;
-  background: #fafafa !important;
-  border: 1px solid #d4d4d8 !important;
-  border-radius: 20px !important; /* Smooth extra-rounded canvas card */
-  font-size: 15px !important;
-  line-height: 1.75 !important;
-  color: #111111 !important;
-  outline: none !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) inset !important;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1) !important;
-}
-
-#lecture:hover {
-  border-color: #888888 !important;
-}
-
-#lecture:focus {
-  background: #ffffff !important;
-  border-color: #10a37f !important;
-  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.15) !important;
-}
-
-/* Dark Theme Overrides for Custom Inputs */
-html.dark .text-field {
-  background-color: #212121 !important;
-  border-color: #383838 !important;
-  color: #ececec !important;
-  box-shadow: none !important;
-}
-
-html.dark .text-field:hover {
-  border-color: #555555 !important;
-}
-
-html.dark .text-field:focus {
-  border-color: #10a37f !important;
-  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.2) !important;
-}
-
-html.dark #lecture {
-  background-color: #1a1a1a !important;
-  border-color: #333333 !important;
-  color: #f1f1f1 !important;
-  box-shadow: none !important;
-}
-
-html.dark #lecture:hover {
-  border-color: #555555 !important;
-}
-
-html.dark #lecture:focus {
-  background-color: #212121 !important;
-  border-color: #10a37f !important;
-  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.2) !important;
 }
 /* ==================== ChatGPT Style Custom Rounded Scrollbar & Auto-Resize ==================== */
 #lecture {
@@ -2025,4 +1886,93 @@ html.dark .gpt-model-chip.active {
   background: #064e3b;
   border-color: #047857;
   color: #34d399;
+}
+
+/* Shared surfaces keep foregrounds and backgrounds paired in both themes. */
+html { scroll-padding-top: 88px; }
+html:root body { background: var(--background); color: var(--foreground); }
+html:root :is(.lecture-sidebar, .mobile-sidebar) { background: var(--surface-subtle); color: var(--foreground); border-color: var(--border); }
+html:root .workspace-header { background: var(--background); backdrop-filter: none; }
+html:root .input-section { background: var(--surface); border-color: var(--border); padding: 28px; box-shadow: 0 2px 10px #00000004; border-radius: 16px; }
+html:root .input-section h1 { font-size: 25px; font-weight: 600; letter-spacing: -0.025em; }
+html:root :is(.workspace-title, .optional, .field-heading span, .form-footer, .empty-materials, .gpt-section-label, .gpt-empty-hint, .gpt-custom-select-label, .gpt-select-arrow) { color: var(--muted-foreground); }
+html:root .empty-materials h2 { color: var(--text-body); }
+html:root :is(.gpt-icon-btn, .gpt-rail-btn, .icon-button) { color: var(--muted-foreground); }
+html:root :is(.gpt-nav-item, .gpt-chat-btn, .gpt-brand-row) { color: var(--foreground); }
+html:root :is(.gpt-nav-item:hover, .gpt-chat-item:hover, .gpt-chat-item.active, .gpt-rail-btn:hover, .gpt-icon-btn:hover, .icon-button:hover) { background: var(--surface-hover); color: var(--foreground); }
+html:root .gpt-search-wrapper { background: var(--muted); }
+html:root .gpt-search-wrapper input { color: var(--foreground); }
+html:root .gpt-sidebar-auth-footer { border-color: var(--border); }
+html:root .account-menu small { color: var(--muted-foreground); opacity: 1; }
+html:root .account-menu-error { color: var(--destructive); }
+html:root .gpt-popover-menu { background: var(--surface); border-color: var(--border); color: var(--foreground); }
+html:root .gpt-popover-menu button:hover { background: var(--surface-hover); }
+html:root .gpt-popover-menu button.danger { color: var(--destructive); }
+html:root .course-import { background: var(--surface-subtle); border-color: var(--border); border-radius: 12px; padding: 16px; }
+html:root :is(.course-import-heading span, .course-import-note) { color: var(--muted-foreground); }
+html:root :is(.course-import-heading > svg, .file-dropzone label svg) { color: var(--accent); }
+html:root :is(.file-dropzone, .youtube-import input) { background: var(--surface); border-color: var(--input); color: var(--foreground); border-radius: 8px; }
+html:root .file-dropzone label { color: var(--text-body); }
+html:root :is(.file-dropzone:hover, .file-dropzone:focus-within) { background: var(--accent-soft); border-color: var(--accent); }
+html:root .text-field, html:root #lecture { color: var(--foreground); background: var(--surface); border: 1px solid var(--input); border-radius: 10px; box-shadow: none; transition: border-color 150ms, box-shadow 150ms; }
+html:root .text-field { min-height: 44px; padding: 10px 14px; }
+html:root #lecture { min-height: 200px; padding: 16px; line-height: 1.8; }
+html:root :is(.text-field:focus, #lecture:focus, .youtube-import input:focus) { background: var(--surface); border-color: var(--ring); outline: 2px solid var(--ring); outline-offset: 2px; }
+html:root input::placeholder, html:root textarea::placeholder { color: var(--muted-foreground); opacity: 1; }
+html:root :is(.gpt-custom-select-trigger, .gpt-settings-lang-trigger) { color: var(--foreground); background: var(--surface); border-color: var(--input); border-radius: 10px; box-shadow: none; }
+html:root :is(.gpt-custom-select-menu, .gpt-settings-lang-menu) { background: var(--surface); color: var(--foreground); border-color: var(--border); }
+html:root .gpt-custom-select-item { color: var(--foreground); }
+html:root :is(.gpt-custom-select-item:hover, .gpt-custom-select-item.selected) { background: var(--accent-soft); color: var(--accent); }
+html:root :is(.gpt-check-icon, .gpt-settings-lang-item.selected, .gpt-theme-card.active) { color: var(--accent); border-color: var(--accent); }
+html:root .history-dialog { color: var(--foreground); background: var(--surface); border-color: var(--border); border-radius: 14px; }
+html:root .history-dialog p { color: var(--muted-foreground); }
+html:root .notice.error, html:root .save-failed { color: var(--destructive); }
+html:root .notice.warning { color: var(--warning); }
+html:root :is(.gpt-auth-submit, .gpt-settings-done-btn, .gpt-pill-btn.primary) { background: var(--primary); color: var(--primary-foreground); border-radius: 10px; }
+html:root :is(.gpt-auth-submit:hover, .gpt-settings-done-btn:hover, .gpt-pill-btn.primary:hover:not(:disabled)) { background: var(--primary); opacity: .92; }
+html:root .gpt-auth-box { max-width: 400px; }
+.account-back { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 13px; margin-bottom: 28px; }
+.account-password { position: relative; }
+.account-password input { padding-right: 50px; }
+.account-password button { position: absolute; inset: 3px 3px 3px auto; width: 42px; display: grid; place-items: center; border-radius: 6px; color: var(--muted-foreground); }
+.account-password button:hover { background: var(--surface-hover); }
+.gpt-auth-field small { color: var(--muted-foreground); font-size: 12px; }
+.account-switch { color: var(--muted-foreground); text-align: center; font-size: 13px; margin-top: 22px; }
+.account-switch a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+html:root .gpt-settings-dialog { height: min(520px, calc(100dvh - 32px)); box-shadow: 0 24px 80px #0003; }
+html:root .gpt-settings-content { min-width: 0; }
+html:root .gpt-theme-card { min-width: 0; }
+html:root :is(.gpt-admin-help-text, .gpt-admin-form-label span, .gpt-admin-status-bar, .gpt-admin-sidebar-title, .gpt-admin-table th, .gpt-table-empty) { color: var(--muted-foreground); }
+html:root .gpt-fetch-models-btn { color: var(--accent); }
+html:root :is(.gpt-admin-topbar, .gpt-admin-sidebar) { background: var(--surface-subtle); border-color: var(--border); }
+html:root :is(.gpt-admin-form-grid, .gpt-admin-table-container) { background: var(--surface); border-color: var(--border); }
+html:root :is(.gpt-admin-text-input, .gpt-admin-select-input) { background: var(--surface-subtle); color: var(--foreground); border-color: var(--input); }
+html:root :is(.gpt-admin-nav-item:hover, .gpt-admin-nav-item.active) { background: var(--surface-hover); color: var(--foreground); }
+html:root .gpt-admin-logout-link { color: var(--destructive); }
+html:root .text-success { color: var(--accent) !important; }
+html:root .text-warning { color: var(--warning) !important; }
+html:root .gpt-admin-main { min-width: 0; }
+html:root .gpt-admin-form-label { flex-wrap: wrap; gap: 8px; }
+html:root .gpt-admin-table-container { overflow-x: auto; }
+@media (max-width: 767px) {
+  html:root .input-section { padding: 20px; border-radius: 14px; }
+  html:root .input-section h1 { font-size: 22px; }
+  .gpt-admin-layout { flex-direction: column; }
+  .gpt-admin-sidebar { width: 100%; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .gpt-admin-nav-list { flex-direction: row; flex-wrap: wrap; }
+  .gpt-admin-nav-item { width: auto; }
+  .gpt-admin-topbar { height: auto; min-height: 54px; flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
+  .gpt-admin-main { padding: 24px 16px; }
+  .gpt-admin-panel-header { flex-wrap: wrap; }
+  .gpt-admin-form-grid { padding: 18px; }
+}
+@media (max-width: 540px) {
+  .gpt-settings-body { flex-direction: column; overflow-y: auto; }
+  .gpt-settings-tabs { width: 100%; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; overflow-x: auto; }
+  .gpt-settings-tab-btn { width: auto; flex: 1; justify-content: center; padding: 10px 8px; white-space: nowrap; }
+  .gpt-settings-tab-btn svg { display: none; }
+  html:root .gpt-settings-content { padding: 20px; overflow: visible; }
+  .gpt-setting-row { flex-wrap: wrap; }
+  .gpt-theme-grid { gap: 8px; }
+  .gpt-theme-card { padding: 14px 8px; }
 }
