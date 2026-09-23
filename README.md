@@ -67,5 +67,6 @@ Next.js、React、TypeScript、Tailwind、Zod、OpenAI SDK。普通路径为分�
 - [前端接入](docs/frontend-handoff.md)
 - [接口契约](docs/api-contract.md)
 - [评估记录](docs/evaluation.md)
+- [学习记录接入服务端数据库：开发交接](docs/study-records-server-integration.md)
 
 后续重点：降低延迟、更多语言与主题的人工评估、线上并发和额度控制。
