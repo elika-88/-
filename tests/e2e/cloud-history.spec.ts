@@ -1,11 +1,46 @@
 import { expect, test, type Page, type BrowserContext } from '@playwright/test';
 import type { StudySession } from '../../lib/client/sessions';
 import { studyKitFixture } from '../fixtures/studyKit';
+import { generationJobFixture } from '../fixtures/generationJob';
+import type { GenerationJob } from '../../lib/contracts/generation-jobs';
 import { readFile } from 'node:fs/promises';
+import { createClient } from '@libsql/client';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const user = { id: 'a20e5041-118e-4de0-b7b6-6ecf279c5b23', username: 'CloudStudent', email: 'cloud@example.invalid', createdAt: '2026-09-23T00:00:00.000Z' };
 const otherUser = { ...user, id: '1a6c8cc9-8707-43b0-9072-3708383773c4', username: 'OtherStudent', email: 'other@example.invalid' };
 const blank = (id: string, title: string): StudySession => ({ id, title, customTitle: true, lecture: 'Private course text', outputLanguage: 'en', tab: 'summary', kit: null, updatedAt: 1 });
+async function fixtureAccount(name: string, email: string, contexts: BrowserContext[], baseURL: string) {
+  // Initialize the isolated E2E database through the real auth route, then seed
+  // sessions directly. This test exercises study sync independently of the registration UI.
+  const bootstrap = await contexts[0].request.post('/api/auth', {
+    headers: { Origin: baseURL }, data: { action: 'login', identifier: `setup-${randomUUID()}`, password: 'invalid' },
+  });
+  expect(bootstrap.status()).toBe(401);
+  const path = process.env.LUMINA_E2E_DATABASE_PATH;
+  if (!path) throw new Error('E2E database path is missing.');
+  const db = createClient({ url: pathToFileURL(resolve(path)).href });
+  const id = randomUUID();
+  const now = Date.now();
+  try {
+    await db.execute('PRAGMA busy_timeout = 5000');
+    await db.execute({
+      sql: 'INSERT INTO app_users (id, username, username_key, email, email_key, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [id, name, name.toLowerCase(), email, email.toLowerCase(), 'disabled-e2e-password', new Date(now).toISOString()],
+    });
+    for (const context of contexts) {
+      const token = randomBytes(32).toString('hex');
+      await db.execute({
+        sql: 'INSERT INTO user_sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
+        args: [createHash('sha256').update(token).digest('hex'), id, now + 7 * 24 * 60 * 60 * 1000, now],
+      });
+      await context.addCookies([{ name: 'lumina_user', value: token, url: baseURL, httpOnly: true, sameSite: 'Lax' }]);
+    }
+  } finally { db.close(); }
+  return id;
+}
 async function sidebar(page: Page) {
   const open = page.getByRole('button', { name: 'Open sidebar', exact: true });
   if (await open.isVisible()) await open.click();
@@ -18,6 +53,7 @@ async function cloud(page: Page, records = new Map<string, StudySession>()) {
     if (route.request().method() === 'POST') current = null;
     return route.fulfill({ json: { user: current } });
   });
+  await page.route('**/api/generation-jobs?*', route => route.fulfill({ json: { userId: current!.id, jobs: [], nextCursor: null } }));
   await page.route('**/api/study-sessions', async route => {
     if (offline) return route.fulfill({ status: 503, json: { code: 'UNAVAILABLE', error: 'Cloud temporarily unavailable. Your edits are retained.' } });
     const req = route.request();
@@ -88,19 +124,19 @@ test('shows revision conflicts, saves a local copy, and preserves a remote delet
   expect(state.records.has(copy.id)).toBe(false);
 });
 
-test('switching account hides old data and ignores an old generation response', async ({ page }) => {
+test('switching account hides old data and ignores an old task submission response', async ({ page }) => {
   const kit = studyKitFixture(); const item = { ...blank('gen-a', 'Private A'), lecture: kit.source.text + '\n' + 'Learning evidence is a useful way to study. '.repeat(20) }; kit.source.text = item.lecture;
   const state = await cloud(page, new Map([[item.id, item]]));
   await page.addInitScript(result => {
     const original = window.fetch.bind(window);
     window.fetch = async (...args) => {
-      if (args[0] === '/api/generate') {
+      if (args[0] === '/api/generation-jobs' && args[1]?.method === 'POST') {
         document.documentElement.dataset.generationHeld = 'true';
-        return new Promise<Response>(resolve => window.addEventListener('release-generation', () => resolve(new Response(JSON.stringify({ type: 'result', runId: result.runId, data: result }) + '\n')), { once: true }));
+        return new Promise<Response>(resolve => window.addEventListener('release-generation', () => resolve(Response.json(result)), { once: true }));
       }
       return original(...args);
     };
-  }, kit);
+  }, { userId: user.id, job: generationJobFixture({ sessionId: item.id }), reused: false });
   await page.goto('/'); await page.getByRole('button', { name: 'Generate materials', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-generation-held', 'true');
   state.switchUser(otherUser);
@@ -114,18 +150,30 @@ test('switching account hides old data and ignores an old generation response', 
 
 test('real accounts sync create, generated materials, rename and delete across independent devices', async ({ page, browser, baseURL }) => {
   const suffix = `${Date.now()}_${test.info().project.name === 'mobile' ? 'm' : 'd'}`;
-  const username = `cloud_${suffix}`; const password = 'Cloud-test-only-3948!';
+  const username = `cloud_${suffix}`;
   const second = await browser.newContext({ baseURL }); const third = await browser.newContext({ baseURL });
-  async function auth(context: BrowserContext, body: unknown) {
-    const response = await context.request.post('/api/auth', { headers: { Origin: baseURL! }, data: body });
-    expect(response.ok(), await response.text()).toBe(true);
-  }
   try {
-    await auth(page.context(), { action: 'register', username, email: `${username}@example.invalid`, password });
-    await auth(second, { action: 'login', identifier: username, password });
-    await auth(third, { action: 'register', username: `b_${suffix}`, email: `b_${suffix}@example.invalid`, password });
+    const accountId = await fixtureAccount(username, `${username}@example.invalid`, [page.context(), second], baseURL!);
+    await fixtureAccount(`b_${suffix}`, `b_${suffix}@example.invalid`, [third], baseURL!);
     const kit = studyKitFixture(); kit.source.text += '\n' + 'This lecture explains reliable learning and evidence. '.repeat(15);
-    await page.route('**/api/generate', route => route.fulfill({ contentType: 'application/x-ndjson', body: JSON.stringify({ type: 'result', runId: kit.runId, data: kit }) + '\n' }));
+    let job: GenerationJob | null = null;
+    await page.route('**/api/generation-jobs**', async route => {
+      const req = route.request(); const url = new URL(req.url());
+      if (req.method() === 'POST') {
+        const input = req.postDataJSON();
+        const cloud = await page.request.get('/api/study-sessions', { headers: { 'X-Lumina-Account': accountId } });
+        const records = await cloud.json();
+        expect(input.expectedRevision).toBe(records.revisions[input.sessionId]);
+        const saved = await page.request.put('/api/study-sessions', { headers: { Origin: baseURL!, 'X-Lumina-Account': accountId },
+          data: { session: { ...records.sessions.find((session: StudySession) => session.id === input.sessionId), kit }, expectedRevision: input.expectedRevision } });
+        expect(saved.ok()).toBe(true);
+        job = generationJobFixture({ userId: accountId, sessionId: input.sessionId, sourceRevision: input.expectedRevision,
+          status: 'succeeded', stage: 'complete', savedSessionId: input.sessionId, savedRevision: input.expectedRevision + 1, saveDisposition: 'updated' });
+        return route.fulfill({ status: 202, json: { userId: accountId, job: { ...job, status: 'queued', stage: null }, reused: false } });
+      }
+      if (url.pathname === '/api/generation-jobs') return route.fulfill({ json: { userId: accountId, jobs: job ? [job] : [], nextCursor: null } });
+      return route.fulfill({ json: { userId: accountId, job, result: kit } });
+    });
     await page.goto('/');
     await page.getByLabel('Lecture title', { exact: false }).first().fill('Multi-device lecture');
     await page.getByLabel('Lecture text', { exact: true }).fill(kit.source.text);

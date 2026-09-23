@@ -71,13 +71,13 @@ function profile(row: Row): UserProfile {
 
 // Untrusted forwarded headers must not let a caller rotate IPs to evade limits.
 // Vercel overwrites x-vercel-forwarded-for; a self-hosted proxy must explicitly
-// opt in and overwrite x-real-ip. Direct/local requests share a conservative bucket.
+// opt in and overwrite x-real-ip. Without a trusted IP, account limits still apply.
 export function authClientAddress(request: Request) {
   const vercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
   const raw = vercel ? request.headers.get('x-vercel-forwarded-for')
     : process.env.AUTH_TRUST_PROXY === 'true' ? request.headers.get('x-real-ip') : null;
   const address = raw?.split(',')[0].trim();
-  return address && isIP(address) ? address : 'direct';
+  return address && isIP(address) ? address : null;
 }
 
 async function reserveAttempt(buckets: { key: string; limit: number; window: number }[]) {
@@ -115,8 +115,12 @@ async function issueSession(tx: Transaction, userId: string) {
 export async function registerUser(input: { username: string; email: string; password: string }, request: Request) {
   const parsed = AuthRequestSchema.safeParse({ ...input, action: 'register' });
   if (!parsed.success || parsed.data.action !== 'register') throw new AccountError('INVALID_REQUEST', 'Use a 3–32 character username, a valid email, and an 8–128 character password.', 400);
-  await reserveAttempt([{ key: `register:ip:${authClientAddress(request)}`, limit: 10, window: REGISTER_WINDOW }]);
   const { username, email, password } = parsed.data;
+  const address = authClientAddress(request);
+  await reserveAttempt([
+    { key: `register:email:${identityKey(email)}`, limit: 5, window: REGISTER_WINDOW },
+    ...(address ? [{ key: `register:ip:${address}`, limit: 20, window: REGISTER_WINDOW }] : []),
+  ]);
   const passwordHash = await hashPassword(password);
   const user: UserProfile = { id: randomUUID(), username, email, createdAt: new Date().toISOString() };
   return withDatabase(async (db) => {
@@ -143,14 +147,18 @@ export async function registerUser(input: { username: string; email: string; pas
 
 export async function loginUser(identifier: string, password: string, request: Request) {
   const key = identityKey(identifier);
-  await reserveAttempt([
-    { key: `login:identity:${key}`, limit: 10, window: LOGIN_WINDOW },
-    { key: `login:ip:${authClientAddress(request)}`, limit: 60, window: LOGIN_WINDOW },
-  ]);
+  const address = authClientAddress(request);
   const row = await withDatabase(async (db) => {
     await initializeUserTables(db);
     return (await db.execute({ sql: `SELECT * FROM app_users WHERE ${key.includes('@') ? 'email_key' : 'username_key'} = ?`, args: [key] })).rows[0];
   });
+  // Reserve atomically before hashing, including concurrent requests. Username
+  // and email share the same account budget, even when the source IP changes.
+  const bucket = row ? `login:user:${row.id}` : `login:identity:${key}`;
+  await reserveAttempt([
+    { key: bucket, limit: 10, window: LOGIN_WINDOW },
+    ...(address ? [{ key: `login:ip:${address}`, limit: 60, window: LOGIN_WINDOW }] : []),
+  ]);
   if (!await verifyPassword(password, row ? String(row.password_hash) : undefined) || !row) {
     throw new AccountError('INVALID_CREDENTIALS', 'Incorrect username, email, or password.', 401);
   }
@@ -158,7 +166,7 @@ export async function loginUser(identifier: string, password: string, request: R
     const tx = await db.transaction('write');
     try {
       const token = await issueSession(tx, String(row.id));
-      await tx.execute({ sql: 'DELETE FROM user_auth_limits WHERE bucket = ?', args: [digest(`login:identity:${key}`)] });
+      await tx.execute({ sql: 'DELETE FROM user_auth_limits WHERE bucket = ?', args: [digest(bucket)] });
       await tx.commit();
       return { user: profile(row), token };
     } finally { if (!tx.closed) await tx.rollback(); tx.close(); }

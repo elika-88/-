@@ -102,7 +102,7 @@ button svg { flex-shrink: 0; }
 .course-import-heading strong, .course-import-heading span { display: block; }
 .course-import-heading strong { font-size: 14px; line-height: 1.4; }
 .course-import-heading span, .course-import-note { color: #686868; font-size: 12px; line-height: 1.5; }
-.course-import-controls { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 1fr); gap: 10px; margin-top: 12px; }
+.course-import-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px; margin-top: 12px; }
 .file-dropzone { min-height: 42px; display: flex; align-items: stretch; border: 1px dashed #a9a9a9; border-radius: 6px; background: white; }
 .file-dropzone:focus-within, .file-dropzone:hover { border-color: #10a37f; background: #f6fffc; }
 .file-dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
@@ -1936,6 +1936,20 @@ html:root .notice.warning { color: var(--warning); }
 .study-sync-message { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .study-sync-message p { margin: 0 0 10px; }
 .study-sync-message strong { display: block; margin-bottom: 6px; color: var(--foreground); }
+.generation-job { margin-top: 20px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text-body); overflow-wrap: anywhere; }
+.generation-job-heading { display: flex; align-items: flex-start; gap: 10px; }
+.generation-job-heading > svg { flex-shrink: 0; margin-top: 3px; }
+.generation-job-heading > div { min-width: 0; }
+.generation-job-heading strong { color: var(--foreground); }
+.generation-job p { margin: 8px 0 0; font-size: 14px; line-height: 1.6; }
+.generation-job-heading p { margin-top: 4px; }
+.generation-job-heading p span, .generation-job-note { color: var(--muted-foreground); }
+.generation-job-error { color: var(--foreground); border-left: 3px solid currentColor; padding-left: 10px; }
+.generation-job-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.generation-job-actions:empty { display: none; }
+.generation-job-actions > button { min-height: 44px; height: auto; white-space: normal; }
+@media (max-width: 480px) { .generation-job { padding: 12px; } .generation-job-actions > button { flex: 1 1 auto; } }
+@media (prefers-reduced-motion: reduce) { .generation-job .animate-spin { animation: none; } }
 @media (max-width: 480px) { .study-sync { padding: 12px; } .study-sync-actions > button { white-space: normal; height: auto; min-height: 36px; } }
 html:root :is(.gpt-auth-submit, .gpt-settings-done-btn, .gpt-pill-btn.primary) { background: var(--primary); color: var(--primary-foreground); border-radius: 10px; }
 html:root :is(.gpt-auth-submit:hover, .gpt-settings-done-btn:hover, .gpt-pill-btn.primary:hover:not(:disabled)) { background: var(--primary); opacity: .92; }

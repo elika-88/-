@@ -38,6 +38,8 @@ npm run dev
 
 密钥只保存在服务端环境中，不发送给浏览器。`.env` 已被 Git 忽略；`.env.local` 的同名变量会优先于 `.env`。登录用户的讲稿与成功材料保存在账号数据库，访客历史保存在 localStorage。未完成的账号保存暂存在当前标签页按账号隔离的 sessionStorage 中；云端保存成功后移除，关闭标签页前应完成同步或下载备份。
 
+本次发布使用用户名、邮箱和密码直接注册，不发送验证邮件，不要求 Resend 或自有域名。邮箱尚未验证，不能作为已验证身份或密码找回依据；邮件验证留待发件域名就绪后接入，计划见 `docs/email-verification-roadmap.md`。
+
 ## 检查
 
 ```bash
@@ -59,6 +61,8 @@ Next.js、React、TypeScript、Tailwind、Zod、OpenAI SDK。普通路径为分�
 普通用户认证复用 xiaomao 在 `4254dd7` 提交的数据库实现：密码以 scrypt 哈希保存，登录会话使用 HttpOnly Cookie，有效期七天，退出时撤销服务端会话。普通用户登录不会获得管理员权限；管理员仍通过 `/admin` 独立登录。用户数据库表在首次使用时自动创建。工作区通过 `/api/study-sessions` 保存账号课程，650 ms 防抖、串行写入，并通过 revision 处理多设备冲突。不同账号视图和访客历史相互隔离；设置中的 JSON 导出包含当前工作区及未保存编辑。详情见下方学习记录接入文档。
 
 本地开发使用 SQLite；Vercel 自动使用 `@libsql/client` 连接 Turso。生产部署必须设置 `TURSO_DATABASE_URL` 和 `TURSO_AUTH_TOKEN`，以及 `ADMIN_PASSWORD`、`ADMIN_ENCRYPTION_KEY`；没有持久化数据库时管理页会明确提示配置缺失。首次打开管理页使用 `/api/admin/status` 检查状态，因此未登录不会产生误导性的 `/api/admin` 401 日志。详见 `docs/admin.md`。
+
+自托管时若要启用按 IP 限流，只在可信反向代理**覆盖** `X-Real-IP` 后设置 `AUTH_TRUST_PROXY=true`；不要信任浏览器自行提交的转发头。没有可信客户端 IP 时，程序不会用一个共享的“direct”桶封锁所有用户，应在入口代理另设限流。
 
 ## 文档
 

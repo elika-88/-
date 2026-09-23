@@ -20,7 +20,7 @@
    `https://lumina-six-chi-20.vercel.app/api/inngest`
 5. 确认 Inngest 中出现两个函数：`generate-study-kit` 和 `recover-generation-jobs`。恢复函数每分钟运行一次，用于重新投递中断任务和清理过期任务。
 
-如果 Inngest 尚未同步，接口会返回 `503 QUEUE_UNAVAILABLE`，不会创建一个用户看不到的任务。配置完成前可保持 `LUMINA_BACKGROUND_GENERATION=false`。
+缺少 Inngest 密钥时创建接口返回 `503 QUEUE_UNAVAILABLE`；开关关闭时返回 `503 BACKGROUND_DISABLED`。密钥齐全但应用未同步、投递失败或队列不可用时，任务仍可能被接受并保存在数据库中，因此必须确认两个函数已同步且恢复函数正常运行。配置完成前保持 `LUMINA_BACKGROUND_GENERATION=false`。
 
 ## 本地调试
 
@@ -29,6 +29,8 @@
 ## 接口
 
 所有接口都要求已登录，并要求 `X-Lumina-Account` 等于当前账号 ID。
+
+前端已接入这些接口。登录用户提交前等待云保存，随后观察后台任务；访客继续使用原有流式生成。任务完成后的课程刷新按云端 revision 选择结果，避免旧任务缓存遮盖另一设备的新结果。
 
 - `POST /api/generation-jobs`：`{ sessionId, expectedRevision, idempotencyKey }`，课程必须已云保存。返回 `202` 和 `job`。
 - `GET /api/generation-jobs?active=true&sessionId=<id>`：列出当前账号的任务。

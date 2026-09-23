@@ -49,6 +49,8 @@ export class StudySync {
   constructor(private options: Options) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
+  // The visible record can still be a local conflict copy after a cloud GET.
+  revisionFor = (id: string) => this.changes.get(id)?.baseRevision ?? this.revisions[id] ?? 0;
   private emit(patch: Partial<SyncSnapshot> = {}) {
     if (this.disposed) return;
     this.snapshot = { ...this.snapshot, ...patch, pending: this.changes.size };
@@ -215,6 +217,44 @@ export class StudySync {
   retry = async () => {
     if (!this.options.userId) { this.save(this.snapshot.history); return; }
     await this.refresh();
+  };
+  private waitForIdle(signal: AbortSignal) {
+    signal.throwIfAborted();
+    if (!this.running) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      const done = () => { unsubscribe(); signal.removeEventListener('abort', aborted); };
+      const aborted = () => { done(); reject(signal.reason); };
+      const unsubscribe = this.subscribe(() => { if (!this.running) { done(); resolve(); } });
+      signal.addEventListener('abort', aborted, { once: true });
+    });
+  }
+  /** Wait for in-flight writes and the latest edit, not just the debounce timer. */
+  ensureSaved = async (id: string, signal: AbortSignal): Promise<number> => {
+    const lifetime = AbortSignal.any([signal, this.controller.signal, AbortSignal.timeout(60_000)]);
+    if (!this.options.userId) throw new StudyStorageError('UNAUTHENTICATED', 'Sign in before starting a background task.');
+    for (;;) {
+      await this.waitForIdle(lifetime);
+      lifetime.throwIfAborted();
+      if (this.running) continue;
+      if (this.snapshot.error) throw new StudyStorageError(this.snapshot.error.code, this.snapshot.error.message);
+      if (!this.snapshot.ready) throw new StudyStorageError('NOT_READY', 'Wait for your cloud lectures to open.');
+      if (this.snapshot.conflicts.some(conflict => conflict.id === id)) throw new StudyStorageError('CONFLICT', 'Resolve this lecture’s sync conflict before generating.');
+      if (!this.snapshot.history.sessions.some(session => session.id === id)) throw new StudyStorageError('NOT_FOUND', 'Save this lecture before generating.');
+      if (this.changes.has(id)) { await this.flush(); continue; }
+      const savedRevision = this.revisions[id];
+      if (!savedRevision) throw new StudyStorageError('NOT_SAVED', 'This lecture has not been saved to the cloud. Retry sync first.');
+      return savedRevision;
+    }
+  };
+  refreshConfirmed = async (signal: AbortSignal) => {
+    const lifetime = AbortSignal.any([signal, this.controller.signal, AbortSignal.timeout(60_000)]);
+    do {
+      await this.waitForIdle(lifetime);
+      lifetime.throwIfAborted();
+    } while (this.running);
+    await this.refresh();
+    lifetime.throwIfAborted();
+    if (this.snapshot.error) throw new StudyStorageError(this.snapshot.error.code, this.snapshot.error.message);
   };
   resolveConflict = (id: string, keepCopy: boolean) => {
     if (this.disposed || this.running) return;
