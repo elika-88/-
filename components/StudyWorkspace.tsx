@@ -11,6 +11,9 @@ import { createSession, type StudySession, type SessionTab } from "@/lib/client/
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useStudyHistory } from './useStudyHistory';
 import { StudySyncStatus } from './StudySyncStatus';
+import { useGenerationJob } from './useGenerationJob';
+import { GenerationJobStatus } from './GenerationJobStatus';
+import { isActiveJob } from '@/lib/client/generation-jobs';
 import { AccountMenu } from './auth/AccountMenu';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
@@ -50,13 +53,17 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
   const lectureInput = useRef<HTMLTextAreaElement>(null);
   const courseFileInput = useRef<HTMLInputElement>(null);
   const active = history.sessions.find((session) => session.id === history.activeId) ?? draft;
+  const task = useGenerationJob({ userId, sessionId: active.id, ready, ensureSaved: sync.ensureSaved, refreshCloud: sync.refreshCloud, refreshAuth });
+  const backgroundBusy = Boolean(userId && (task.action || task.restoring || isActiveJob(task.job)));
+  const submitting = Boolean(task.action === 'saving' || task.action === 'submitting' || task.action === 'retrying');
+  const displayedKit = task.result ?? active.kit;
   useEffect(() => {
     if (lectureInput.current) {
       lectureInput.current.style.height = "auto";
       lectureInput.current.style.height = `${Math.min(Math.max(lectureInput.current.scrollHeight, 180), 550)}px`;
     }
   }, [active.lecture]);
-  const staleKit = Boolean(active.kit && active.kit.source.text !== active.lecture);
+  const staleKit = Boolean(displayedKit && displayedKit.source.text !== active.lecture);
 
   useEffect(() => () => {
     operation.current?.controller.abort(); operation.current = null;
@@ -88,7 +95,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
   }
 
   async function importCourse(form: FormData) {
-    if (!ready || pending || importing) return;
+    if (!ready || pending || importing || submitting) return;
     const controller = new AbortController(); extraction.current = controller;
     const targetId = historyRef.current.activeId;
     setImportError(null); setError(null); setProgress("Extracting course content"); setImporting(true);
@@ -170,11 +177,12 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (pending || !ready) return;
+    if (operation.current || pending || importing || !ready || userId && task.blocked) return;
     const normalizedLecture = normalizeLectureText(active.lecture);
     if (normalizedLecture !== active.lecture) updateSession({ lecture: normalizedLecture });
     const validation = validateGenerationInput({ title: active.title, lecture: normalizedLecture, outputLanguage: active.outputLanguage });
     if (!validation.success) { setError(new GenerationClientError(validation.error.code, validation.error.retryable)); lectureInput.current?.focus(); return; }
+    if (userId) { setError(null); setProgress(''); task.create(); return; }
     setError(null); setPending(true); setProgress("Sending lecture");
     const current: Operation = { controller: new AbortController(), sessionId: active.id };
     operation.current = current;
@@ -218,8 +226,8 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
         <StudySyncStatus sync={sync} username={username} />
         <section className="input-section" aria-labelledby="input-heading">
           <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1></div>
-          <form onSubmit={submit} noValidate aria-busy={pending || importing}>
-            <fieldset disabled={!ready || pending || importing} className="lecture-fields">
+          <form onSubmit={submit} noValidate aria-busy={pending || importing || backgroundBusy}>
+            <fieldset disabled={!ready || pending || importing || submitting} className="lecture-fields">
               <div><label htmlFor="lecture-title">Lecture title <span className="optional">(optional)</span></label><input className="text-field" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder="Untitled lecture" /></div>
               <div className="course-import" aria-label="Import course source">
                 <div className="course-import-heading"><FileText aria-hidden="true" /><div><strong>Import course content</strong><span>PDF, PPTX, DOCX, TXT or Markdown up to 15 MB</span></div></div>
@@ -235,16 +243,17 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
               <div><div className="field-heading"><label htmlFor="lecture">Lecture text</label><span id="lecture-count">{countWords(active.lecture).toLocaleString("en-US")} words · {active.lecture.length.toLocaleString("en-US")} / 60,000</span></div>
                 <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder="Lecture text" /></div>
             </fieldset>
-            <div className="input-toolbar"><CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending} onChange={(val) => updateSession({ outputLanguage: val })} />
-              <div className="generate-actions">{pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}<Button type="submit" disabled={!ready || pending || importing}>{pending || importing ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : active.kit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? "Importing" : pending ? "Generating" : active.kit ? "Regenerate materials" : "Generate materials"}</Button></div>
+            <div className="input-toolbar"><CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending || importing || submitting} onChange={(val) => updateSession({ outputLanguage: val })} />
+              <div className="generate-actions">{pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}<Button type="submit" disabled={!ready || pending || importing || Boolean(userId && task.blocked)}>{pending || importing || backgroundBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : displayedKit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? "Importing" : task.action === 'saving' ? 'Saving lecture' : task.restoring ? 'Checking tasks' : pending || backgroundBusy ? "Generating" : displayedKit ? "Regenerate materials" : "Generate materials"}</Button></div>
             </div>
             {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
             <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}{error ? "" : progress}</span></div>
           </form>
+          {userId && <GenerationJobStatus task={task} />}
         </section>
         {staleKit && <div className="notice warning" role="status"><AlertCircle aria-hidden="true" /><p>These materials are from the previous version of this lecture. Regenerate to update them.</p></div>}
-        {active.kit ? <StudyDashboard key={`${active.id}:${active.kit.runId}`} kit={active.kit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : <section className="empty-materials" aria-label="Study materials"><BookOpen aria-hidden="true" /><h2>No study materials yet</h2><div className="empty-tabs"><span>Summary</span><span>Key points</span><span>Quiz</span><span>Flashcards</span></div></section>}
+        {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : <section className="empty-materials" aria-label="Study materials"><BookOpen aria-hidden="true" /><h2>No study materials yet</h2><div className="empty-tabs"><span>Summary</span><span>Key points</span><span>Quiz</span><span>Flashcards</span></div></section>}
       </main>
     </div>
     <dialog className="history-dialog" ref={editDialog} aria-labelledby="edit-title" onClose={() => setEdit(null)}>

@@ -48,6 +48,41 @@ function edit(sync: StudySync, item: StudySession) {
 }
 
 describe('account study synchronization', () => {
+  it('confirms the newest revision after an in-flight save and subsequent edits', async () => {
+    const f = setup(); await f.sync.start(); const first = session();
+    const gate = deferred<{ session: StudySession; revision: number }>(); const actual = f.transport.save;
+    f.transport.save = vi.fn().mockImplementationOnce(() => gate.promise).mockImplementation(actual);
+    edit(f.sync, first); const writing = f.sync.flush();
+    const latest = { ...first, lecture: 'The exact version to generate' }; edit(f.sync, latest);
+    let confirmed = false;
+    const saving = f.sync.ensureSaved(first.id, new AbortController().signal).then(revision => { confirmed = true; return revision; });
+    await Promise.resolve(); expect(confirmed).toBe(false);
+    f.records.set(first.id, first); f.revisions[first.id] = 1; gate.resolve({ session: first, revision: 1 });
+    await writing; expect(await saving).toBe(2); expect(f.records.get(first.id)).toEqual(latest);
+  });
+  it('refuses generation when a save fails or conflicts and cancels waiters on disposal', async () => {
+    const f = setup(); await f.sync.start(); const item = session(); edit(f.sync, item);
+    f.transport.save = vi.fn(async () => { throw new StudyStorageError('NETWORK', 'Offline'); });
+    await expect(f.sync.ensureSaved(item.id, new AbortController().signal)).rejects.toMatchObject({ code: 'NETWORK' });
+    f.transport.save = vi.fn(async () => { throw new StudyStorageError('CONFLICT', 'Changed'); });
+    f.records.set(item.id, { ...item, lecture: 'Other device' }); f.revisions[item.id] = 2;
+    await f.sync.refresh();
+    await expect(f.sync.ensureSaved(item.id, new AbortController().signal)).rejects.toMatchObject({ code: 'CONFLICT' });
+    const gate = deferred<Awaited<ReturnType<StudyTransport['list']>>>(); f.transport.list = vi.fn(() => gate.promise);
+    const refresh = f.sync.refresh(); const waiter = f.sync.ensureSaved(item.id, new AbortController().signal);
+    const rejected = expect(waiter).rejects.toMatchObject({ name: 'AbortError' }); f.sync.dispose(); await rejected;
+    gate.resolve({ userId, sessions: [], revisions: {}, storage: 'local' }); await refresh;
+  });
+  it('waits for an in-flight save before refreshing worker results and copies', async () => {
+    const f = setup(); await f.sync.start(); const item = session(); edit(f.sync, item);
+    const gate = deferred<{ session: StudySession; revision: number }>(); f.transport.save = vi.fn(() => gate.promise);
+    const writing = f.sync.flush(); const refreshed = f.sync.refreshConfirmed(new AbortController().signal);
+    await Promise.resolve(); expect(f.transport.list).toHaveBeenCalledTimes(1);
+    const copy = session('Generated copy'); f.records.set(item.id, item); f.revisions[item.id] = 1;
+    f.records.set(copy.id, copy); f.revisions[copy.id] = 1;
+    gate.resolve({ session: item, revision: 1 }); await writing; await refreshed;
+    expect(f.sync.getSnapshot().history.sessions).toEqual(expect.arrayContaining([copy, item]));
+  });
   it('loads cloud records, never presents or uploads guest history without explicit import', async () => {
     const f = setup(); const guest = session('Guest private'); const cloud = session('Cloud');
     f.local.setItem(STORAGE_KEY, serializeHistory({ version: 1, activeId: guest.id, sessions: [guest] }));
