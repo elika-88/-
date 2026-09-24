@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { isActiveJob } from '@/lib/client/generation-jobs';
 import { useSettings } from '@/lib/i18n/SettingsContext';
 import type { useGenerationJob } from './useGenerationJob';
+import { GenerationSteps } from './GenerationProgress';
 
 export function GenerationJobStatus({ task }: { task: ReturnType<typeof useGenerationJob> }) {
   const { language } = useSettings();
@@ -26,10 +27,11 @@ export function GenerationJobStatus({ task }: { task: ReturnType<typeof useGener
   return <section className="generation-job" aria-label={zh ? '后台生成任务' : 'Background generation'} data-testid="generation-job">
     <div className="generation-job-heading" role="status" aria-live="polite" aria-atomic="true">
       <Icon size={18} aria-hidden="true" className={Icon === LoaderCircle ? 'animate-spin' : undefined} />
-      <div><strong>{action ? actions[action] : restoring ? (zh ? '正在恢复任务状态…' : 'Checking for existing tasks…') : job ? labels[job.status] : (zh ? '任务连接中断' : 'Task connection interrupted')}</strong>
+      <div><strong className={active && !busy && job?.status === 'running' ? 'shimmer-text' : undefined}>{action ? actions[action] : restoring ? (zh ? '正在恢复任务状态…' : 'Checking for existing tasks…') : job ? labels[job.status] : (zh ? '任务连接中断' : 'Task connection interrupted')}</strong>
         {job?.stage && <p data-testid="generation-stage">{stageLabels[job.stage]} <span>({job.stage})</span></p>}
       </div>
     </div>
+    {job && (active || job.status === 'failed') && <GenerationSteps stage={job.stage} failed={job.status === 'failed'} running={active} startedAt={job.startedAt ?? job.createdAt} />}
     {active && <p>{zh ? '任务在后台运行，刷新或离开页面后仍会继续。' : 'Your task continues in the background, even if you refresh or leave this page.'}</p>}
     {job?.status === 'failed' && <p role="alert">{job.error?.message || (zh ? '生成失败，请重试。' : 'Generation failed. Please try again.')}</p>}
     {job?.status === 'cancelled' && <p>{zh ? '任务已取消。你的课程仍保留。' : 'The task was cancelled. Your lecture is still saved.'}</p>}

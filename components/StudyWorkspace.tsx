@@ -17,6 +17,7 @@ import { GenerationJobStatus } from './GenerationJobStatus';
 import { isActiveJob } from '@/lib/client/generation-jobs';
 import { displayedStudyKit } from '@/lib/client/displayed-study-kit';
 import { AccountMenu } from './auth/AccountMenu';
+import { GenerationSteps, MaterialsSkeleton } from './GenerationProgress';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
 
@@ -50,6 +51,8 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
   const [youtubeUrl, setYoutubeUrl] = useState("");
   
   const [progress, setProgress] = useState("");
+  const [liveStage, setLiveStage] = useState<{ stage: GenerationStage | null; startedAt: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
   const operation = useRef<Operation | null>(null);
   const extraction = useRef<AbortController | null>(null);
   const lectureInput = useRef<HTMLTextAreaElement>(null);
@@ -76,7 +79,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
     operation.current?.controller.abort();
     operation.current = null;
     extraction.current?.abort(); extraction.current = null; setImporting(false);
-    setPending(false);
+    setPending(false); setLiveStage(null);
     setProgress(message);
   }
 
@@ -185,7 +188,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
     const validation = validateGenerationInput({ title: active.title, lecture: normalizedLecture, outputLanguage: active.outputLanguage });
     if (!validation.success) { setError(new GenerationClientError(validation.error.code, validation.error.retryable)); lectureInput.current?.focus(); return; }
     if (userId) { setError(null); setProgress(''); task.create(); return; }
-    setError(null); setPending(true); setProgress("Sending lecture");
+    setError(null); setPending(true); setProgress("Sending lecture"); setLiveStage({ stage: null, startedAt: Date.now() });
     const current: Operation = { controller: new AbortController(), sessionId: active.id };
     operation.current = current;
     let timedOut = false;
@@ -195,8 +198,8 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
         signal: current.controller.signal,
         onEvent: (event) => {
           if (operation.current !== current) return;
-          if (event.type === "stage") setProgress(stages[event.stage]);
-          if (event.type === "retry") setProgress(`${stages[event.stage]}: attempt ${event.attempt} of ${event.maxAttempts}`);
+          if (event.type === "stage") { setProgress(stages[event.stage]); setLiveStage((value) => value && { ...value, stage: event.stage }); }
+          if (event.type === "retry") { setProgress(`${stages[event.stage]}: attempt ${event.attempt} of ${event.maxAttempts}`); setLiveStage((value) => value && { ...value, stage: event.stage }); }
         },
       });
       if (operation.current !== current) return;
@@ -211,7 +214,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
       else setError(caught instanceof GenerationClientError ? caught : new GenerationClientError("NETWORK_ERROR", true));
     } finally {
       clearTimeout(timeout);
-      if (operation.current === current) { operation.current = null; setPending(false); }
+      if (operation.current === current) { operation.current = null; setPending(false); setLiveStage(null); }
     }
   }
 
@@ -234,9 +237,9 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
               <div className="course-import" aria-label="Import course source">
                 <div className="course-import-heading"><FileText aria-hidden="true" /><div><strong>Import course content</strong><span>PDF, PPTX, DOCX, TXT or Markdown up to 15 MB</span></div></div>
                 <div className="course-import-controls">
-                  <div className="file-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); importFile(event.dataTransfer.files[0]); }}>
+                  <div className="file-dropzone" data-dragging={dragging || undefined} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }} onDrop={(event) => { event.preventDefault(); setDragging(false); importFile(event.dataTransfer.files[0]); }}>
                     <input ref={courseFileInput} id="course-file" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={(event) => { importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-                    <label htmlFor="course-file"><Upload aria-hidden="true" />Drop a course file here or browse</label>
+                    <label htmlFor="course-file"><Upload aria-hidden="true" />{dragging ? "Release to import" : "Drop a course file here or browse"}</label>
                   </div>
                   <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">YouTube video link</label><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="Paste a YouTube link" inputMode="url" /><Button type="button" variant="outline" onClick={importYouTube} title="Import YouTube captions"><Link aria-hidden="true" />Import captions</Button></div>
                 </div>
@@ -250,12 +253,13 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
             </div>
             {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}{error.code === 'LOGIN_REQUIRED' && <> <AccountLink href="/login">Sign in or create an account</AccountLink></>}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
-            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}{error ? "" : progress}</span></div>
+            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
+            {pending && liveStage && <div className="gen-progress"><GenerationSteps stage={liveStage.stage} startedAt={liveStage.startedAt} /></div>}
           </form>
           {userId && <GenerationJobStatus task={task} />}
         </section>
         {staleKit && <div className="notice warning" role="status"><AlertCircle aria-hidden="true" /><p>These materials are from the previous version of this lecture. Regenerate to update them.</p></div>}
-        {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : <section className="empty-materials" aria-label="Study materials"><BookOpen aria-hidden="true" /><h2>No study materials yet</h2><div className="empty-tabs"><span>Summary</span><span>Key points</span><span>Quiz</span><span>Flashcards</span></div></section>}
+        {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : pending || (userId && isActiveJob(task.job)) ? <MaterialsSkeleton /> : <section className="empty-materials" aria-label="Study materials"><BookOpen aria-hidden="true" /><h2>No study materials yet</h2><div className="empty-tabs"><span>Summary</span><span>Key points</span><span>Quiz</span><span>Flashcards</span></div></section>}
       </main>
     </div>
     <dialog className="history-dialog" ref={editDialog} aria-labelledby="edit-title" onClose={() => setEdit(null)}>
