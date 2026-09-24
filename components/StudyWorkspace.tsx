@@ -26,6 +26,7 @@ const stages: Record<GenerationStage, string> = {
 };
 const emptyDraft: StudySession = { id: "draft", title: "", lecture: "", outputLanguage: "auto", tab: "summary", kit: null, updatedAt: 0, customTitle: false };
 type Operation = { controller: AbortController; sessionId: string };
+const SIDEBAR_KEY = "lumina.sidebar.collapsed";
 
 export function StudyWorkspace() {
   const { user, ready, verified, error, recheckIdentity } = useAuth();
@@ -38,7 +39,12 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
   const sync = useStudyHistory(userId, refreshAuth);
   const { history, historyRef, ready, save } = sync;
   const [draft, setDraft] = useState<StudySession>(emptyDraft);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return typeof window !== "undefined" && window.localStorage.getItem(SIDEBAR_KEY) === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0"); } catch { /* storage unavailable */ }
+  }, [sidebarCollapsed]);
   const mobileSidebar = useRef<HTMLDialogElement>(null);
   const editDialog = useRef<HTMLDialogElement>(null);
   const [edit, setEdit] = useState<{ id: string; action: "rename" | "delete" } | null>(null);
@@ -68,6 +74,19 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
     }
   }, [active.lecture]);
   const staleKit = Boolean(displayedKit && displayedKit.source.text !== active.lecture);
+
+  // Ctrl/⌘+B toggles the sidebar (opens the drawer on small screens).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "b") return;
+      event.preventDefault();
+      if (matchMedia("(max-width: 767px)").matches) {
+        if (mobileSidebar.current?.open) mobileSidebar.current.close(); else mobileSidebar.current?.showModal();
+      } else setSidebarCollapsed((value) => !value);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => () => {
     operation.current?.controller.abort(); operation.current = null;

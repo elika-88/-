@@ -1,0 +1,212 @@
+/*
+ * Lecture history sidebar — redesign.
+ * Loaded after globals.css and supersedes its older sidebar rules.
+ *
+ * Collapse behaviour (Claude / ChatGPT style):
+ *  - One width transition drives both the panel and the workspace margin, on the
+ *    same curve, so the page glides instead of jumping.
+ *  - Rail icons sit at the exact x-position of the expanded icons, so collapsing
+ *    reads as "labels fold away" rather than two panels swapping.
+ *  - The outgoing layer fades out fast; the incoming one fades in after a short
+ *    delay. No scaling or sliding of content.
+ */
+:root {
+  --sb-expanded: 264px;
+  --sb-rail: 56px;
+  --sb-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --sb-dur: 320ms;
+  --sb-bg: var(--surface-subtle);
+  --sb-line: color-mix(in srgb, var(--border) 70%, transparent);
+  --sb-hover: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --sb-active: color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+
+/* ---------- Shell ---------- */
+html:root .lecture-sidebar {
+  width: var(--sb-expanded);
+  background: var(--sb-bg);
+  border-right: 1px solid var(--sb-line);
+  transition: width var(--sb-dur) var(--sb-ease);
+  overflow: hidden;
+  contain: layout paint;
+}
+html:root .lecture-sidebar.rail { width: var(--sb-rail); }
+html:root .workspace { margin-left: var(--sb-expanded); transition: margin-left var(--sb-dur) var(--sb-ease); }
+html:root .sidebar-collapsed .workspace { margin-left: var(--sb-rail); }
+@media (max-width: 767px) {
+  html:root .workspace, html:root .sidebar-collapsed .workspace { margin-left: 0; }
+}
+
+/* ---------- Layers ---------- */
+html:root .gpt-rail-content {
+  width: var(--sb-rail);
+  padding: 10px 8px 12px;
+  align-items: center;
+  transform: none;
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+html:root .gpt-sidebar-container.is-collapsed .gpt-rail-content {
+  opacity: 1;
+  transform: none;
+  transition: opacity 180ms ease-out 140ms;
+}
+html:root .gpt-expanded-content {
+  width: var(--sb-expanded);
+  padding: 10px 8px 12px;
+  transform: none;
+  opacity: 1;
+  transition: opacity 220ms ease-out 90ms;
+}
+html:root .gpt-sidebar-container.is-collapsed .gpt-expanded-content {
+  opacity: 0;
+  transform: none;
+  transition: opacity 110ms ease-out;
+}
+
+/* ---------- Rail ---------- */
+html:root .gpt-rail-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--muted-foreground);
+}
+html:root .gpt-rail-btn:hover { background: var(--sb-hover); color: var(--foreground); }
+.gpt-rail-icons { gap: 4px; margin-top: 8px; flex: 1; }
+.gpt-rail-footer { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.gpt-rail-btn.brand { position: relative; }
+.gpt-rail-btn.brand .sb-logo, .gpt-rail-btn.brand .sb-expand-icon { transition: opacity 150ms ease-out, transform 200ms var(--sb-ease); }
+.gpt-rail-btn.brand .sb-expand-icon { position: absolute; opacity: 0; transform: scale(0.8); }
+.gpt-rail-btn.brand:is(:hover, :focus-visible) .sb-logo { opacity: 0; transform: scale(0.8); }
+.gpt-rail-btn.brand:is(:hover, :focus-visible) .sb-expand-icon { opacity: 1; transform: none; }
+
+/* ---------- Expanded: header ---------- */
+html:root .gpt-brand-row { padding: 0 0 10px 7px; min-height: 40px; }
+.gpt-brand-lockup img { border-radius: 7px; }
+html:root .gpt-brand-title { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+html:root .gpt-icon-btn { width: 36px; height: 36px; border-radius: 10px; color: var(--muted-foreground); }
+html:root .gpt-icon-btn:hover { background: var(--sb-hover); color: var(--foreground); }
+
+/* Nav rows: icon centred on the same x as the rail icons (8px pad + 20px). */
+html:root .gpt-nav-item {
+  gap: 11px;
+  min-height: 38px;
+  padding: 0 11px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--foreground);
+  transition: background-color 120ms ease-out;
+}
+html:root .gpt-nav-item:hover { background: var(--sb-hover); }
+html:root .gpt-nav-item.primary { font-weight: 500; }
+html:root .gpt-nav-item.primary svg { color: var(--accent); }
+.gpt-nav-actions { margin-bottom: 6px; }
+
+/* Search */
+html:root .gpt-search-wrapper {
+  margin: 0 0 10px;
+  padding: 0 11px;
+  gap: 2px;
+  height: 38px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--sb-line);
+  transition: border-color 150ms, background-color 150ms, box-shadow 150ms;
+}
+html:root .gpt-search-wrapper:hover { background: var(--sb-hover); }
+html:root .gpt-search-wrapper:focus-within { background: var(--surface); border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 14%, transparent); }
+html:root .gpt-search-wrapper svg { color: var(--muted-foreground); }
+html:root .gpt-search-wrapper input { height: 36px; color: var(--foreground); }
+html:root .gpt-search-wrapper input:focus-visible { outline: none; }
+.gpt-search-wrapper input::-webkit-search-cancel-button { cursor: pointer; }
+
+/* ---------- History list ---------- */
+html:root .gpt-history-scroll {
+  margin: 0 -8px;
+  padding: 0 8px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 24px), transparent 100%);
+}
+html:root .gpt-history-scroll:hover { scrollbar-color: var(--border) transparent; }
+.gpt-history-group + .gpt-history-group { margin-top: 14px; }
+html:root .gpt-section-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 11px 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: var(--sb-bg);
+}
+html:root .gpt-chat-list { gap: 1px; }
+html:root .gpt-chat-item { border-radius: 10px; background: transparent; transition: background-color 120ms ease-out; }
+html:root .gpt-chat-item:hover { background: var(--sb-hover); }
+html:root .gpt-chat-item.active { background: var(--sb-active); }
+html:root .gpt-chat-item.menu-open { z-index: 5; }
+html:root .gpt-chat-btn { min-height: 36px; padding: 0 4px 0 11px; font-size: 13.5px; color: var(--text-body); }
+html:root .gpt-chat-item.active .gpt-chat-btn { color: var(--foreground); font-weight: 500; }
+/* Soft fade instead of a hard ellipsis cut under the options button. */
+html:root .gpt-chat-btn span { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+html:root .gpt-item-more { width: 28px; height: 28px; margin-right: 4px; border-radius: 8px; color: var(--muted-foreground); opacity: 0; transition: opacity 120ms, background-color 120ms; }
+html:root :is(.gpt-chat-item:hover, .gpt-chat-item:focus-within, .gpt-chat-item.active, .gpt-chat-item.menu-open) .gpt-item-more { opacity: 1; }
+html:root .gpt-item-more:hover, html:root .gpt-item-more[aria-expanded="true"] { background: var(--sb-active); color: var(--foreground); }
+@media (hover: none) { html:root .gpt-item-more { opacity: 1; } }
+
+/* Item menu */
+html:root .gpt-popover-menu {
+  right: 4px;
+  min-width: 148px;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 12px 32px #0000001f, 0 2px 6px #0000000f;
+  transform-origin: top right;
+  animation: sb-menu-in 160ms var(--sb-ease) both;
+}
+html:root .gpt-popover-menu button { gap: 9px; padding: 8px 10px; font-size: 13px; border-radius: 8px; color: var(--foreground); }
+html:root .gpt-popover-menu button:hover { background: var(--sb-hover); }
+html:root .gpt-popover-menu button.danger { color: var(--destructive); }
+html:root .gpt-popover-menu button.danger:hover { background: var(--error-soft); }
+@keyframes sb-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+html:root .gpt-empty-hint { padding: 28px 12px; font-size: 13px; color: var(--muted-foreground); }
+
+/* ---------- Footer ---------- */
+html:root .gpt-sidebar-auth-footer { margin: 4px 0 0; padding-top: 8px; border-top: 1px solid var(--sb-line); }
+html:root .gpt-sidebar-auth-footer .account-menu { gap: 2px; }
+html:root .gpt-sidebar-auth-footer .account-identity { padding: 6px 11px; gap: 11px; font-size: 13.5px; }
+html:root .gpt-sidebar-auth-footer .account-menu small { padding: 0 11px 6px 40px; }
+
+/* ---------- Header toggle on the workspace ---------- */
+html:root .workspace-header { transition: background-color 200ms; }
+
+/* ---------- Mobile drawer ---------- */
+html:root .mobile-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  margin: 0;
+  padding: 0;
+  width: min(300px, calc(100% - 44px));
+  height: 100dvh;
+  max-height: 100dvh;
+  border: 0;
+  transform: translateX(-100%);
+  background: var(--sb-bg);
+  border-right: 1px solid var(--sb-line);
+  box-shadow: 16px 0 48px #0000002e;
+  transition: transform 300ms var(--sb-ease), overlay 300ms allow-discrete, display 300ms allow-discrete;
+}
+html:root .mobile-sidebar[open] { transform: none; }
+@starting-style { html:root .mobile-sidebar[open] { transform: translateX(-100%); } }
+html:root .mobile-sidebar .gpt-expanded-content { width: 100%; }
+.mobile-sidebar::backdrop { background: #0000; backdrop-filter: blur(0); transition: background-color 300ms, backdrop-filter 300ms, overlay 300ms allow-discrete, display 300ms allow-discrete; }
+.mobile-sidebar[open]::backdrop { background: #00000047; backdrop-filter: blur(2px); }
+@starting-style { .mobile-sidebar[open]::backdrop { background: #0000; backdrop-filter: blur(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  html:root :is(.lecture-sidebar, .workspace, .gpt-rail-content, .gpt-expanded-content, .mobile-sidebar) { transition: none; }
+  html:root .gpt-popover-menu { animation: none; }
+}
