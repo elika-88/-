@@ -6,11 +6,12 @@ import { segmentLecture } from '@/lib/source';
 import { validateMaterials, validateReview } from '@/lib/ai/grounding';
 import type { createOpenAIClient } from '@/lib/openai';
 import { studyKitFixture } from './fixtures/studyKit';
+import OpenAI from 'openai';
 
 const kit = studyKitFixture();
 const materials = GeneratedMaterialsSchema.parse(Object.fromEntries(Object.entries(kit).filter(([key]) => !['runId', 'source', 'topics', 'verification'].includes(key))));
 const analysis = { title: 'Schemas', language: 'en', sufficient: true, insufficiencyReason: null, topics: kit.topics, concepts: [], relationships: [], ambiguities: [] };
-const response = (output_parsed: unknown) => ({ status: 'completed', output: [], output_parsed });
+const response = (value: unknown) => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] }] });
 const verdicts = kit.verification.items.map(({ itemId, status, reason }) => ({ itemId, status, reason }));
 const notePart = { lectureTitle: materials.lectureTitle, overview: materials.overview, summary: materials.summary, keyPoints: materials.keyPoints, limitations: materials.limitations };
 function successfulCalls() {
@@ -39,14 +40,36 @@ describe('source grounding', () => {
 });
 
 describe('generation pipeline', () => {
+  it.each(['responses', 'chat_completions'] as const)('handles the actual SDK HTTP envelope with fenced JSON at every stage via %s', async (apiFormat) => {
+    const outputs = [analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }];
+    const fetcher = vi.fn().mockImplementation(async () => {
+      const text = '```json\n' + JSON.stringify(outputs.shift()) + '\n```';
+      return Response.json(apiFormat === 'responses'
+        ? { id: 'resp-test', status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] }] }
+        : { id: 'chat-test', choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: text, refusal: null } }] });
+    });
+    const client = new OpenAI({ apiKey: 'test-only-key', baseURL: 'https://relay.example/v1', fetch: fetcher, maxRetries: 0 });
+    const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, { client, model: 'test-model', apiFormat }, kit.runId, new AbortController().signal, vi.fn());
+    expect(result.verification.supportedItems).toBe(5);
+    expect(fetcher).toHaveBeenCalledTimes(5);
+  });
+
+  it.each(['incomplete', 'refusal'] as const)('never accepts JSON from a response marked %s', async (kind) => {
+    const raw = kind === 'incomplete' ? { ...response(analysis), status: 'incomplete' }
+      : { status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'No' }, { type: 'output_text', text: JSON.stringify(analysis) }] }] };
+    const create = vi.fn().mockResolvedValue(raw);
+    const connection = { client: { responses: { create } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    await expect(generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn())).rejects.toMatchObject({ code: kind === 'refusal' ? 'MODEL_REFUSAL' : 'INVALID_OUTPUT' });
+    expect(create).toHaveBeenCalledTimes(kind === 'refusal' ? 1 : 3);
+  });
   it.each(['responses', 'chat_completions'] as const)('accepts reflowed citations and saves literal source spans through %s', async (apiFormat) => {
     const lecture = kit.source.text.replace('defines a', 'defines\n\n\u3000\u3000a');
     const outputs = structuredClone([analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }]);
     const parse = vi.fn().mockImplementation(async () => {
       const value = outputs.shift();
-      return apiFormat === 'responses' ? response(value) : { choices: [{ finish_reason: 'stop', message: { parsed: value, refusal: null } }] };
+      return apiFormat === 'responses' ? response(value) : { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(value), refusal: null } }] };
     });
-    const client = apiFormat === 'responses' ? { responses: { parse } } : { chat: { completions: { parse } } };
+    const client = apiFormat === 'responses' ? { responses: { create: parse } } : { chat: { completions: { create: parse } } };
     const connection = { client, model: 'test-model', apiFormat } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     const result = await generateStudyKit({ title: '', lecture, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(parse).toHaveBeenCalledTimes(5);
@@ -61,7 +84,7 @@ describe('generation pipeline', () => {
     bad.topics[0].evidence[0].quote = 'An invented claim.';
     const outputs = [bad, analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }];
     const parse = vi.fn().mockImplementation(async () => response(structuredClone(outputs.shift())));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(parse).toHaveBeenCalledTimes(6);
     expect(parse.mock.calls[1][0].input[0].content).toContain('The previous analysis had a quote that did not match its segment.');
@@ -72,7 +95,7 @@ describe('generation pipeline', () => {
     const bad = structuredClone(analysis);
     bad.topics[0].evidence[0].quote = 'An invented claim.';
     const parse = vi.fn().mockImplementation(async () => response(structuredClone(bad)));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await expect(generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn())).rejects.toMatchObject({ code: 'INVALID_OUTPUT' });
     expect(parse).toHaveBeenCalledTimes(3);
     expect(parse.mock.calls.every(([request]) => request.text.format.name === 'lecture_analysis')).toBe(true);
@@ -80,8 +103,8 @@ describe('generation pipeline', () => {
 
   it('uses the configured chat format with strict structured output and full review', async () => {
     const outputs = [analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }];
-    const parse = vi.fn().mockImplementation(async () => ({ choices: [{ finish_reason: 'stop', message: { parsed: outputs.shift(), refusal: null } }] }));
-    const connection = { client: { chat: { completions: { parse } } }, model: 'test-model', apiFormat: 'chat_completions' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const parse = vi.fn().mockImplementation(async () => ({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(outputs.shift()), refusal: null } }] }));
+    const connection = { client: { chat: { completions: { create: parse } } }, model: 'test-model', apiFormat: 'chat_completions' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(result.verification.supportedItems).toBe(5);
     expect(parse).toHaveBeenCalledTimes(5);
@@ -94,7 +117,7 @@ describe('generation pipeline', () => {
       .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
       .mockResolvedValueOnce(response({ quiz: materials.quiz }))
       .mockResolvedValueOnce(response({ items: verdicts }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(parse.mock.calls.map(([request]) => request.text.format.name)).toEqual(['lecture_analysis', 'study_notes', 'study_quiz', 'study_cards', 'study_quiz', 'material_review']);
   });
@@ -107,7 +130,7 @@ describe('generation pipeline', () => {
       .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
       .mockResolvedValueOnce(response({ items: verdicts.slice(1) }))
       .mockResolvedValueOnce(response({ items: verdicts }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(parse.mock.calls.map(([request]) => request.text.format.name)).toEqual(['lecture_analysis', 'study_notes', 'study_quiz', 'study_cards', 'material_review', 'material_review']);
     expect(JSON.parse(parse.mock.calls[5][0].input[1].content).previousReviewFeedback.error).toContain('every material ID exactly once');
@@ -120,7 +143,7 @@ describe('generation pipeline', () => {
       .mockResolvedValueOnce(response({ items: verdicts.map((v) => v.itemId === materials.quiz[0].id ? { ...v, status: 'unsupported' } : v) }))
       .mockResolvedValueOnce(response({ quiz: materials.quiz }))
       .mockResolvedValueOnce(response({ items: verdicts }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(parse.mock.calls.map(([request]) => request.text.format.name)).toEqual(['lecture_analysis', 'study_notes', 'study_quiz', 'study_cards', 'material_review', 'study_quiz', 'material_review']);
     const repair = JSON.parse(parse.mock.calls[5][0].input[1].content);
@@ -146,9 +169,9 @@ describe('generation pipeline', () => {
           value = { quiz: materials.quiz };
         } else value = { quiz: rejectedQuiz };
       } else value = { items: data.materials.quiz[0].explanation === 'Schemas cure disease.' ? badVerdicts : verdicts };
-      return apiFormat === 'responses' ? response(structuredClone(value)) : { choices: [{ finish_reason: 'stop', message: { parsed: structuredClone(value), refusal: null } }] };
+      return apiFormat === 'responses' ? response(structuredClone(value)) : { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(value), refusal: null } }] };
     });
-    const client = apiFormat === 'responses' ? { responses: { parse } } : { chat: { completions: { parse } } };
+    const client = apiFormat === 'responses' ? { responses: { create: parse } } : { chat: { completions: { create: parse } } };
     const connection = { client, model: 'test-model', apiFormat } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(result.quiz).toEqual(materials.quiz);
@@ -165,7 +188,7 @@ describe('generation pipeline', () => {
       .mockRejectedValueOnce(new Error('temporary transport interruption'))
       .mockResolvedValueOnce(response({ quiz: materials.quiz }))
       .mockResolvedValueOnce(response({ items: verdicts }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     expect(JSON.parse(parse.mock.calls[6][0].input[1].content)).toEqual(JSON.parse(parse.mock.calls[5][0].input[1].content));
     expect(parse).toHaveBeenCalledTimes(8);
@@ -183,7 +206,7 @@ describe('generation pipeline', () => {
       .mockResolvedValueOnce(response({ quiz: materials.quiz }))
       .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
       .mockResolvedValueOnce(response({ items: verdicts }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
     const repair = JSON.parse(parse.mock.calls[5][0].input[1].content);
     expect(repair.previousCandidate).toEqual({ quiz: badQuiz });
@@ -199,7 +222,7 @@ describe('generation pipeline', () => {
       .mockResolvedValueOnce(response({ quiz: materials.quiz }))
       .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
       .mockResolvedValue(response({ items: verdicts.slice(1) }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await expect(generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn())).rejects.toMatchObject({ code: 'INVALID_OUTPUT', message: expect.stringContaining('verification report') });
     expect(parse).toHaveBeenCalledTimes(7);
   });
@@ -210,14 +233,14 @@ describe('generation pipeline', () => {
     else badQuiz[0].evidence[0].quote = 'Invented quotation.';
     const parse = vi.fn().mockResolvedValueOnce(response(analysis));
     for (let i = 0; i < 3; i++) parse.mockResolvedValueOnce(response(notePart)).mockResolvedValueOnce(response({ quiz: badQuiz })).mockResolvedValueOnce(response({ flashcards: materials.flashcards }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await expect(generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn())).rejects.toMatchObject({ code: kind === 'source_reference' ? 'VERIFICATION_FAILED' : 'INVALID_OUTPUT' });
     expect(parse.mock.calls.some(([request]) => request.text.format.name === 'material_review')).toBe(false);
     expect(parse).toHaveBeenCalledTimes(10);
   });
   it('runs analysis, parallel materials and review, computing counts from records', async () => {
     const parse = successfulCalls();
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     const emit = vi.fn();
     const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, emit);
     expect(result.verification.supportedItems).toBe(5);
@@ -228,7 +251,7 @@ describe('generation pipeline', () => {
   it('does not publish a kit when repeated reviews are unsupported', async () => {
     const parse = vi.fn().mockResolvedValueOnce(response(analysis));
     for (let i = 0; i < 3; i++) parse.mockResolvedValueOnce(response(notePart)).mockResolvedValueOnce(response({ quiz: materials.quiz })).mockResolvedValueOnce(response({ flashcards: materials.flashcards })).mockResolvedValueOnce(response({ items: verdicts.map((item) => ({ ...item, status: 'unsupported' })) }));
-    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
     await expect(generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn())).rejects.toMatchObject({ code: 'VERIFICATION_FAILED' });
     expect(parse).toHaveBeenCalledTimes(13);
   });

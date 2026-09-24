@@ -8,7 +8,7 @@ const connection = (result: unknown) => ({ model: 'test-model', apiFormat: 'resp
 describe('admin analysis diagnostics', () => {
   it('detects markdown-wrapped JSON without returning raw content', async () => {
     const result = await diagnoseAnalysis(input, connection({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: '```json\n{"private":"content"}\n```' }] }] }));
-    expect(result).toMatchObject({ jsonValid: false, representation: 'fenced' });
+    expect(result).toMatchObject({ jsonValid: true, schemaValid: false, representation: 'fenced' });
     expect(JSON.stringify(result)).not.toContain('private');
   });
   it('reports only structural issue paths', async () => {
