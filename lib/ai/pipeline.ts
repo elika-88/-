@@ -8,6 +8,7 @@ import { countWords } from '../input';
 import type { GenerationEvent } from '../contracts/generation';
 import type { GenerationError } from '../contracts/errors';
 import { segmentLecture } from '../source';
+import { parseStructuredOutput } from './structured-output';
 import { materialItems, MaterialValidationError, ReviewFailure, SourceReferenceError, validateEvidence, validateMaterials, validateReview } from './grounding';
 
 export class PipelineError extends Error {
@@ -39,7 +40,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
     signal.throwIfAborted();
     if (++calls > 15) throw new PipelineError('INVALID_OUTPUT', 'Generation exceeded its retry budget. Please try a shorter lecture.');
     if (apiFormat === 'chat_completions') {
-      const completion = await client.chat.completions.parse({
+      const completion = await client.chat.completions.create({
         model, store: false, max_completion_tokens: STRUCTURED_OUTPUT_TOKENS,
         ...(/^gpt-(5|6)/.test(model) ? { reasoning_effort: 'low' as const } : {}),
         messages: [{ role: 'developer', content: `${rules}\n${prompt}` }, { role: 'user', content: data }],
@@ -47,10 +48,10 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       }, { signal });
       const choice = completion.choices[0];
       if (choice?.message.refusal) throw new PipelineError('MODEL_REFUSAL', 'The model declined this lecture.');
-      if (completion.choices.length !== 1 || choice?.finish_reason !== 'stop' || !choice.message.parsed) throw new Error('Incomplete structured output.');
-      return schema.parse(choice.message.parsed);
+      if (completion.choices.length !== 1 || choice?.finish_reason !== 'stop' || !choice.message.content) throw new Error('Incomplete structured output.');
+      return parseStructuredOutput(choice.message.content, schema);
     }
-    const response = await client.responses.parse({
+    const response = await client.responses.create({
       model, store: false, max_output_tokens: STRUCTURED_OUTPUT_TOKENS,
       ...(/^gpt-(5|6)/.test(model) ? { reasoning: { effort: 'low' as const } } : {}),
       input: [{ role: 'developer', content: `${rules}\n${prompt}` }, { role: 'user', content: data }],
@@ -58,8 +59,9 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
     }, { signal });
     console.info(JSON.stringify({ event: 'generation_call', stage: name, milliseconds: Date.now() - started, status: response.status, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens }));
     if (response.output.some((item) => item.type === 'message' && item.content.some((part) => part.type === 'refusal'))) throw new PipelineError('MODEL_REFUSAL', 'The model declined this lecture. Try another source.');
-    if (response.status !== 'completed' || !response.output_parsed) throw new Error('Incomplete structured output.');
-    return schema.parse(response.output_parsed);
+    if (response.status !== 'completed') throw new Error('Incomplete structured output.');
+    const text = response.output.flatMap(item => item.type === 'message' ? item.content.flatMap(part => part.type === 'output_text' ? [part.text] : []) : []).join('');
+    return parseStructuredOutput(text, schema);
   }
   emit({ type: 'stage', runId, stage: 'analyzing' });
   let analysis: z.infer<typeof AnalysisSchema> | undefined;
@@ -78,7 +80,9 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       analysisFeedback = error instanceof SourceReferenceError
         ? 'The previous analysis had a quote that did not match its segment. Select a short literal passage from the supplied segment and use that segment ID. Retain every word, number and punctuation mark; do not omit embedded line numbers.'
         : 'The previous analysis was invalid or incomplete. Return every required schema field and at least one topic with a valid source quote.';
-      if (attempt === 3) throw new PipelineError('INVALID_OUTPUT', 'Unable to analyze the lecture with valid source references.');
+      if (attempt === 3) throw new PipelineError('INVALID_OUTPUT', error instanceof SourceReferenceError
+        ? 'The AI analysis quotes could not be matched to the original text.'
+        : 'The AI did not return a complete analysis in the required JSON format. Your lecture is saved.');
       emit({ type: 'retry', runId, stage: 'analyzing', attempt: attempt + 1, maxAttempts: 3, message: 'Retrying source analysis.' });
     }
   }

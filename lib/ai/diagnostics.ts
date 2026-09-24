@@ -5,6 +5,8 @@ import type { GenerateRequest } from '../input';
 import { AnalysisSchema } from '../schemas/studyMaterials';
 import { segmentLecture } from '../source';
 import { validateEvidence } from './grounding';
+import { parseStructuredOutput } from './structured-output';
+import { z } from 'zod';
 
 // Admin-only, one bounded request. Never return credentials, raw response text,
 // provider error bodies, or user material in diagnostics.
@@ -38,7 +40,7 @@ export async function diagnoseAnalysis(input: GenerateRequest, connection: Await
     }
     const summary = { model, apiFormat, status: status ?? 'missing', keys, types, refused, characters: text.length, representation: text.trim().startsWith('```') ? 'fenced' : text.trim().startsWith('{') ? 'object' : 'other' };
     let value: unknown;
-    try { value = JSON.parse(text); }
+    try { value = parseStructuredOutput(text, z.unknown()); }
     catch { return { ...summary, jsonValid: false }; }
     const parsed = AnalysisSchema.safeParse(value);
     if (!parsed.success) return { ...summary, jsonValid: true, schemaValid: false, issues: parsed.error.issues.slice(0, 12).map(issue => ({ path: issue.path.map(String).join('.'), code: issue.code })) };
