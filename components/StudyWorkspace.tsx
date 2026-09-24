@@ -198,7 +198,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
         onEvent: (event) => {
           if (operation.current !== current) return;
           if (event.type === "stage") { setProgress(stages[event.stage]); setLiveStage((value) => value && { ...value, stage: event.stage }); }
-          if (event.type === "retry") setProgress(`${stages[event.stage]}: attempt ${event.attempt} of ${event.maxAttempts}`);
+          if (event.type === "retry") { setProgress(`${stages[event.stage]}: attempt ${event.attempt} of ${event.maxAttempts}`); setLiveStage((value) => value && { ...value, stage: event.stage }); }
         },
       });
       if (operation.current !== current) return;

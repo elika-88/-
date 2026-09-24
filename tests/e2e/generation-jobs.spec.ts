@@ -87,12 +87,16 @@ test('saves the exact revision first, disables duplicate submits, restores and d
   expect(state.getJob()?.sourceRevision).toBe(state.revisions[state.lecture.id]);
   await expect(page.getByRole('button', { name: 'Generating', exact: true })).toBeDisabled();
   await page.reload(); await expect(page.getByTestId('generation-job')).toContainText('Queued');
+  await expect(page.locator('.gen-step[data-state="active"]')).toHaveCount(0);
   await page.clock.install();
   for (const stage of ['validating', 'analyzing', 'generating', 'verifying', 'correcting'] as const) {
     state.setJob({ status: 'running', stage }); await page.clock.runFor(4_000);
     await expect(page.getByTestId('generation-stage')).toContainText(`(${stage})`);
+    await expect(page.locator('.gen-step[aria-current="step"]')).toHaveAttribute('data-stage', stage);
+    await expect(page.locator('.gen-step[data-state="done"]')).toHaveCount(0);
   }
   await expect(page.getByTestId('generation-job')).not.toContainText('%');
+  await expect(page.getByTestId('generation-job')).not.toContainText('Usually takes');
   await page.getByTestId('generation-job').screenshot({ path: `test-results/background-running-${test.info().project.name}.png` });
   state.complete(); await page.clock.runFor(4_000);
   await expect(page.getByTestId('generation-stage')).toContainText('(complete)');
@@ -102,6 +106,14 @@ test('saves the exact revision first, disables duplicate submits, restores and d
   expect(state.counts().legacy).toBe(0); expect(state.counts().posts).toBe(1);
   expect(state.requestOwners.every(owner => owner === user.id)).toBe(true);
   const polls = state.counts().gets; await page.clock.runFor(12_000); expect(state.counts().gets).toBe(polls);
+});
+
+test('does not invent a stage while a running task has no reported stage', async ({ page }) => {
+  const state = await background(page); state.setJob({ status: 'running', stage: null });
+  await page.goto('/'); await expect(page.getByTestId('generation-job')).toContainText('Running');
+  await expect(page.getByTestId('generation-stage')).toHaveCount(0);
+  await expect(page.locator('.gen-step[aria-current="step"]')).toHaveCount(0);
+  await expect(page.locator('.gen-step[data-state="done"]')).toHaveCount(0);
 });
 
 test('shows backend errors, retries with a new key and cancels durably across refresh', async ({ page }) => {
@@ -137,12 +149,16 @@ test('cloud refresh replaces an older completed task result with another deviceâ
   state.setJob({ id: state.kit.runId }); state.complete();
   await page.goto('/');
   await expect(page.getByRole('heading', { name: state.kit.lectureTitle })).toBeVisible();
+  // Restoring the completed task also refreshes cloud history; let that request finish first.
+  await expect(page.getByTestId('generation-job')).toContainText('Succeeded');
   state.kit.runId = 'c0913c04-e964-4aec-9104-a684fe6a6825';
   state.kit.lectureTitle = 'New result from another device';
   state.setJob({ id: state.kit.runId }); state.complete();
-  const refreshed = page.waitForResponse(response => response.url().endsWith('/api/study-sessions') && response.request().method() === 'GET');
+  const refreshRequest = page.waitForRequest(request => request.url().endsWith('/api/study-sessions') && request.method() === 'GET');
   await page.getByRole('button', { name: 'Refresh cloud', exact: true }).click();
-  const payload = await (await refreshed).json();
+  const request = await refreshRequest;
+  const response = await request.response();
+  const payload = await response!.json();
   expect(payload.sessions[0].kit.lectureTitle).toBe('New result from another device');
   await expect(page.getByRole('heading', { name: 'New result from another device', exact: true })).toBeVisible();
 });

@@ -48,7 +48,8 @@ export function SourceEvidence({ source, evidence, onClose }: {
   }, []);
 
   useEffect(() => {
-    quoteRef.current?.scrollIntoView({ block: "center", behavior: selected === 0 ? "auto" : "smooth" });
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    quoteRef.current?.scrollIntoView({ block: "center", behavior: selected === 0 || reducedMotion ? "instant" : "smooth" });
   }, [selected]);
 
   return (

@@ -31,7 +31,7 @@ export function GenerationJobStatus({ task }: { task: ReturnType<typeof useGener
         {job?.stage && <p data-testid="generation-stage">{stageLabels[job.stage]} <span>({job.stage})</span></p>}
       </div>
     </div>
-    {job && (active || job.status === 'failed') && <GenerationSteps stage={job.stage ?? (job.status === 'queued' ? null : 'validating')} failed={job.status === 'failed'} running={active} startedAt={job.startedAt ?? job.createdAt} />}
+    {job && (active || job.status === 'failed') && <GenerationSteps stage={job.stage} failed={job.status === 'failed'} running={active} startedAt={job.startedAt ?? job.createdAt} />}
     {active && <p>{zh ? '任务在后台运行，刷新或离开页面后仍会继续。' : 'Your task continues in the background, even if you refresh or leave this page.'}</p>}
     {job?.status === 'failed' && <p role="alert">{job.error?.message || (zh ? '生成失败，请重试。' : 'Generation failed. Please try again.')}</p>}
     {job?.status === 'cancelled' && <p>{zh ? '任务已取消。你的课程仍保留。' : 'The task was cancelled. Your lecture is still saved.'}</p>}
