@@ -4,10 +4,10 @@ import { adminReady, adminSetupIssue, loginAdmin, logoutAdmin, readStoredSetting
 import { ApiBaseUrlSchema, DEFAULT_API_BASE_URL, DEFAULT_MODEL } from '@/lib/provider';
 import { validateGenerationInput } from '@/lib/input';
 import { createOpenAIClient } from '@/lib/openai';
-import { diagnoseAnalysis } from '@/lib/ai/diagnostics';
+import { diagnoseAnalysis, diagnoseGeneration } from '@/lib/ai/diagnostics';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 const cookieName = 'lumina_admin';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 async function authorized(request: NextRequest) { return validAdminSession(request.cookies.get(cookieName)?.value ?? ''); }
@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
     if (body.action === 'diagnose_ai') {
       const input = validateGenerationInput(body.input);
       if (!input.success || input.data.provider || input.data.lecture.length > 6000) return json({ error: 'Provide 80 words to 6,000 characters without a provider override.' }, 400);
-      return json(await diagnoseAnalysis(input.data, await createOpenAIClient()));
+      const connection = await createOpenAIClient();
+      return json(body.mode === 'generation' ? await diagnoseGeneration(input.data, connection) : await diagnoseAnalysis(input.data, connection));
     }
     if (body.action === 'logout') {
       await logoutAdmin(request.cookies.get(cookieName)?.value ?? '');

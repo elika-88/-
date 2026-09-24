@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { parseStructuredOutput } from '@/lib/ai/structured-output';
+import { parseStructuredOutput, StructuredOutputError } from '@/lib/ai/structured-output';
 const schema = z.strictObject({ title: z.string(), count: z.number().int() });
 const raw = '{"title":"Nightingale","count":3}';
 describe('strict structured output with Markdown envelope compatibility', () => {
@@ -23,6 +23,6 @@ describe('strict structured output with Markdown envelope compatibility', () => 
     expect(() => parseStructuredOutput(text, schema)).toThrow();
   });
   it('bounds parsing size', () => {
-    expect(() => parseStructuredOutput(' '.repeat(1_000_001), schema)).toThrow('size limit');
+    expect(() => parseStructuredOutput(' '.repeat(1_000_001), schema)).toThrow(StructuredOutputError);
   });
 });

@@ -7,6 +7,20 @@ import { segmentLecture } from '../source';
 import { validateEvidence } from './grounding';
 import { parseStructuredOutput } from './structured-output';
 import { z } from 'zod';
+import { generateStudyKit, type GenerationDiagnostic } from './pipeline';
+import { randomUUID } from 'node:crypto';
+
+export async function diagnoseGeneration(input: GenerateRequest, connection: Awaited<ReturnType<typeof createOpenAIClient>>) {
+  const diagnostics: GenerationDiagnostic[] = [];
+  let stage: string | null = null;
+  const started = Date.now();
+  try {
+    const result = await generateStudyKit(input, connection, randomUUID(), AbortSignal.timeout(220000), event => { if ('stage' in event) stage = event.stage; }, item => diagnostics.push(item));
+    return { success: true, milliseconds: Date.now() - started, quiz: result.quiz.length, cards: result.flashcards.length, supported: result.verification.supportedItems, total: result.verification.totalItems, diagnostics };
+  } catch (error) {
+    return { success: false, milliseconds: Date.now() - started, stage, kind: error instanceof Error ? error.name : 'unknown', diagnostics };
+  }
+}
 
 // Admin-only, one bounded request. Never return credentials, raw response text,
 // provider error bodies, or user material in diagnostics.
