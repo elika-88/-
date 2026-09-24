@@ -48,7 +48,7 @@ describe('generation pipeline', () => {
   it.each(['responses', 'chat_completions'] as const)('handles the actual SDK HTTP envelope with fenced JSON at every stage via %s', async (apiFormat) => {
     const outputs = [analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }];
     const fetcher = vi.fn().mockImplementation(async () => {
-      const text = '```json\n' + JSON.stringify(wire(outputs.shift())) + '\n```';
+      const text = '```json\n' + JSON.stringify({ ...wire(outputs.shift()) as object, provider_metadata: 'must not be saved' }) + '\n```';
       return Response.json(apiFormat === 'responses'
         ? { id: 'resp-test', status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] }] }
         : { id: 'chat-test', choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: text, refusal: null } }] });
@@ -56,6 +56,7 @@ describe('generation pipeline', () => {
     const client = new OpenAI({ apiKey: 'test-only-key', baseURL: 'https://relay.example/v1', fetch: fetcher, maxRetries: 0 });
     const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, { client, model: 'test-model', apiFormat }, kit.runId, new AbortController().signal, vi.fn());
     expect(result.verification.supportedItems).toBe(5);
+    expect(JSON.stringify(result)).not.toContain('must not be saved');
     expect(fetcher).toHaveBeenCalledTimes(5);
   });
 
