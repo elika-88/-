@@ -8,7 +8,7 @@ import { countWords } from '../input';
 import type { GenerationEvent } from '../contracts/generation';
 import type { GenerationError } from '../contracts/errors';
 import { segmentLecture } from '../source';
-import { parseStructuredOutput, StructuredOutputError } from './structured-output';
+import { parseStructuredOutput, StructuredOutputError, validateStructuredValue } from './structured-output';
 import { citationCatalog, citationSelectionSchema, CitationSelectionError, resolveCitationSelections } from './citation-catalog';
 import { materialItems, MaterialValidationError, ReviewFailure, SourceReferenceError, validateEvidence, validateMaterials, validateReview } from './grounding';
 
@@ -51,9 +51,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       const metadata = { stage: name, representation: text.trim().startsWith('```') ? 'fenced' : 'bare', characters: text.length };
       try {
         const decoded = resolveCitationSelections(parseStructuredOutput(text, z.unknown()), catalog);
-        const parsed = schema.safeParse(decoded);
-        if (!parsed.success) throw new StructuredOutputError('schema', parsed.error.issues.slice(0, 16).map(issue => ({ path: issue.path.map(String).join('.'), code: issue.code })));
-        const value = parsed.data;
+        const value = validateStructuredValue(decoded, schema, true);
         diagnose?.({ ...metadata, outcome: 'valid' });
         return value;
       } catch (error) {
