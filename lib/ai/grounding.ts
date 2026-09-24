@@ -18,6 +18,15 @@ export class SourceReferenceError extends Error {
   }
 }
 
+type MaterialIssue = { itemId: string; code: 'source_reference' | 'duplicate_id' | 'topic_reference' | 'duplicate_options' | 'duplicate_content'; reason: string };
+
+export class MaterialValidationError extends Error {
+  constructor(public issues: MaterialIssue[]) {
+    super('Learning materials failed validation.');
+    this.name = 'MaterialValidationError';
+  }
+}
+
 function sourceQuote(quote: string, text: string): string | null {
   if (!quote.trim()) return null;
   if (text.includes(quote)) return quote;
@@ -53,18 +62,34 @@ export function validateEvidence(evidence: Evidence[], segments: SourceSegment[]
 
 export function validateMaterials(materials: GeneratedMaterials, topics: Topic[], segments: SourceSegment[]) {
   const items = materialItems(materials);
-  if (new Set(items.map((item) => item.id)).size !== items.length) throw new Error('Material IDs must be unique.');
   if (!topics.length || new Set(topics.map((item) => item.id)).size !== topics.length) throw new Error('Invalid topic IDs.');
-  for (const item of [...items, ...topics]) validateEvidence(item.evidence, segments);
+  for (const topic of topics) validateEvidence(topic.evidence, segments);
+  const issues: MaterialIssue[] = [];
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (ids.has(item.id)) issues.push({ itemId: item.id, code: 'duplicate_id', reason: 'Use a unique ID across all material groups.' });
+    ids.add(item.id);
+    try { validateEvidence(item.evidence, segments); }
+    catch { issues.push({ itemId: item.id, code: 'source_reference', reason: 'Copy a literal quote from its stated segment. Preserve embedded numbers and punctuation.' }); }
+  }
   const topicIds = new Set(topics.map((item) => item.id));
   const references = [...materials.summary.flatMap((item) => item.topicIds), ...materials.keyPoints.map((item) => item.topicId), ...materials.quiz.map((item) => item.topicId), ...materials.flashcards.map((item) => item.topicId)];
-  if (references.some((id) => !topicIds.has(id))) throw new Error('Unknown topic reference.');
+  for (const item of [...materials.summary, ...materials.keyPoints, ...materials.quiz, ...materials.flashcards]) {
+    const referenced = 'topicIds' in item ? item.topicIds : [item.topicId];
+    if (referenced.some((id) => !topicIds.has(id))) issues.push({ itemId: item.id, code: 'topic_reference', reason: 'Use only topic IDs from the supplied analysis.' });
+  }
   for (const question of materials.quiz) {
-    if (new Set(question.options.map((option) => option.trim().toLowerCase())).size !== 4) throw new Error('Quiz options must be distinct.');
+    if (new Set(question.options.map((option) => option.trim().toLowerCase())).size !== 4) issues.push({ itemId: question.id, code: 'duplicate_options', reason: 'Provide four distinct answer options.' });
   }
-  for (const texts of [materials.quiz.map((item) => item.question), materials.flashcards.map((item) => item.front), materials.keyPoints.map((item) => item.text)]) {
-    if (new Set(texts.map((text) => text.trim().toLowerCase())).size !== texts.length) throw new Error('Duplicate learning items.');
+  for (const group of [materials.quiz.map((item) => ({ id: item.id, text: item.question })), materials.flashcards.map((item) => ({ id: item.id, text: item.front })), materials.keyPoints]) {
+    const seen = new Set<string>();
+    for (const item of group) {
+      const text = item.text.trim().toLowerCase();
+      if (seen.has(text)) issues.push({ itemId: item.id, code: 'duplicate_content', reason: 'Remove this duplicate or replace it with a distinct source-supported item.' });
+      seen.add(text);
+    }
   }
+  if (issues.length) throw new MaterialValidationError(issues);
   return new Set(references).size;
 }
 

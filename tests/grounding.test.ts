@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { SourceReferenceError, validateEvidence } from '@/lib/ai/grounding';
+import { MaterialValidationError, SourceReferenceError, validateEvidence, validateMaterials } from '@/lib/ai/grounding';
 import { segmentLecture } from '@/lib/source';
+import { studyKitFixture } from './fixtures/studyKit';
 
 const excerpt = "The name of Florence Nightingale lives in the memory of the\n\n\u3000\u3000world by virtue of the heroic adventure of the Crimea. Had she\n\n\u3000\u3000died - as she nearly did - upon her return to England, her\n\n\u3000\u3000reputation would hardly have been different; her legend would\n\n\u3000\u30005 have come down to us almost as we know it today - that gentle\n\n\u3000\u3000vision of female virtue";
 
@@ -62,5 +63,28 @@ describe('source reference layout tolerance', () => {
     const before = structuredClone(evidence);
     expect(() => validateEvidence(evidence, segmentLecture(excerpt))).toThrow(SourceReferenceError);
     expect(evidence).toEqual(before);
+  });
+});
+
+describe('actionable material validation', () => {
+  it('identifies invalid material IDs, references, duplicate options and duplicate content', () => {
+    const kit = studyKitFixture();
+    kit.quiz[0].options[1] = kit.quiz[0].options[0];
+    kit.flashcards[0].topicId = 'unknown';
+    kit.keyPoints.push(structuredClone(kit.keyPoints[0]));
+    kit.summary[0].evidence = [{ segmentId: 's1', quote: 'Invented.' }];
+    try {
+      validateMaterials(kit, kit.topics, kit.source.segments);
+      expect.fail('Invalid materials must be rejected.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(MaterialValidationError);
+      expect((error as MaterialValidationError).issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ itemId: 'q1', code: 'duplicate_options' }),
+        expect.objectContaining({ itemId: 'f1', code: 'topic_reference' }),
+        expect.objectContaining({ itemId: 'point1', code: 'duplicate_id' }),
+        expect.objectContaining({ itemId: 'point1', code: 'duplicate_content' }),
+        expect.objectContaining({ itemId: 'summary1', code: 'source_reference' }),
+      ]));
+    }
   });
 });
