@@ -48,13 +48,13 @@ export function SourceEvidence({ source, evidence, onClose }: {
   }, []);
 
   useEffect(() => {
-    quoteRef.current?.scrollIntoView({ block: "center" });
+    quoteRef.current?.scrollIntoView({ block: "center", behavior: selected === 0 ? "auto" : "smooth" });
   }, [selected]);
 
   return (
     <dialog
       ref={dialogRef}
-      className={styles.sourceDialog}
+      className={`${styles.sourceDialog} lumina-dialog`}
       aria-labelledby={titleId}
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onClick={(event) => {
