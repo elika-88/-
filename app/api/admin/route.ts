@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AdminSettingsSchema, SaveAdminSettingsSchema } from '@/lib/admin-schema';
 import { adminReady, adminSetupIssue, loginAdmin, logoutAdmin, readStoredSettings, saveStoredSettings, validAdminSession, withAdminDb, type AdminLoginResult } from '@/lib/server/admin-db';
 import { ApiBaseUrlSchema, DEFAULT_API_BASE_URL, DEFAULT_MODEL } from '@/lib/provider';
+import { validateGenerationInput } from '@/lib/input';
+import { createOpenAIClient } from '@/lib/openai';
+import { diagnoseAnalysis } from '@/lib/ai/diagnostics';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 const cookieName = 'lumina_admin';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 async function authorized(request: NextRequest) { return validAdminSession(request.cookies.get(cookieName)?.value ?? ''); }
@@ -61,6 +65,11 @@ export async function POST(request: NextRequest) {
       return loginResponse(request, await loginAdmin(body.password));
     }
     if (!await authorized(request)) return json({ error: 'Please log in.' }, 401);
+    if (body.action === 'diagnose_ai') {
+      const input = validateGenerationInput(body.input);
+      if (!input.success || input.data.provider || input.data.lecture.length > 6000) return json({ error: 'Provide 80 words to 6,000 characters without a provider override.' }, 400);
+      return json(await diagnoseAnalysis(input.data, await createOpenAIClient()));
+    }
     if (body.action === 'logout') {
       await logoutAdmin(request.cookies.get(cookieName)?.value ?? '');
       const response = json({ authenticated: false });
