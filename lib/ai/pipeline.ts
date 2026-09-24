@@ -8,7 +8,7 @@ import { countWords } from '../input';
 import type { GenerationEvent } from '../contracts/generation';
 import type { GenerationError } from '../contracts/errors';
 import { segmentLecture } from '../source';
-import { parseStructuredOutput } from './structured-output';
+import { parseStructuredOutput, StructuredOutputError } from './structured-output';
 import { materialItems, MaterialValidationError, ReviewFailure, SourceReferenceError, validateEvidence, validateMaterials, validateReview } from './grounding';
 
 export class PipelineError extends Error {
@@ -29,8 +29,9 @@ const NotesSchema = GeneratedMaterialsSchema.pick({ lectureTitle: true, overview
 const QuizSchema = GeneratedMaterialsSchema.pick({ quiz: true });
 const CardsSchema = GeneratedMaterialsSchema.pick({ flashcards: true });
 const STRUCTURED_OUTPUT_TOKENS = 8_000;
+export type GenerationDiagnostic = { stage: string; outcome: string; representation: string; characters: number; issues?: { path: string; code: string }[] };
 
-export async function generateStudyKit(input: GenerateRequest, connection: Awaited<ReturnType<typeof createOpenAIClient>>, runId: string, signal: AbortSignal, emit: (event: GenerationEvent) => void) {
+export async function generateStudyKit(input: GenerateRequest, connection: Awaited<ReturnType<typeof createOpenAIClient>>, runId: string, signal: AbortSignal, emit: (event: GenerationEvent) => void, diagnose?: (diagnostic: GenerationDiagnostic) => void) {
   const { client, model, apiFormat = 'responses' } = connection;
   const segments = segmentLecture(input.lecture);
   const source = JSON.stringify({ title: input.title, language: input.outputLanguage, segments });
@@ -39,29 +40,44 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
     const started = Date.now();
     signal.throwIfAborted();
     if (++calls > 15) throw new PipelineError('INVALID_OUTPUT', 'Generation exceeded its retry budget. Please try a shorter lecture.');
+    const format = zodTextFormat(schema, name);
+    // Compatible relays may ignore or incompletely translate text.format. Supply
+    // the same contract in the prompt, while retaining strict server validation.
+    const instructions = `${rules}\n${prompt}\nReturn one JSON object matching this complete JSON Schema. Include every required field; use exactly the listed names and types. No Markdown or explanatory prose.\n${JSON.stringify(format.schema)}`;
+    const parseText = (text: string) => {
+      const metadata = { stage: name, representation: text.trim().startsWith('```') ? 'fenced' : 'bare', characters: text.length };
+      try {
+        const value = parseStructuredOutput(text, schema);
+        diagnose?.({ ...metadata, outcome: 'valid' });
+        return value;
+      } catch (error) {
+        diagnose?.({ ...metadata, outcome: error instanceof StructuredOutputError ? error.kind : 'invalid', issues: error instanceof StructuredOutputError ? error.issues : undefined });
+        throw error;
+      }
+    };
     if (apiFormat === 'chat_completions') {
       const completion = await client.chat.completions.create({
         model, store: false, max_completion_tokens: STRUCTURED_OUTPUT_TOKENS,
         ...(/^gpt-(5|6)/.test(model) ? { reasoning_effort: 'low' as const } : {}),
-        messages: [{ role: 'developer', content: `${rules}\n${prompt}` }, { role: 'user', content: data }],
+        messages: [{ role: 'developer', content: instructions }, { role: 'user', content: data }],
         response_format: zodResponseFormat(schema, name),
       }, { signal });
       const choice = completion.choices[0];
       if (choice?.message.refusal) throw new PipelineError('MODEL_REFUSAL', 'The model declined this lecture.');
       if (completion.choices.length !== 1 || choice?.finish_reason !== 'stop' || !choice.message.content) throw new Error('Incomplete structured output.');
-      return parseStructuredOutput(choice.message.content, schema);
+      return parseText(choice.message.content);
     }
     const response = await client.responses.create({
       model, store: false, max_output_tokens: STRUCTURED_OUTPUT_TOKENS,
       ...(/^gpt-(5|6)/.test(model) ? { reasoning: { effort: 'low' as const } } : {}),
-      input: [{ role: 'developer', content: `${rules}\n${prompt}` }, { role: 'user', content: data }],
-      text: { format: zodTextFormat(schema, name) },
+      input: [{ role: 'developer', content: instructions }, { role: 'user', content: data }],
+      text: { format },
     }, { signal });
     console.info(JSON.stringify({ event: 'generation_call', stage: name, milliseconds: Date.now() - started, status: response.status, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens }));
     if (response.output.some((item) => item.type === 'message' && item.content.some((part) => part.type === 'refusal'))) throw new PipelineError('MODEL_REFUSAL', 'The model declined this lecture. Try another source.');
     if (response.status !== 'completed') throw new Error('Incomplete structured output.');
     const text = response.output.flatMap(item => item.type === 'message' ? item.content.flatMap(part => part.type === 'output_text' ? [part.text] : []) : []).join('');
-    return parseStructuredOutput(text, schema);
+    return parseText(text);
   }
   emit({ type: 'stage', runId, stage: 'analyzing' });
   let analysis: z.infer<typeof AnalysisSchema> | undefined;
@@ -79,7 +95,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       if (signal.aborted || error instanceof PipelineError || (error as { status?: number })?.status) throw error;
       analysisFeedback = error instanceof SourceReferenceError
         ? 'The previous analysis had a quote that did not match its segment. Select a short literal passage from the supplied segment and use that segment ID. Retain every word, number and punctuation mark; do not omit embedded line numbers.'
-        : 'The previous analysis was invalid or incomplete. Return every required schema field and at least one topic with a valid source quote.';
+        : `The previous analysis was invalid or incomplete. Return every required schema field and at least one topic with a valid source quote. ${error instanceof StructuredOutputError ? JSON.stringify({ kind: error.kind, fields: error.issues }) : ''}`;
       if (attempt === 3) throw new PipelineError('INVALID_OUTPUT', error instanceof SourceReferenceError
         ? 'The AI analysis quotes could not be matched to the original text.'
         : 'The AI did not return a complete analysis in the required JSON format. Your lecture is saved.');
@@ -151,6 +167,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       // A transport/schema failure during review repeats review only.
       feedback = error instanceof ReviewFailure ? { reviewIssues: error.issues }
         : error instanceof MaterialValidationError ? { materialIssues: error.issues }
+        : error instanceof StructuredOutputError ? { formatError: error.kind, fields: error.issues }
         : feedback ?? { validationError: 'Output did not match the required structure. Return all required fields with valid references.' };
       reviewFeedback = phase === 'review' && !(error instanceof ReviewFailure)
         ? { error: 'The previous verification report was invalid or incomplete. Return every material ID exactly once with status and a nonempty reason. No extra IDs.' }

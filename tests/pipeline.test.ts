@@ -109,6 +109,27 @@ describe('generation pipeline', () => {
     expect(result.verification.supportedItems).toBe(5);
     expect(parse).toHaveBeenCalledTimes(5);
     expect(parse.mock.calls[0][0].response_format.type).toBe('json_schema');
+    expect(parse.mock.calls[0][0].messages[0].content).toContain(JSON.stringify(parse.mock.calls[0][0].response_format.json_schema.schema));
+  });
+
+  it('repairs invalid fields with explicit schema feedback and exposes no content in diagnostics', async () => {
+    const badQuiz = structuredClone(materials.quiz);
+    const invalid = { quiz: badQuiz.map(item => ({ ...Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'correctAnswer')), answer: 'private-provider-content' })) };
+    const parse = vi.fn().mockResolvedValueOnce(response(analysis))
+      .mockResolvedValueOnce(response(notePart))
+      .mockResolvedValueOnce(response(invalid))
+      .mockResolvedValueOnce(response({ flashcards: materials.flashcards }))
+      .mockResolvedValueOnce(response({ quiz: materials.quiz }))
+      .mockResolvedValueOnce(response({ items: verdicts }));
+    const connection = { client: { responses: { create: parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const diagnose = vi.fn();
+    await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn(), diagnose);
+    const correction = JSON.parse(parse.mock.calls[4][0].input[1].content);
+    expect(correction.previousValidationFeedback.fields).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'quiz.0.correctAnswer' })]));
+    expect(parse.mock.calls[4][0].input[0].content).toContain(JSON.stringify(parse.mock.calls[4][0].text.format.schema));
+    expect(diagnose.mock.calls.flat().some(d => d.stage === 'study_quiz' && d.outcome === 'schema')).toBe(true);
+    expect(JSON.stringify(diagnose.mock.calls)).not.toContain('private-provider-content');
+    expect(parse).toHaveBeenCalledTimes(6);
   });
   it('retries only a failed group while retaining successful siblings', async () => {
     const parse = vi.fn().mockResolvedValueOnce(response(analysis))
