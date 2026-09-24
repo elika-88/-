@@ -11,12 +11,44 @@ export function materialItems(materials: GeneratedMaterials) {
   return [materials.overview, ...materials.summary, ...materials.keyPoints, ...materials.quiz, ...materials.flashcards];
 }
 
+export class SourceReferenceError extends Error {
+  constructor() {
+    super('Quote does not match its source segment.');
+    this.name = 'SourceReferenceError';
+  }
+}
+
+function sourceQuote(quote: string, text: string): string | null {
+  if (!quote.trim()) return null;
+  if (text.includes(quote)) return quote;
+
+  // Match whitespace only, then recover the literal source span for saved citations.
+  // Never delete line numbers, fix OCR words, or match across source segments.
+  const parts: string[] = [];
+  const starts: number[] = [];
+  const ends: number[] = [];
+  for (const match of text.matchAll(/\s+|\S+/gu)) {
+    const value = /^\s/u.test(match[0]) ? ' ' : match[0];
+    parts.push(value);
+    for (let i = 0; i < value.length; i++) {
+      starts.push(match.index + i);
+      ends.push(value === ' ' ? match.index + match[0].length : match.index + i + 1);
+    }
+  }
+  const normalized = quote.replace(/\s+/gu, ' ').trim();
+  const index = parts.join('').indexOf(normalized);
+  return index === -1 ? null : text.slice(starts[index], ends[index + normalized.length - 1]);
+}
+
 export function validateEvidence(evidence: Evidence[], segments: SourceSegment[]) {
   if (!evidence.length) throw new Error('Missing source evidence.');
-  for (const item of evidence) {
+  const quotes = evidence.map((item) => {
     const segment = segments.find((part) => part.id === item.segmentId);
-    if (!item.quote.trim() || !segment?.text.includes(item.quote)) throw new Error('Quote does not match its source segment.');
-  }
+    const quote = segment ? sourceQuote(item.quote, segment.text) : null;
+    if (quote === null) throw new SourceReferenceError();
+    return quote;
+  });
+  for (let i = 0; i < evidence.length; i++) evidence[i].quote = quotes[i];
 }
 
 export function validateMaterials(materials: GeneratedMaterials, topics: Topic[], segments: SourceSegment[]) {

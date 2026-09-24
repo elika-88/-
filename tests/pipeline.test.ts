@@ -39,6 +39,45 @@ describe('source grounding', () => {
 });
 
 describe('generation pipeline', () => {
+  it.each(['responses', 'chat_completions'] as const)('accepts reflowed citations and saves literal source spans through %s', async (apiFormat) => {
+    const lecture = kit.source.text.replace('defines a', 'defines\n\n\u3000\u3000a');
+    const outputs = structuredClone([analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }]);
+    const parse = vi.fn().mockImplementation(async () => {
+      const value = outputs.shift();
+      return apiFormat === 'responses' ? response(value) : { choices: [{ finish_reason: 'stop', message: { parsed: value, refusal: null } }] };
+    });
+    const client = apiFormat === 'responses' ? { responses: { parse } } : { chat: { completions: { parse } } };
+    const connection = { client, model: 'test-model', apiFormat } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const result = await generateStudyKit({ title: '', lecture, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
+    expect(parse).toHaveBeenCalledTimes(5);
+    expect(result.source.text).toBe(lecture);
+    for (const item of [...result.topics, result.overview, ...result.summary, ...result.keyPoints, ...result.quiz, ...result.flashcards, ...result.verification.items]) {
+      for (const evidence of item.evidence) expect(evidence.quote).toBe(lecture);
+    }
+  });
+
+  it('gives analysis retries source-reference feedback without accepting invented quotes', async () => {
+    const bad = structuredClone(analysis);
+    bad.topics[0].evidence[0].quote = 'An invented claim.';
+    const outputs = [bad, analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }];
+    const parse = vi.fn().mockImplementation(async () => response(structuredClone(outputs.shift())));
+    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const result = await generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn());
+    expect(parse).toHaveBeenCalledTimes(6);
+    expect(parse.mock.calls[1][0].input[0].content).toContain('The previous analysis had a quote that did not match its segment.');
+    expect(result.topics).toEqual(kit.topics);
+  });
+
+  it('fails after three invalid analyses without generating any materials', async () => {
+    const bad = structuredClone(analysis);
+    bad.topics[0].evidence[0].quote = 'An invented claim.';
+    const parse = vi.fn().mockImplementation(async () => response(structuredClone(bad)));
+    const connection = { client: { responses: { parse } }, model: 'test-model' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    await expect(generateStudyKit({ title: '', lecture: kit.source.text, outputLanguage: 'en' }, connection, kit.runId, new AbortController().signal, vi.fn())).rejects.toMatchObject({ code: 'INVALID_OUTPUT' });
+    expect(parse).toHaveBeenCalledTimes(3);
+    expect(parse.mock.calls.every(([request]) => request.text.format.name === 'lecture_analysis')).toBe(true);
+  });
+
   it('uses the configured chat format with strict structured output and full review', async () => {
     const outputs = [analysis, notePart, { quiz: materials.quiz }, { flashcards: materials.flashcards }, { items: verdicts }];
     const parse = vi.fn().mockImplementation(async () => ({ choices: [{ finish_reason: 'stop', message: { parsed: outputs.shift(), refusal: null } }] }));
