@@ -9,6 +9,10 @@ export type Translations = {
   groupEarlier: string;
   expandSidebar: string;
   collapseSidebar: string;
+  pinned: string;
+  pin: string;
+  unpin: string;
+  showRecents: string;
   noMatching: string;
   noSaved: string;
   untitled: string;
@@ -85,6 +89,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     groupEarlier: "Earlier",
     expandSidebar: "Expand sidebar",
     collapseSidebar: "Collapse sidebar",
+    pinned: "Pinned",
+    pin: "Pin",
+    unpin: "Unpin",
+    showRecents: "Show recent lectures",
     noMatching: "No matching lectures",
     noSaved: "No saved lectures yet",
     untitled: "Untitled lecture",
@@ -159,6 +167,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     groupEarlier: "更早",
     expandSidebar: "展开侧栏",
     collapseSidebar: "收起侧栏",
+    pinned: "已固定",
+    pin: "固定",
+    unpin: "取消固定",
+    showRecents: "查看最近讲稿",
     noMatching: "未找到匹配的讲座",
     noSaved: "暂无保存的讲座",
     untitled: "未命名讲座",
@@ -233,6 +245,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     groupEarlier: "Ранее",
     expandSidebar: "Развернуть панель",
     collapseSidebar: "Свернуть панель",
+    pinned: "Закреплённые",
+    pin: "Закрепить",
+    unpin: "Открепить",
+    showRecents: "Недавние лекции",
     noMatching: "Лекции не найдены",
     noSaved: "Нет сохраненных лекций",
     untitled: "Лекция без названия",
@@ -307,6 +323,10 @@ export const translations: Record<SupportedLanguage, Translations> = {
     groupEarlier: "Ертерек",
     expandSidebar: "Панельді ашу",
     collapseSidebar: "Панельді жию",
+    pinned: "Бекітілген",
+    pin: "Бекіту",
+    unpin: "Босату",
+    showRecents: "Соңғы дәрістер",
     noMatching: "Сәйкес дәрістер табылмады",
     noSaved: "Сақталған дәрістер жоқ",
     untitled: "Атаусыз дәріс",

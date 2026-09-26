@@ -1,36 +1,47 @@
 /*
- * Lecture history sidebar — redesign.
+ * Lecture sidebar — Claude-style redesign.
  * Loaded after globals.css and supersedes its older sidebar rules.
  *
- * Collapse behaviour (Claude / ChatGPT style):
- *  - One width transition drives both the panel and the workspace margin, on the
- *    same curve, so the page glides instead of jumping.
- *  - Rail icons sit at the exact x-position of the expanded icons, so collapsing
- *    reads as "labels fold away" rather than two panels swapping.
- *  - The outgoing layer fades out fast; the incoming one fades in after a short
- *    delay. No scaling or sliding of content.
+ * Look: a quiet tinted column with no hard divider, generous rows, one accent
+ * (the round "new" button), and an account card at the bottom.
+ * Motion:
+ *  - Collapse/expand: one width transition drives the panel and the workspace
+ *    margin on the same curve. Rail icons sit at the same x as the expanded
+ *    icons, so collapsing reads as labels folding away.
+ *  - Peek: while collapsed, hovering the Recents icon floats the full panel over
+ *    the page as a card (no layout shift); click to keep it open.
  */
 :root {
-  --sb-expanded: 264px;
+  --sb-expanded: 272px;
   --sb-rail: 56px;
   --sb-ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --sb-dur: 320ms;
-  --sb-bg: var(--surface-subtle);
-  --sb-line: color-mix(in srgb, var(--border) 70%, transparent);
+  --sb-dur: 300ms;
+  --sb-bg: color-mix(in srgb, var(--background) 95%, var(--foreground) 5%);
+  --sb-line: color-mix(in srgb, var(--foreground) 8%, transparent);
   --sb-hover: color-mix(in srgb, var(--foreground) 6%, transparent);
-  --sb-active: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --sb-active: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --sb-text: color-mix(in srgb, var(--foreground) 82%, var(--background));
+  --sb-shadow: 0 1px 2px #0000000d, 0 12px 40px #0000001f;
+}
+html.dark {
+  --sb-bg: color-mix(in srgb, var(--background) 82%, #000);
+  --sb-line: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --sb-hover: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --sb-active: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --sb-shadow: 0 1px 2px #0000004d, 0 16px 48px #00000080;
 }
 
 /* ---------- Shell ---------- */
 html:root .lecture-sidebar {
   width: var(--sb-expanded);
   background: var(--sb-bg);
-  border-right: 1px solid var(--sb-line);
+  border-right: 0;
+  box-shadow: inset -1px 0 0 var(--sb-line);
   transition: width var(--sb-dur) var(--sb-ease);
   overflow: hidden;
-  contain: layout paint;
 }
 html:root .lecture-sidebar.rail { width: var(--sb-rail); }
+html:root .lecture-sidebar:has(.is-peek) { overflow: visible; z-index: 80; }
 html:root .workspace { margin-left: var(--sb-expanded); transition: margin-left var(--sb-dur) var(--sb-ease); }
 html:root .sidebar-collapsed .workspace { margin-left: var(--sb-rail); }
 @media (max-width: 767px) {
@@ -46,142 +57,220 @@ html:root .gpt-rail-content {
   opacity: 0;
   transition: opacity 90ms linear;
 }
-html:root .gpt-sidebar-container.is-collapsed .gpt-rail-content {
-  opacity: 1;
-  transform: none;
-  transition: opacity 180ms ease-out 140ms;
-}
+html:root .gpt-sidebar-container.is-collapsed .gpt-rail-content { opacity: 1; transform: none; transition: opacity 180ms ease-out 130ms; }
 html:root .gpt-expanded-content {
   width: var(--sb-expanded);
-  padding: 10px 8px 12px;
+  padding: 10px 10px 10px;
   transform: none;
   opacity: 1;
-  transition: opacity 220ms ease-out 90ms;
+  transition: opacity 220ms ease-out 80ms;
 }
-html:root .gpt-sidebar-container.is-collapsed .gpt-expanded-content {
-  opacity: 0;
+html:root .gpt-sidebar-container.is-collapsed .gpt-expanded-content { opacity: 0; transform: none; transition: opacity 100ms ease-out; }
+
+/* Peek card */
+html:root .gpt-sidebar-container.is-collapsed.is-peek .gpt-expanded-content {
+  top: 8px;
+  left: 8px;
+  height: calc(100% - 16px);
+  border-radius: 16px;
+  background: var(--sb-bg);
+  box-shadow: var(--sb-shadow), inset 0 0 0 1px var(--sb-line);
+  opacity: 1;
+  pointer-events: auto;
   transform: none;
-  transition: opacity 110ms ease-out;
+  transition: opacity 180ms ease-out, transform 260ms var(--sb-ease);
+}
+@starting-style {
+  html:root .gpt-sidebar-container.is-collapsed.is-peek .gpt-expanded-content { opacity: 0; transform: translateX(-10px); }
 }
 
 /* ---------- Rail ---------- */
-html:root .gpt-rail-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: var(--muted-foreground);
-}
-html:root .gpt-rail-btn:hover { background: var(--sb-hover); color: var(--foreground); }
-.gpt-rail-icons { gap: 4px; margin-top: 8px; flex: 1; }
-.gpt-rail-footer { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+html:root .gpt-rail-btn { width: 40px; height: 40px; border-radius: 10px; color: var(--muted-foreground); }
+html:root .gpt-rail-btn:hover, html:root .gpt-rail-btn.is-active { background: var(--sb-hover); color: var(--foreground); }
+.gpt-rail-icons { gap: 4px; margin-top: 10px; flex: 1; }
+.gpt-rail-footer { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .gpt-rail-btn.brand { position: relative; }
-.gpt-rail-btn.brand .sb-logo, .gpt-rail-btn.brand .sb-expand-icon { transition: opacity 150ms ease-out, transform 200ms var(--sb-ease); }
+.gpt-rail-btn.brand :is(.sb-logo, .sb-expand-icon) { transition: opacity 150ms ease-out, transform 200ms var(--sb-ease); }
 .gpt-rail-btn.brand .sb-expand-icon { position: absolute; opacity: 0; transform: scale(0.8); }
 .gpt-rail-btn.brand:is(:hover, :focus-visible) .sb-logo { opacity: 0; transform: scale(0.8); }
 .gpt-rail-btn.brand:is(:hover, :focus-visible) .sb-expand-icon { opacity: 1; transform: none; }
+html:root .gpt-rail-btn.sb-new:hover { background: transparent; }
 
-/* ---------- Expanded: header ---------- */
-html:root .gpt-brand-row { padding: 0 0 10px 7px; min-height: 40px; }
+/* The round accent "new" button, shared by rail and panel */
+.sb-new-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface);
+  transition: transform 200ms var(--sb-ease), box-shadow 200ms;
+}
+:is(.gpt-nav-item.primary, .gpt-rail-btn.sb-new):hover .sb-new-dot { transform: rotate(90deg) scale(1.06); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+:is(.gpt-nav-item.primary, .gpt-rail-btn.sb-new):active .sb-new-dot { transform: rotate(90deg) scale(0.94); }
+
+/* ---------- Panel: header ---------- */
+html:root .gpt-brand-row { padding: 0 0 12px 9px; min-height: 40px; }
 .gpt-brand-lockup img { border-radius: 7px; }
-html:root .gpt-brand-title { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+html:root .gpt-brand-lockup { gap: 10px; }
+html:root .gpt-brand-title { font-size: 15.5px; font-weight: 600; letter-spacing: -0.015em; }
 html:root .gpt-icon-btn { width: 36px; height: 36px; border-radius: 10px; color: var(--muted-foreground); }
 html:root .gpt-icon-btn:hover { background: var(--sb-hover); color: var(--foreground); }
 
-/* Nav rows: icon centred on the same x as the rail icons (8px pad + 20px). */
+/* Rows: icon column centred on the rail icon x (10px pad + 18px). */
+.gpt-nav-actions { display: grid; gap: 2px; margin-bottom: 14px; }
 html:root .gpt-nav-item {
-  gap: 11px;
+  gap: 10px;
   min-height: 38px;
-  padding: 0 11px;
+  padding: 0 8px 0 7px;
   border-radius: 10px;
   font-size: 14px;
-  color: var(--foreground);
-  transition: background-color 120ms ease-out;
+  color: var(--sb-text);
+  transition: background-color 120ms ease-out, color 120ms;
 }
-html:root .gpt-nav-item:hover { background: var(--sb-hover); }
-html:root .gpt-nav-item.primary { font-weight: 500; }
-html:root .gpt-nav-item.primary svg { color: var(--accent); }
-.gpt-nav-actions { margin-bottom: 6px; }
+html:root .gpt-nav-item > svg { width: 26px; flex-shrink: 0; }
+html:root .gpt-nav-item:hover { background: var(--sb-hover); color: var(--foreground); }
+html:root .gpt-nav-item.primary { color: var(--foreground); font-weight: 500; }
+html:root .gpt-nav-item.primary:hover { background: transparent; }
+html:root .gpt-nav-item.primary:hover > span:last-child { color: var(--accent); }
 
-/* Search */
+/* Search looks like a row until focused */
 html:root .gpt-search-wrapper {
-  margin: 0 0 10px;
-  padding: 0 11px;
-  gap: 2px;
+  gap: 10px;
+  margin: 0;
+  padding: 0 8px 0 7px;
   height: 38px;
   border-radius: 10px;
+  border: 1px solid transparent;
   background: transparent;
-  border: 1px solid var(--sb-line);
+  cursor: text;
   transition: border-color 150ms, background-color 150ms, box-shadow 150ms;
 }
+html:root .gpt-search-wrapper > svg { width: 26px; color: var(--muted-foreground); }
 html:root .gpt-search-wrapper:hover { background: var(--sb-hover); }
-html:root .gpt-search-wrapper:focus-within { background: var(--surface); border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 14%, transparent); }
-html:root .gpt-search-wrapper svg { color: var(--muted-foreground); }
-html:root .gpt-search-wrapper input { height: 36px; color: var(--foreground); }
+html:root .gpt-search-wrapper:focus-within { background: var(--surface); border-color: var(--sb-line); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 16%, transparent); }
+html:root .gpt-search-wrapper input { height: 36px; padding: 0; font-size: 14px; color: var(--foreground); }
+html:root .gpt-search-wrapper input::placeholder { color: var(--sb-text); }
 html:root .gpt-search-wrapper input:focus-visible { outline: none; }
-.gpt-search-wrapper input::-webkit-search-cancel-button { cursor: pointer; }
 
-/* ---------- History list ---------- */
+/* ---------- Lists ---------- */
 html:root .gpt-history-scroll {
-  margin: 0 -8px;
-  padding: 0 8px 12px;
+  margin: 0 -10px;
+  padding: 0 10px 12px;
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
 }
-html:root .gpt-history-scroll:hover { scrollbar-color: var(--border) transparent; }
-.gpt-history-group + .gpt-history-group { margin-top: 14px; }
+html:root .gpt-history-scroll:hover { scrollbar-color: var(--sb-line) transparent; }
+.gpt-history-group + .gpt-history-group { margin-top: 16px; }
 html:root .gpt-section-label {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 10px 11px 6px;
-  font-size: 11.5px;
+  padding: 4px 9px 6px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--muted-foreground);
   background: var(--sb-bg);
 }
 html:root .gpt-chat-list { gap: 1px; }
-html:root .gpt-chat-item { border-radius: 10px; background: transparent; transition: background-color 120ms ease-out; }
+html:root .gpt-chat-item { border-radius: 9px; background: transparent; transition: background-color 120ms ease-out; }
 html:root .gpt-chat-item:hover { background: var(--sb-hover); }
 html:root .gpt-chat-item.active { background: var(--sb-active); }
-html:root .gpt-chat-item.menu-open { z-index: 5; }
-html:root .gpt-chat-btn { min-height: 36px; padding: 0 4px 0 11px; font-size: 13.5px; color: var(--text-body); }
-html:root .gpt-chat-item.active .gpt-chat-btn { color: var(--foreground); font-weight: 500; }
-/* Soft fade instead of a hard ellipsis cut under the options button. */
-html:root .gpt-chat-btn span { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
-html:root .gpt-item-more { width: 28px; height: 28px; margin-right: 4px; border-radius: 8px; color: var(--muted-foreground); opacity: 0; transition: opacity 120ms, background-color 120ms; }
-html:root :is(.gpt-chat-item:hover, .gpt-chat-item:focus-within, .gpt-chat-item.active, .gpt-chat-item.menu-open) .gpt-item-more { opacity: 1; }
+html:root .gpt-chat-item.menu-open { z-index: 5; background: var(--sb-hover); }
+html:root .gpt-chat-btn { min-height: 34px; padding: 0 4px 0 9px; font-size: 13.5px; color: var(--sb-text); }
+html:root .gpt-chat-item.active .gpt-chat-btn { color: var(--foreground); }
+html:root .gpt-chat-btn span { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent); }
+html:root :is(.gpt-chat-item:hover, .gpt-chat-item:focus-within, .gpt-chat-item.menu-open) .gpt-chat-btn span { mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent calc(100% - 8px)); }
+html:root .gpt-item-more { width: 28px; height: 28px; margin-right: 3px; border-radius: 7px; color: var(--muted-foreground); opacity: 0; transition: opacity 120ms, background-color 120ms; }
+html:root :is(.gpt-chat-item:hover, .gpt-chat-item:focus-within, .gpt-chat-item.menu-open) .gpt-item-more { opacity: 1; }
 html:root .gpt-item-more:hover, html:root .gpt-item-more[aria-expanded="true"] { background: var(--sb-active); color: var(--foreground); }
 @media (hover: none) { html:root .gpt-item-more { opacity: 1; } }
 
-/* Item menu */
 html:root .gpt-popover-menu {
-  right: 4px;
-  min-width: 148px;
+  right: 2px;
+  min-width: 164px;
   padding: 5px;
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--sb-line);
   background: var(--surface);
-  box-shadow: 0 12px 32px #0000001f, 0 2px 6px #0000000f;
+  box-shadow: var(--sb-shadow);
   transform-origin: top right;
   animation: sb-menu-in 160ms var(--sb-ease) both;
 }
-html:root .gpt-popover-menu button { gap: 9px; padding: 8px 10px; font-size: 13px; border-radius: 8px; color: var(--foreground); }
+html:root .gpt-popover-menu button { gap: 10px; padding: 8px 10px; font-size: 13px; border-radius: 8px; color: var(--foreground); }
+html:root .gpt-popover-menu button svg { color: var(--muted-foreground); }
 html:root .gpt-popover-menu button:hover { background: var(--sb-hover); }
-html:root .gpt-popover-menu button.danger { color: var(--destructive); }
+html:root .gpt-popover-menu button.danger, html:root .gpt-popover-menu button.danger svg { color: var(--destructive); }
 html:root .gpt-popover-menu button.danger:hover { background: var(--error-soft); }
 @keyframes sb-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.96); } to { opacity: 1; transform: none; } }
 
-html:root .gpt-empty-hint { padding: 28px 12px; font-size: 13px; color: var(--muted-foreground); }
+html:root .gpt-empty-hint { padding: 24px 12px; font-size: 13px; color: var(--muted-foreground); text-align: left; }
 
-/* ---------- Footer ---------- */
-html:root .gpt-sidebar-auth-footer { margin: 4px 0 0; padding-top: 8px; border-top: 1px solid var(--sb-line); }
-html:root .gpt-sidebar-auth-footer .account-menu { gap: 2px; }
-html:root .gpt-sidebar-auth-footer .account-identity { padding: 6px 11px; gap: 11px; font-size: 13.5px; }
-html:root .gpt-sidebar-auth-footer .account-menu small { padding: 0 11px 6px 40px; }
-
-/* ---------- Header toggle on the workspace ---------- */
-html:root .workspace-header { transition: background-color 200ms; }
+/* ---------- Account card (footer) ---------- */
+html:root .gpt-sidebar-auth-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 6px 0 0;
+  border-top: 0;
+  box-shadow: 0 -1px 0 var(--sb-line);
+}
+html:root .gpt-sidebar-auth-footer .account-menu {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 2px;
+  row-gap: 0;
+  min-width: 0;
+  padding: 4px;
+  border-radius: 12px;
+  transition: background-color 120ms;
+}
+html:root .gpt-sidebar-auth-footer .account-menu:has(.account-identity):hover { background: var(--sb-hover); }
+html:root .gpt-sidebar-auth-footer .account-identity { grid-column: 1; grid-row: 1; gap: 10px; padding: 2px 3px; font-size: 13.5px; font-weight: 500; color: var(--foreground); }
+html:root :is(.gpt-sidebar-auth-footer, .gpt-rail-footer) .account-identity > svg {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+html:root .gpt-sidebar-auth-footer .account-menu small { grid-column: 1; grid-row: 2; margin-top: -8px; padding: 0 0 2px 43px; font-size: 11.5px; color: var(--muted-foreground); opacity: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Signed in: sign-out becomes a quiet icon button on the card */
+html:root .gpt-sidebar-auth-footer .account-menu > button.gpt-nav-item { grid-column: 2; grid-row: 1 / span 2; width: 34px; min-height: 34px; padding: 0; justify-content: center; color: var(--muted-foreground); }
+html:root .gpt-sidebar-auth-footer .account-menu > button.gpt-nav-item > span { display: none; }
+html:root .gpt-sidebar-auth-footer .account-menu > button.gpt-nav-item > svg { width: 17px; }
+/* Guest: sign-in is an outlined pill */
+html:root .gpt-sidebar-auth-footer .account-menu > a.gpt-nav-item {
+  grid-column: 1 / -1;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  border: 1px solid var(--sb-line);
+  background: var(--surface);
+  color: var(--foreground);
+  font-weight: 500;
+  font-size: 13.5px;
+}
+html:root .gpt-sidebar-auth-footer .account-menu > a.gpt-nav-item > svg { width: 16px; }
+html:root .gpt-sidebar-auth-footer .account-menu > a.gpt-nav-item:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+html:root .gpt-sidebar-auth-footer .account-menu > a.gpt-nav-item ~ small { grid-column: 1 / -1; grid-row: auto; margin: 6px 0 0; padding: 0 4px; text-align: center; }
+html:root .gpt-sidebar-auth-footer .account-menu-error { grid-column: 1 / -1; }
+.gpt-footer-user-row { align-self: start; padding-top: 4px; }
+html:root .gpt-footer-user-row .gpt-nav-item { width: 36px; min-height: 36px; padding: 0; justify-content: center; color: var(--muted-foreground); }
+html:root .gpt-footer-user-row .gpt-nav-item > span { display: none; }
+html:root .gpt-footer-user-row .gpt-nav-item > svg { width: 18px; }
+html:root .gpt-footer-user-row .gpt-nav-item:hover { color: var(--foreground); }
+.gpt-footer-user-row .gpt-nav-item > svg { transition: transform 400ms var(--sb-ease); }
+.gpt-footer-user-row .gpt-nav-item:hover > svg { transform: rotate(45deg); }
+html:root .gpt-rail-footer .account-identity { padding: 0; }
 
 /* ---------- Mobile drawer ---------- */
 html:root .mobile-sidebar {
@@ -195,8 +284,7 @@ html:root .mobile-sidebar {
   border: 0;
   transform: translateX(-100%);
   background: var(--sb-bg);
-  border-right: 1px solid var(--sb-line);
-  box-shadow: 16px 0 48px #0000002e;
+  box-shadow: var(--sb-shadow);
   transition: transform 300ms var(--sb-ease), overlay 300ms allow-discrete, display 300ms allow-discrete;
 }
 html:root .mobile-sidebar[open] { transform: none; }
@@ -207,6 +295,6 @@ html:root .mobile-sidebar .gpt-expanded-content { width: 100%; }
 @starting-style { .mobile-sidebar[open]::backdrop { background: #0000; backdrop-filter: blur(0); } }
 
 @media (prefers-reduced-motion: reduce) {
-  html:root :is(.lecture-sidebar, .workspace, .gpt-rail-content, .gpt-expanded-content, .mobile-sidebar) { transition: none; }
+  html:root :is(.lecture-sidebar, .workspace, .gpt-rail-content, .gpt-expanded-content, .mobile-sidebar, .sb-new-dot) { transition: none; }
   html:root .gpt-popover-menu { animation: none; }
 }
