@@ -4,8 +4,7 @@ import { createOpenAIClient } from '@/lib/openai';
 import { generateStudyKit, publicError } from '@/lib/ai/pipeline';
 import { encodeGenerationEvent, type GenerationEvent } from '@/lib/contracts/generation';
 import { getEncoding } from 'js-tiktoken';
-import { DEFAULT_API_BASE_URL } from '@/lib/provider';
-import { readStoredSettings } from '@/lib/server/admin-db';
+import { AccountError, getUserFromRequest, requireSameOrigin } from '@/lib/server/user-auth';
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -19,6 +18,21 @@ function errorResponse(error: GenerationError) {
 }
 
 export async function POST(request: Request) {
+  // Production generation has one metered entry point. Accepting a provider
+  // override or a stream here would bypass durable jobs and account allowances.
+  if (process.env.NODE_ENV === 'production' || ['1', 'true'].includes(process.env.VERCEL ?? '')) {
+    try {
+      requireSameOrigin(request);
+      const user = await getUserFromRequest(request);
+      return errorResponse(user
+        ? { code: 'BACKGROUND_REQUIRED', message: 'Generate from your saved course using background tasks.', retryable: false }
+        : { code: 'LOGIN_REQUIRED', message: 'Sign in to generate study materials. Your lecture is still saved in this browser.', retryable: false });
+    } catch (error) {
+      return errorResponse(error instanceof AccountError && error.code === 'INVALID_ORIGIN'
+        ? { code: 'INVALID_ORIGIN', message: 'Invalid request origin.', retryable: false }
+        : { code: 'SERVER_CONFIG', message: 'Account verification is unavailable. Try again later.', retryable: false });
+    }
+  }
   if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
     return errorResponse({ code: "UNSUPPORTED_MEDIA_TYPE", message: "Use application/json.", retryable: false });
   }
@@ -62,13 +76,6 @@ export async function POST(request: Request) {
   tokenizer ??= getEncoding('o200k_base');
   if (tokenizer.encode(validation.data.lecture).length > INPUT_LIMITS.maxInputTokens) {
     return errorResponse({ code: 'INPUT_TOO_LONG', message: 'The lecture exceeds 16,000 input tokens.', retryable: false });
-  }
-  // Public deployments only forward credentials to explicitly configured bases.
-  if (process.env.NODE_ENV === 'production' && validation.data.provider) {
-    let adminBase: string | undefined;
-    try { adminBase = (await readStoredSettings())?.settings.baseURL; } catch { return errorResponse({ code: 'SERVER_CONFIG', message: 'Cannot read server configuration.', retryable: false }); }
-    const allowed = [DEFAULT_API_BASE_URL, adminBase, process.env.OPENAI_BASE_URL, ...(process.env.ALLOWED_API_BASE_URLS ?? '').split(',')].filter(Boolean).map((url) => url!.trim().replace(/\/+$/, ''));
-    if (!allowed.includes(validation.data.provider.baseURL)) return errorResponse({ code: 'INVALID_PROVIDER_CONFIG', message: 'This API base URL is not enabled by the server administrator.', retryable: false });
   }
   let connection: Awaited<ReturnType<typeof createOpenAIClient>>;
   try { connection = await createOpenAIClient(validation.data.provider); } catch {

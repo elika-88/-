@@ -80,20 +80,34 @@ describe('transport and deployment boundaries', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).quiz).toHaveLength(1);
   });
-  it('blocks unapproved production targets before invoking the pipeline', async () => {
+  it('blocks production guest calls before invoking the pipeline', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('OPENAI_BASE_URL', 'https://approved.example/v1');
     vi.stubEnv('ALLOWED_API_BASE_URLS', '');
-    const response = await POST(request(body));
-    expect(response.status).toBe(400);
+    const req = request(body); req.headers.set('origin', 'http://localhost');
+    const response = await POST(req);
+    expect(response.status).toBe(401);
+    expect((await response.json()).error.code).toBe('LOGIN_REQUIRED');
     expect(generateStudyKit).not.toHaveBeenCalled();
   });
-  it('accepts explicitly configured production bases', async () => {
+  it('cannot bypass production allowances with an approved provider override', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('ALLOWED_API_BASE_URLS', body.provider.baseURL);
-    const response = await POST(request(body));
-    expect(response.status).toBe(200);
-    await response.text();
-    expect(generateStudyKit).toHaveBeenCalledTimes(1);
+    const req = request(body); req.headers.set('origin', 'http://localhost');
+    const response = await POST(req);
+    expect(response.status).toBe(401);
+    expect(generateStudyKit).not.toHaveBeenCalled();
+  });
+  it('blocks cross-origin calls even when they claim production cookies', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const req = request(body); req.headers.set('origin', 'https://attacker.test');
+    expect((await POST(req)).status).toBe(403);
+    expect(generateStudyKit).not.toHaveBeenCalled();
+  });
+  it('also closes the streaming entry point on Vercel preview deployments', async () => {
+    vi.stubEnv('VERCEL', '1');
+    const req = request(body); req.headers.set('origin', 'https://localhost');
+    expect((await POST(req)).status).toBe(401);
+    expect(generateStudyKit).not.toHaveBeenCalled();
   });
 });

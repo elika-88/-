@@ -107,7 +107,9 @@ describe('real account database and HTTP boundaries', () => {
     expect(limited.status).toBe(429); expect((await limited.json()).code).toBe('RATE_LIMITED');
     const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 15 * 60 * 1000 + 1);
     expect((await POST(request({ action: 'login', identifier: 'Alice', password }))).status).toBe(200);
-  });
+  // This intentionally hashes more than 20 real passwords; it is a security
+  // behavior test, not a five-second performance benchmark on shared runners.
+  }, 15_000);
 
   it('shares the login budget across username, email and different source IPs', async () => {
     await register(); vi.stubEnv('AUTH_TRUST_PROXY', 'true');

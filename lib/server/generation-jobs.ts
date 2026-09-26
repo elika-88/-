@@ -13,6 +13,7 @@ import { withDatabase } from './database';
 import { AccountError } from './user-auth';
 import { initializeStudyTables, MAX_STUDY_RECORDS, STUDY_REQUEST_BYTES } from './study-records';
 import { JOB_LIMITS } from './generation-job-config';
+import { initializeUsageTables, releaseExpiredJobCredits, reserveGenerationCredit, settleGenerationCredit, usagePolicy } from './usage-ledger';
 
 let tokenizer: ReturnType<typeof getEncoding> | undefined;
 const terminal = ['succeeded', 'failed', 'cancelled'];
@@ -22,6 +23,7 @@ const publicColumns = `id, user_id, session_id, source_revision, status, stage, 
 
 export async function initializeGenerationTables(db: Client) {
   await initializeStudyTables(db);
+  await initializeUsageTables(db);
   await db.batch([
     `CREATE TABLE IF NOT EXISTS generation_jobs (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -80,11 +82,21 @@ function snapshotInput(snapshot: z.infer<typeof ServerStudySessionSchema>): Gene
 async function create(userId: string, input: CreateGenerationJob | { idempotencyKey: string; retryOf: string }) {
   return transaction(async tx => {
     const retryOf = 'retryOf' in input ? input.retryOf : null;
+    const key = (await tx.execute({ sql: 'SELECT * FROM generation_request_keys WHERE user_id=? AND request_key=?', args: [userId, input.idempotencyKey] })).rows[0];
+    if (key) {
+      const same = retryOf ? key.retry_of === retryOf : key.retry_of === null
+        && key.session_id === (input as CreateGenerationJob).sessionId && Number(key.source_revision) === (input as CreateGenerationJob).expectedRevision;
+      if (!same) throw new AccountError('IDEMPOTENCY_CONFLICT', 'This request key belongs to a different submission.', 409);
+      const previous = (await tx.execute({ sql: 'SELECT * FROM generation_jobs WHERE id=? AND user_id=?', args: [key.job_id, userId] })).rows[0];
+      if (!previous) throw new AccountError('REQUEST_EXPIRED', 'This task has expired. Generate again with a new request key.', 409);
+      return { job: view(previous), reused: true };
+    }
     const existing = (await tx.execute({ sql: 'SELECT * FROM generation_jobs WHERE user_id = ? AND request_key = ?', args: [userId, input.idempotencyKey] })).rows[0];
     if (existing) {
       const same = retryOf ? existing.retry_of === retryOf
         : existing.retry_of === null && existing.session_id === (input as CreateGenerationJob).sessionId && Number(existing.source_revision) === (input as CreateGenerationJob).expectedRevision;
       if (!same) throw new AccountError('IDEMPOTENCY_CONFLICT', 'This request key belongs to a different submission.', 409);
+      await rememberRequest(tx, userId, input.idempotencyKey, String(existing.id), String(existing.session_id), Number(existing.source_revision), existing.retry_of === null ? null : String(existing.retry_of));
       return { job: view(existing), reused: true };
     }
     let snapshot: z.infer<typeof ServerStudySessionSchema>;
@@ -111,6 +123,7 @@ async function create(userId: string, input: CreateGenerationJob | { idempotency
       AND (status IN ('queued','running') OR (status = 'cancelled' AND lease_until > ?)) LIMIT 1`, args: [userId, now] })).rows[0];
     if (active) {
       if (!retryOf && active.session_id === snapshot.id && Number(active.source_revision) === sourceRevision && !terminal.includes(String(active.status))) {
+        await rememberRequest(tx, userId, input.idempotencyKey, String(active.id), snapshot.id, sourceRevision, null);
         return { job: view(active), reused: true };
       }
       throw new AccountError('CONCURRENCY_LIMIT', 'One generation task is already active. Wait for it to finish or cancel it.', 429);
@@ -127,12 +140,19 @@ async function create(userId: string, input: CreateGenerationJob | { idempotency
       || Number(counts.global_hour) >= JOB_LIMITS.globalHour || Number(counts.global_day) >= JOB_LIMITS.globalDay
       || Number(counts.active) >= JOB_LIMITS.activeGlobal) throw new AccountError('RATE_LIMITED', 'Generation capacity has been reached. Try again later.', 429);
     const id = randomUUID();
+    await reserveGenerationCredit(tx, userId, id, now);
     await tx.execute({ sql: `INSERT INTO generation_jobs
       (id,user_id,session_id,source_revision,request_key,snapshot_json,status,created_at,updated_at,next_attempt_at,dispatch_after,retry_of)
       VALUES (?,?,?,?,?,?,'queued',?,?,?,?,?)`,
       args: [id, userId, snapshot.id, sourceRevision, input.idempotencyKey, JSON.stringify(snapshot), now, now, now, now, retryOf] });
+    await rememberRequest(tx, userId, input.idempotencyKey, id, snapshot.id, sourceRevision, retryOf);
     return { job: view(await owned(tx, userId, id)), reused: false };
   });
+}
+async function rememberRequest(tx: Transaction, userId: string, key: string, jobId: string, sessionId: string, revision: number, retryOf: string | null) {
+  const count = (await tx.execute({ sql: 'SELECT COUNT(*) AS n FROM generation_request_keys WHERE job_id=?', args: [jobId] })).rows[0];
+  if (Number(count.n) >= 32) throw new AccountError('RATE_LIMITED', 'Too many request keys for this task. Reuse the original request key.', 429);
+  await tx.execute({ sql: 'INSERT INTO generation_request_keys (user_id,request_key,job_id,session_id,source_revision,retry_of) VALUES (?,?,?,?,?,?)', args: [userId, key, jobId, sessionId, revision, retryOf] });
 }
 export function createGenerationJob(userId: string, input: CreateGenerationJob) {
   return create(userId, CreateGenerationJobSchema.parse(input));
@@ -170,6 +190,7 @@ export async function cancelGenerationJob(userId: string, id: string) {
     if (!terminal.includes(String(row.status))) {
       const now = Date.now();
       await tx.execute({ sql: "UPDATE generation_jobs SET status='cancelled', updated_at=?, finished_at=?, error_json=NULL WHERE id=?", args: [now, now, id] });
+      await settleGenerationCredit(tx, id, 'released', now);
     }
     return view(await owned(tx, userId, id));
   });
@@ -198,10 +219,12 @@ export async function recoverGenerationJobs() {
       WHERE status='queued' AND created_at < ?`, args: [now, now, JSON.stringify({ code: 'QUEUE_TIMEOUT', message: 'The task could not start in time. Retry later.', retryable: true }), now - JOB_LIMITS.queueTimeoutMs] });
     // Cancellation retains the lease until worker acknowledgement or expiry.
     await tx.execute({ sql: "UPDATE generation_jobs SET lease_token=NULL, lease_until=NULL WHERE status='cancelled' AND lease_until <= ?", args: [now] });
+    await releaseExpiredJobCredits(tx, now);
     await tx.execute({ sql: "DELETE FROM generation_jobs WHERE status IN ('succeeded','failed','cancelled') AND finished_at < ?", args: [now - JOB_LIMITS.retentionMs] });
   });
 }
 export async function claimGenerationJob(id: string) {
+  if (usagePolicy().paused) return null;
   return transaction(async tx => {
     const now = Date.now();
     const row = (await tx.execute({ sql: 'SELECT * FROM generation_jobs WHERE id=?', args: [id] })).rows[0];
@@ -233,6 +256,7 @@ export async function failGenerationAttempt(id: string, token: string, error: Jo
     await tx.execute({ sql: `UPDATE generation_jobs SET status=?, error_json=?, updated_at=?, finished_at=?,
       next_attempt_at=?, dispatch_after=?, lease_token=NULL, lease_until=NULL WHERE id=?`,
       args: [again ? 'queued' : 'failed', JSON.stringify(error), now, again ? null : now, now + JOB_LIMITS.retryDelayMs, now + JOB_LIMITS.retryDelayMs, id] });
+    if (!again) await settleGenerationCredit(tx, id, 'released', now);
   });
 }
 export async function completeGenerationJob(id: string, token: string, output: StudyKit) {
@@ -273,6 +297,7 @@ export async function completeGenerationJob(id: string, token: string, output: S
       saved_session_id=?, saved_revision=?, save_disposition=?, updated_at=?, finished_at=?,
       error_json=NULL, lease_token=NULL, lease_until=NULL WHERE id=?`,
       args: [resultJson, savedId, savedRevision, disposition, now, now, id] });
+    await settleGenerationCredit(tx, id, 'charged', now);
     return true;
   });
 }

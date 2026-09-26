@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import AccountLink from 'next/link';
 import { AlertCircle, BookOpen, Check, FileText, Link, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square, Upload } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { CustomLanguageSelect } from '@/components/CustomLanguageSelect';
@@ -250,7 +251,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
             <div className="input-toolbar"><CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending || importing || submitting} onChange={(val) => updateSession({ outputLanguage: val })} />
               <div className="generate-actions">{pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}<Button type="submit" disabled={!ready || pending || importing || Boolean(userId && task.blocked)}>{pending || importing || backgroundBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : displayedKit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? "Importing" : task.action === 'saving' ? 'Saving lecture' : task.restoring ? 'Checking tasks' : pending || backgroundBusy ? "Generating" : displayedKit ? "Regenerate materials" : "Generate materials"}</Button></div>
             </div>
-            {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}
+            {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}{error.code === 'LOGIN_REQUIRED' && <> <AccountLink href="/login">Sign in or create an account</AccountLink></>}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
             <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
             {pending && liveStage && <div className="gen-progress"><GenerationSteps stage={liveStage.stage} startedAt={liveStage.startedAt} /></div>}

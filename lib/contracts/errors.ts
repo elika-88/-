@@ -5,6 +5,7 @@ export const ErrorCodeSchema = z.enum([
   "INPUT_TOO_LONG", "INSUFFICIENT_CONTENT", "SERVER_CONFIG", "RATE_LIMITED",
   "UPSTREAM_FAILURE", "MODEL_REFUSAL", "INVALID_OUTPUT", "VERIFICATION_FAILED",
   "TIMEOUT", "NOT_IMPLEMENTED", "INVALID_PROVIDER_CONFIG",
+  "LOGIN_REQUIRED", "BACKGROUND_REQUIRED", "INVALID_ORIGIN",
 ]);
 
 export const GenerationErrorSchema = z.strictObject({
@@ -20,6 +21,9 @@ export type GenerationError = z.infer<typeof GenerationErrorSchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 
 export const ERROR_HTTP_STATUS = {
+  LOGIN_REQUIRED: 401,
+  BACKGROUND_REQUIRED: 409,
+  INVALID_ORIGIN: 403,
   INVALID_REQUEST: 400,
   INVALID_PROVIDER_CONFIG: 400,
   UNSUPPORTED_MEDIA_TYPE: 415,
