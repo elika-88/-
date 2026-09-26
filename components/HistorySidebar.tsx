@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import Image from "next/image";
-import { Ellipsis, History, PanelLeft, Pencil, Pin, PinOff, Plus, Search, Settings, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Ellipsis, GraduationCap, History, PanelLeft, Pencil, Pin, PinOff, Plus, Search, Settings, Trash2 } from "lucide-react";
 import type { StudySession } from "@/lib/client/sessions";
 import { togglePinnedLecture, usePinnedLectures } from "@/lib/client/pinned-lectures";
 import { useSettings } from "@/lib/i18n/SettingsContext";
@@ -19,6 +20,7 @@ type Props = {
   onEdit: (id: string, action: "rename" | "delete") => void;
   onClose: () => void;
   onExport?: () => void;
+  prepActive?: boolean;
 };
 
 const shortcut = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘B" : "Ctrl+B";
@@ -31,7 +33,7 @@ const PEEK_CLOSE_DELAY = 220;
  *  - collapsed: a slim icon rail; hovering the Recents icon "peeks" the full panel
  *    as a floating card without changing the layout, clicking pins it open.
  */
-export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse, onNew, onSelect, onEdit, onExport }: Props) {
+export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse, onNew, onSelect, onEdit, onExport, prepActive = false }: Props) {
   const { t } = useSettings();
   const [search, setSearch] = useState("");
   const [menu, setMenu] = useState<string | null>(null);
@@ -99,6 +101,9 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
             <button className="gpt-rail-btn" type="button" title={t.searchPlaceholder} aria-label={t.searchPlaceholder} onClick={() => expand(true)}>
               <Search size={18} />
             </button>
+            <Link href="/prep" className={`gpt-rail-btn ${prepActive ? "is-active" : ""}`} title={t.examPrep} aria-label={t.examPrep} aria-current={prepActive ? "page" : undefined}>
+              <GraduationCap size={18} />
+            </Link>
             <button className={`gpt-rail-btn ${peeking ? "is-active" : ""}`} type="button" title={t.showRecents} aria-label={t.showRecents} aria-expanded={peeking}
               onPointerEnter={(event) => schedulePeek(true, event)} onPointerLeave={(event) => schedulePeek(false, event)} onClick={() => expand()}>
               <History size={18} />
@@ -136,6 +141,11 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={(event) => { if (event.key === "Escape" && search) { event.stopPropagation(); setSearch(""); } }} />
             </label>
+            <Link href="/prep" className={`gpt-nav-item sb-prep ${prepActive ? "is-active" : ""}`} aria-current={prepActive ? "page" : undefined} onClick={() => setPeek(false)}>
+              <GraduationCap size={18} />
+              <span>{t.examPrep}</span>
+              <span className="sb-badge">SAT · IELTS · TOEFL</span>
+            </Link>
           </div>
 
           <nav className="gpt-history-scroll" aria-label="Saved lectures">
@@ -147,8 +157,8 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
                   {section.items.map((session) => {
                     const isPinned = pinnedIds.includes(session.id);
                     return (
-                      <li className={`gpt-chat-item ${activeId === session.id ? "active" : ""} ${menu === session.id ? "menu-open" : ""}`} key={session.id}>
-                        <button className="gpt-chat-btn" type="button" aria-current={activeId === session.id ? "page" : undefined} title={session.title || t.untitled}
+                      <li className={`gpt-chat-item ${activeId === session.id && !prepActive ? "active" : ""} ${menu === session.id ? "menu-open" : ""}`} key={session.id}>
+                        <button className="gpt-chat-btn" type="button" aria-current={activeId === session.id && !prepActive ? "page" : undefined} title={session.title || t.untitled}
                           onClick={() => { setMenu(null); setPeek(false); onSelect(session.id); }}>
                           <span>{session.title || t.untitled}</span>
                         </button>

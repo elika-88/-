@@ -1,0 +1,154 @@
+.page { --exam: var(--accent); container: prep-page / inline-size; max-width: 1120px; margin: 0 auto; color: var(--foreground); }
+.eyebrow { margin: 0 0 8px; font-size: 11.5px; font-weight: 600; letter-spacing: .06em; color: var(--muted-foreground); }
+.lead { margin: 6px 0 0; color: var(--muted-foreground); font-size: 15px; line-height: 1.6; }
+.muted { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.hint { margin: 4px 0 10px; color: var(--muted-foreground); font-size: 13px; }
+.disclaimer { margin: 28px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
+
+/* ---------- Home ---------- */
+.hero { padding: 8px 0 28px; }
+.hero h1 { margin: 0; font-size: 30px; line-height: 1.25; font-weight: 650; letter-spacing: -0.025em; }
+.examGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.examCard {
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-height: 250px; padding: 22px;
+  border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: inherit; text-decoration: none; overflow: hidden;
+  transition: transform 220ms cubic-bezier(.2,0,0,1), box-shadow 220ms, border-color 220ms;
+  animation: prepIn 360ms cubic-bezier(.2,0,0,1) backwards;
+}
+.examCard::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--exam); opacity: .85; }
+.examCard::after { content: ""; position: absolute; right: -60px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--exam) 16%, transparent), transparent 70%); pointer-events: none; transition: transform 400ms cubic-bezier(.2,0,0,1); }
+.examCard:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--exam) 45%, var(--border)); box-shadow: 0 14px 36px #00000014; }
+.examCard:hover::after { transform: scale(1.25); }
+.examCard:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.examMark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--exam) 14%, var(--surface)); color: var(--exam); font-weight: 700; font-size: 18px; margin-bottom: 8px; }
+.examName { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+.examTagline { color: var(--muted-foreground); font-size: 13.5px; }
+.examMeta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 13px; color: var(--text-body); }
+.examMeta span { display: inline-flex; align-items: center; gap: 6px; }
+.examMeta svg { color: var(--exam); }
+.examLast { font-size: 12.5px; color: var(--muted-foreground); }
+.examCta { display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 16px; font-weight: 600; font-size: 14px; color: var(--exam); }
+.examCta svg { transition: transform 220ms cubic-bezier(.2,0,0,1); }
+.examCard:hover .examCta svg { transform: translateX(4px); }
+@keyframes prepIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Exam page ---------- */
+.backLink { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: var(--muted-foreground); font-size: 13px; text-decoration: none; }
+.backLink:hover { color: var(--foreground); }
+.examHeader { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.examHeader .examMark { margin: 0; width: 48px; height: 48px; font-size: 22px; border-radius: 14px; }
+.examHeader h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+.examHeader strong { color: var(--exam); font-weight: 600; }
+.examLayout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; align-items: start; }
+.examMain { min-width: 0; container: prep-main / inline-size; }
+.examAside { display: grid; gap: 16px; position: sticky; top: 90px; }
+.panel { padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.panel h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.field { display: grid; gap: 6px; margin-bottom: 12px; font-size: 12.5px; color: var(--muted-foreground); }
+.field select, .field input { height: 38px; padding: 0 10px; border: 1px solid var(--input); border-radius: 9px; background: var(--surface); color: var(--foreground); font-size: 14px; }
+.field select:focus-visible, .field input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.attempts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.attempts li { display: grid; gap: 2px; font-size: 13px; }
+.attempts span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attempts small { color: var(--muted-foreground); font-size: 12px; }
+
+.sectionTabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.sectionTabs > span { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 999px; font-size: 13.5px; }
+.sectionActive { background: var(--exam); color: #fff; font-weight: 600; }
+.sectionSoon { border: 1px dashed var(--border); color: var(--muted-foreground); }
+.sectionSoon small { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--muted); }
+
+/* ---------- Buttons ---------- */
+.primaryButton, .secondaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 500; transition: background-color 150ms, transform 120ms, opacity 150ms, border-color 150ms; }
+.primaryButton { background: var(--exam); color: #fff; }
+.primaryButton:hover:not(:disabled) { background: color-mix(in srgb, var(--exam) 88%, #000); }
+.primaryButton:disabled { opacity: .5; cursor: not-allowed; }
+.secondaryButton { border: 1px solid var(--border); background: var(--surface); color: var(--foreground); width: auto; }
+.panel .secondaryButton { width: 100%; }
+.secondaryButton:hover { border-color: var(--input); background: var(--surface-hover); }
+.primaryButton:active:not(:disabled), .secondaryButton:active { transform: scale(.97); }
+.actionGroup { display: flex; gap: 8px; flex-wrap: wrap; }
+.linkButton { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12.5px; color: var(--exam); font-weight: 500; }
+.linkButton:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Compose ---------- */
+.compose { padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); animation: prepIn 300ms cubic-bezier(.2,0,0,1) backwards; }
+.fieldHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.fieldHead label { font-weight: 600; font-size: 14px; }
+.fieldHead span { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.over { color: var(--destructive) !important; }
+.passageInput { display: block; width: 100%; min-height: 260px; padding: 14px 16px; border: 1px solid var(--input); border-radius: 12px; background: var(--surface); color: var(--foreground); font-size: 15px; line-height: 1.75; resize: vertical; transition: border-color 150ms, box-shadow 150ms; }
+.passageInput:focus { outline: none; border-color: var(--exam); box-shadow: 0 0 0 4px color-mix(in srgb, var(--exam) 14%, transparent); }
+.typeChips { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; border: 0; }
+.typeChips legend { width: 100%; margin-bottom: 8px; font-weight: 600; font-size: 14px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text-body); cursor: pointer; user-select: none; transition: background-color 150ms, border-color 150ms, color 150ms; }
+.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chip:hover { border-color: var(--input); }
+.chip:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+.chipOn { border-color: color-mix(in srgb, var(--exam) 50%, transparent); background: color-mix(in srgb, var(--exam) 10%, var(--surface)); color: var(--exam); font-weight: 500; }
+.composeActions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-body); cursor: pointer; }
+.toggle input { width: 16px; height: 16px; accent-color: var(--exam); }
+.error { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--error-soft); color: var(--destructive); font-size: 13px; }
+
+/* ---------- Practice ---------- */
+.practice { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.passagePanel { position: sticky; top: 90px; max-height: calc(100dvh - 110px); display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }
+.passagePanel header { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); color: var(--exam); }
+.passagePanel h2 { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--foreground); }
+.passageText { padding: 18px 20px 24px; overflow: auto; white-space: pre-wrap; font-size: 15px; line-height: 1.85; color: var(--text-body); }
+.passageText mark { background: color-mix(in srgb, var(--exam) 22%, transparent); color: inherit; border-radius: 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--exam) 22%, transparent); animation: markPulse 900ms cubic-bezier(.2,0,0,1); }
+@keyframes markPulse { from { background: color-mix(in srgb, var(--exam) 55%, transparent); } }
+.questions { min-width: 0; }
+.questionList { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.question { padding: 16px 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); animation: prepIn 320ms cubic-bezier(.2,0,0,1) backwards; transition: border-color 200ms, background-color 200ms; }
+.qRight { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.qWrong { border-color: color-mix(in srgb, var(--destructive) 45%, var(--border)); }
+.qHead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.qNumber { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 7px; background: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.qType { font-size: 12px; color: var(--muted-foreground); }
+.qVerdict { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 12px; font-weight: 600; animation: prepIn 240ms cubic-bezier(.3,0,0,1.2) backwards; }
+.qRight .qVerdict { color: var(--accent); }
+.qWrong .qVerdict { color: var(--destructive); }
+.qPrompt { margin: 0 0 12px; font-size: 14.5px; line-height: 1.7; font-weight: 500; }
+.options { display: grid; gap: 8px; }
+.option { position: relative; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--input); border-radius: 10px; font-size: 14px; line-height: 1.5; cursor: pointer; transition: border-color 150ms, background-color 150ms, transform 150ms; }
+.option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.option:hover { border-color: var(--muted-foreground); }
+.option:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+.optionLetter { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 6px; background: var(--muted); color: var(--muted-foreground); font-size: 12px; font-weight: 600; transition: background-color 150ms, color 150ms; }
+.optionChosen { border-color: var(--exam); background: color-mix(in srgb, var(--exam) 8%, var(--surface)); }
+.optionChosen .optionLetter { background: var(--exam); color: #fff; }
+.optionAnswer { border-color: var(--accent); background: var(--accent-soft); }
+.optionAnswer .optionLetter { background: var(--accent); color: var(--surface); }
+.optionMissed { border-color: var(--destructive); background: var(--error-soft); animation: shake 360ms cubic-bezier(.36,.07,.19,.97); }
+.optionMissed .optionLetter { background: var(--destructive); color: var(--surface); }
+.option:has(input:disabled) { cursor: default; }
+@keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 50% { transform: translateX(4px); } 75% { transform: translateX(-2px); } }
+.blankInput { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--input); border-radius: 10px; background: var(--surface); color: var(--foreground); font-size: 14px; }
+.blankInput:focus { outline: none; border-color: var(--exam); box-shadow: 0 0 0 4px color-mix(in srgb, var(--exam) 14%, transparent); }
+.explanation { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); font-size: 13.5px; line-height: 1.7; color: var(--text-body); }
+.explanation p { margin: 0 0 4px; }
+.submitBar { position: sticky; bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding: 10px 12px 10px 16px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(10px); box-shadow: 0 8px 24px #00000012; font-size: 13px; color: var(--muted-foreground); }
+.resultCard { margin-bottom: 14px; padding: 20px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--exam) 35%, var(--border)); background: linear-gradient(135deg, color-mix(in srgb, var(--exam) 10%, var(--surface)), var(--surface)); animation: prepIn 360ms cubic-bezier(.2,0,0,1) backwards; }
+.resultCard p { margin: 0 0 4px; }
+.resultScore { font-size: 40px !important; font-weight: 700; line-height: 1.1; color: var(--exam); font-variant-numeric: tabular-nums; }
+.resultScore span { font-size: 18px; color: var(--muted-foreground); font-weight: 500; }
+.resultCard .actionGroup { margin-top: 14px; }
+
+@container prep-page (max-width: 900px) {
+  .examLayout { grid-template-columns: minmax(0, 1fr); }
+  .examAside { position: static; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+@container prep-main (max-width: 760px) {
+  .practice { grid-template-columns: minmax(0, 1fr); }
+  .passagePanel { position: relative; top: 0; max-height: 50dvh; }
+}
+@media (max-width: 600px) {
+  .hero h1 { font-size: 24px; }
+  .compose, .panel { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .examCard, .compose, .question, .resultCard, .qVerdict, .optionMissed, .passageText mark { animation: none; }
+  .examCard, .examCard::after, .examCta svg { transition: none; }
+}

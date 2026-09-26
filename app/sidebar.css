@@ -298,3 +298,9 @@ html:root .mobile-sidebar .gpt-expanded-content { width: 100%; }
   html:root :is(.lecture-sidebar, .workspace, .gpt-rail-content, .gpt-expanded-content, .mobile-sidebar, .sb-new-dot) { transition: none; }
   html:root .gpt-popover-menu { animation: none; }
 }
+
+/* ---------- Exam prep entry ---------- */
+html:root .gpt-nav-item.sb-prep { margin-top: 2px; }
+html:root .gpt-nav-item.sb-prep.is-active { background: var(--sb-active); color: var(--foreground); font-weight: 500; }
+.sb-badge { margin-left: auto; padding: 1px 7px; border-radius: 999px; background: var(--sb-hover); color: var(--muted-foreground); font-size: 10px; font-weight: 500; letter-spacing: .02em; white-space: nowrap; }
+html:root .workspace-main.prep-main { max-width: 1180px; }

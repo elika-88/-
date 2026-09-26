@@ -13,6 +13,7 @@ export type Translations = {
   pin: string;
   unpin: string;
   showRecents: string;
+  examPrep: string;
   noMatching: string;
   noSaved: string;
   untitled: string;
@@ -93,6 +94,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     pin: "Pin",
     unpin: "Unpin",
     showRecents: "Show recent lectures",
+    examPrep: "Exam prep",
     noMatching: "No matching lectures",
     noSaved: "No saved lectures yet",
     untitled: "Untitled lecture",
@@ -171,6 +173,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     pin: "固定",
     unpin: "取消固定",
     showRecents: "查看最近讲稿",
+    examPrep: "备考专区",
     noMatching: "未找到匹配的讲座",
     noSaved: "暂无保存的讲座",
     untitled: "未命名讲座",
@@ -249,6 +252,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     pin: "Закрепить",
     unpin: "Открепить",
     showRecents: "Недавние лекции",
+    examPrep: "Подготовка к экзаменам",
     noMatching: "Лекции не найдены",
     noSaved: "Нет сохраненных лекций",
     untitled: "Лекция без названия",
@@ -327,6 +331,7 @@ export const translations: Record<SupportedLanguage, Translations> = {
     pin: "Бекіту",
     unpin: "Босату",
     showRecents: "Соңғы дәрістер",
+    examPrep: "Емтиханға дайындық",
     noMatching: "Сәйкес дәрістер табылмады",
     noSaved: "Сақталған дәрістер жоқ",
     untitled: "Атаусыз дәріс",

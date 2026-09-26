@@ -16,6 +16,9 @@ import { GenerationJobStatus } from './GenerationJobStatus';
 import { isActiveJob } from '@/lib/client/generation-jobs';
 import { displayedStudyKit } from '@/lib/client/displayed-study-kit';
 import { AccountMenu } from './auth/AccountMenu';
+import { useRouter } from 'next/navigation';
+import { PrepArea } from './prep/PrepArea';
+import type { ExamId } from '@/lib/prep/exams';
 import { GenerationSteps, MaterialsSkeleton } from './GenerationProgress';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
@@ -28,14 +31,17 @@ const emptyDraft: StudySession = { id: "draft", title: "", lecture: "", outputLa
 type Operation = { controller: AbortController; sessionId: string };
 const SIDEBAR_KEY = "lumina.sidebar.collapsed";
 
-export function StudyWorkspace() {
+export type PrepRoute = { exam: ExamId | null };
+
+export function StudyWorkspace({ prep }: { prep?: PrepRoute } = {}) {
   const { user, ready, verified, error, recheckIdentity } = useAuth();
   if (!ready || !verified || error) return <main className="workspace-main"><div className="study-sync" role="status"><p>{error ? 'Account verification is unavailable. Your lectures are hidden until your account can be checked.' : 'Checking your account before opening lectures…'}</p><AccountMenu /></div></main>;
   // Remount synchronously on identity changes: no frame can render the old account's data.
-  return <AccountWorkspace key={user?.id ?? 'guest'} userId={user?.id ?? null} username={user?.username ?? null} refreshAuth={recheckIdentity} />;
+  return <AccountWorkspace key={user?.id ?? 'guest'} userId={user?.id ?? null} username={user?.username ?? null} refreshAuth={recheckIdentity} prep={prep} />;
 }
 
-function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | null; username: string | null; refreshAuth: () => Promise<void> }) {
+function AccountWorkspace({ userId, username, refreshAuth, prep }: { userId: string | null; username: string | null; refreshAuth: () => Promise<void>; prep?: PrepRoute }) {
+  const router = useRouter();
   const sync = useStudyHistory(userId, refreshAuth);
   const { history, historyRef, ready, save } = sync;
   const [draft, setDraft] = useState<StudySession>(emptyDraft);
@@ -163,6 +169,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
     cancel(""); setError(null); setDraft(emptyDraft);
     save({ ...historyRef.current, activeId: null });
     mobileSidebar.current?.close();
+    if (prep) { router.push("/"); return; }
     requestAnimationFrame(() => lectureInput.current?.focus());
   }
 
@@ -173,6 +180,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
     cancel(""); setError(null);
     save({ ...historyRef.current, activeId: id });
     mobileSidebar.current?.close();
+    if (prep) router.push("/");
   }
 
   function openEdit(id: string, action: "rename" | "delete") {
@@ -236,16 +244,16 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
     }
   }
 
-  const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit, onExport: sync.download };
+  const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit, onExport: sync.download, prepActive: Boolean(prep) };
   return <div className={`study-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
     <aside className={`lecture-sidebar ${sidebarCollapsed ? "rail" : ""}`} aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} onClose={() => setSidebarCollapsed(true)} /></aside>
     <dialog ref={mobileSidebar} className="mobile-sidebar" aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={false} onToggleCollapse={() => mobileSidebar.current?.close()} onClose={() => mobileSidebar.current?.close()} /></dialog>
     <div className="workspace">
       <header className="workspace-header"><div className="header-inner">
         <button className="icon-button open-sidebar" type="button" title="Open sidebar" aria-label="Open sidebar" onClick={() => { if (matchMedia("(max-width: 767px)").matches) mobileSidebar.current?.showModal(); else setSidebarCollapsed(false); }}><PanelLeft aria-hidden="true" /></button>
-        <span className="workspace-title">{active.title || "New lecture"}</span>
+        <span className="workspace-title">{prep ? "Exam prep" : active.title || "New lecture"}</span>
       </div></header>
-      <main className="workspace-main">
+      {prep ? <main className="workspace-main prep-main"><PrepArea exam={prep.exam} /></main> : <main className="workspace-main">
         <StudySyncStatus sync={sync} username={username} />
         <section className="input-section" aria-labelledby="input-heading">
           <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1></div>
@@ -278,7 +286,7 @@ function AccountWorkspace({ userId, username, refreshAuth }: { userId: string | 
         </section>
         {staleKit && <div className="notice warning" role="status"><AlertCircle aria-hidden="true" /><p>These materials are from the previous version of this lecture. Regenerate to update them.</p></div>}
         {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : pending || (userId && isActiveJob(task.job)) ? <MaterialsSkeleton /> : <section className="empty-materials" aria-label="Study materials"><BookOpen aria-hidden="true" /><h2>No study materials yet</h2><div className="empty-tabs"><span>Summary</span><span>Key points</span><span>Quiz</span><span>Flashcards</span></div></section>}
-      </main>
+      </main>}
     </div>
     <dialog className="history-dialog" ref={editDialog} aria-labelledby="edit-title" onClose={() => setEdit(null)}>
       <form onSubmit={submitEdit}><h2 id="edit-title">{edit?.action === "delete" ? "Delete lecture?" : "Rename lecture"}</h2>
