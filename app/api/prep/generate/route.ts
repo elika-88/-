@@ -2,11 +2,11 @@ import { ERROR_HTTP_STATUS, type ErrorResponse, type GenerationError } from "@/l
 import { createOpenAIClient } from "@/lib/openai";
 import { publicError } from "@/lib/ai/pipeline";
 import { PASSAGE_LIMITS } from "@/lib/prep/exams";
-import { PrepGenerateRequestSchema } from "@/lib/prep/schema";
+import { PrepGenerateRequestSchema, type PrepStreamEvent } from "@/lib/prep/schema";
 import { generateReadingSet } from "@/lib/server/prep-generation";
 
 export const runtime = "nodejs";
-export const maxDuration = 180;
+export const maxDuration = 200;
 const MAX_BODY_BYTES = 64 * 1024;
 
 function errorResponse(error: GenerationError) {
@@ -38,14 +38,27 @@ export async function POST(request: Request) {
   const controller = new AbortController();
   const abort = () => controller.abort();
   request.signal.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(abort, 150_000);
-  try {
-    const set = await generateReadingSet(parsed.data, connection, controller.signal);
-    return Response.json({ set }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) {
-    return errorResponse(controller.signal.aborted ? { code: "TIMEOUT", message: "Generation was cancelled or took too long. Try again.", retryable: true } : publicError(error));
-  } finally {
-    clearTimeout(timer);
-    request.signal.removeEventListener("abort", abort);
-  }
+  const timer = setTimeout(abort, 170_000);
+  const cleanup = () => { clearTimeout(timer); request.signal.removeEventListener("abort", abort); };
+  const encoder = new TextEncoder();
+  let closed = false;
+  // NDJSON stream: stage events let the client show real progress with check marks.
+  const stream = new ReadableStream<Uint8Array>({
+    async start(output) {
+      const send = (event: PrepStreamEvent) => { if (!closed) output.enqueue(encoder.encode(JSON.stringify(event) + "\n")); };
+      try {
+        send({ type: "stage", stage: "reading", attempt: 1 });
+        const set = await generateReadingSet(parsed.data, connection, controller.signal, (stage, attempt) => send({ type: "stage", stage, attempt }));
+        send({ type: "stage", stage: "complete", attempt: 1 });
+        send({ type: "result", set });
+      } catch (error) {
+        send({ type: "error", error: controller.signal.aborted ? { code: "TIMEOUT", message: "Generation was cancelled or took too long. Try again.", retryable: true } : publicError(error) });
+      } finally {
+        cleanup();
+        if (!closed) { closed = true; output.close(); }
+      }
+    },
+    cancel() { closed = true; controller.abort(); cleanup(); },
+  });
+  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no" } });
 }

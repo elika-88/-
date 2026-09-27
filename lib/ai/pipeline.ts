@@ -29,7 +29,7 @@ const VerdictsSchema = z.strictObject({ items: z.array(z.strictObject({ itemId: 
 const NotesSchema = GeneratedMaterialsSchema.pick({ lectureTitle: true, overview: true, summary: true, keyPoints: true, limitations: true });
 const QuizSchema = GeneratedMaterialsSchema.pick({ quiz: true });
 const CardsSchema = GeneratedMaterialsSchema.pick({ flashcards: true });
-const STRUCTURED_OUTPUT_TOKENS = 8_000;
+const STRUCTURED_OUTPUT_TOKENS = 10_000;
 export type GenerationDiagnostic = { stage: string; outcome: string; representation: string; characters: number; issues?: { path: string; code: string }[] };
 
 export async function generateStudyKit(input: GenerateRequest, connection: Awaited<ReturnType<typeof createOpenAIClient>>, runId: string, signal: AbortSignal, emit: (event: GenerationEvent) => void, diagnose?: (diagnostic: GenerationDiagnostic) => void) {
@@ -126,8 +126,8 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       // All must succeed before the combined result can reach verification.
       const parts = await Promise.allSettled([
         savedNotes ? Promise.resolve(savedNotes) : structured(NotesSchema, 'study_notes', `${shared} Generate a concise overview (one sentence), 1-5 themed summary sections (one focused sentence each), and 1-5 distinct key points as the source supports. Cover the main topics without repetition or compound claims. IDs: overview, summary1..., point1... . Report real limitations in the requested output language.`, data(previousNotes)),
-        savedQuiz ? Promise.resolve(savedQuiz) : structured(QuizSchema, 'study_quiz', `${shared} Generate up to 8 varied questions if supported, otherwise fewer. IDs q1, q2... . Exactly four distinct options and one correct answer indexed 0-3. Plausible distractors are incorrect alternatives, not asserted facts. Explanations must be one concise sentence.`, data(previousQuiz)),
-        savedCards ? Promise.resolve(savedCards) : structured(CardsSchema, 'study_cards', `${shared} Generate up to 10 distinct cards if supported, otherwise fewer. IDs fc1, fc2... . Answers must be one concise sentence. Cover definitions, distinctions and relationships.`, data(previousCards)),
+        savedQuiz ? Promise.resolve(savedQuiz) : structured(QuizSchema, 'study_quiz', `${shared} Generate up to 12 varied questions if supported, otherwise fewer. Mix recall, understanding, comparison and reasoning, and spread them across all topics. IDs q1, q2... . Exactly four distinct options and one correct answer indexed 0-3. Plausible distractors are incorrect alternatives, not asserted facts. Explanations must be one concise sentence.`, data(previousQuiz)),
+        savedCards ? Promise.resolve(savedCards) : structured(CardsSchema, 'study_cards', `${shared} Generate up to 15 distinct cards if supported, otherwise fewer. IDs fc1, fc2... . Answers must be one concise sentence. Cover definitions, distinctions and relationships.`, data(previousCards)),
       ]);
       // Save every successful sibling before propagating any failure.
       if (parts[0].status === 'fulfilled') savedNotes = parts[0].value;
@@ -139,7 +139,7 @@ export async function generateStudyKit(input: GenerateRequest, connection: Await
       const cards = fulfilled(parts[2]);
       const materials = GeneratedMaterialsSchema.parse({ ...notes, ...quiz, ...cards });
       phase = 'validation';
-      if (materials.quiz.length < 8 || materials.flashcards.length < 10) materials.limitations.push('Fewer practice items were generated to stay within the available source evidence.');
+      if (materials.quiz.length < 12 || materials.flashcards.length < 15) materials.limitations.push('Fewer practice items were generated to stay within the available source evidence.');
       const representedTopics = validateMaterials(materials, analysis.topics, segments);
       emit({ type: 'stage', runId, stage: 'verifying' });
       phase = 'review';

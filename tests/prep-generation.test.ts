@@ -7,7 +7,7 @@ import type { createOpenAIClient } from '@/lib/openai';
 
 const passage = ('Honeybees communicate the location of food through a waggle dance. The angle of the dance relative to vertical indicates the direction of the food source relative to the sun. '
   + 'Longer waggle runs signal greater distances. Researchers first decoded this behaviour in the twentieth century. ').repeat(4);
-const request: PrepGenerateRequest = { exam: 'ielts', passage, types: ['tfng', 'mcq', 'completion'], explanationLanguage: 'en' };
+const request: PrepGenerateRequest = { exam: 'ielts', passage, types: ['tfng', 'mcq', 'completion'], count: 6, explanationLanguage: 'en' };
 const base = { explanation: 'Because the passage says so.' };
 const valid: ReadingSet = {
   title: 'Bee communication',
@@ -49,6 +49,17 @@ describe('prep reading sets', () => {
     expect(set.questions).toHaveLength(4);
     expect(parse).toHaveBeenCalledTimes(2);
     expect(JSON.parse(parse.mock.calls[1][0].input[1].content).previousValidationError).toMatch(/exact quote/);
+  });
+
+  it('reports stages and respects the requested question count', async () => {
+    const stages: string[] = [];
+    const parse = vi.fn().mockResolvedValue({ status: 'completed', output: [], output_parsed: valid });
+    const connection = { client: { responses: { parse } }, model: 'test-model', apiFormat: 'responses' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    await generateReadingSet(request, connection, new AbortController().signal, (stage, attempt) => stages.push(`${stage}${attempt}`));
+    expect(stages).toEqual(['writing1', 'checking1']);
+    const many = { ...valid, questions: Array.from({ length: 12 }, (_, index) => valid.questions[index % 4]) };
+    expect(validateReadingSet(many, { ...request, count: 10 }).questions).toHaveLength(10);
+    expect(() => validateReadingSet(valid, { ...request, count: 15 })).toThrow(/at least 9/);
   });
 
   it('estimates IELTS bands from scaled raw scores', () => {

@@ -1,22 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import type { GenerationStage } from "@/lib/contracts/generation";
 
-const steps = ["validating", "analyzing", "generating", "verifying", "correcting", "complete"] as const;
+const steps = ["validating", "analyzing", "generating", "verifying", "complete"] as const;
 type Step = (typeof steps)[number];
 type StepState = "pending" | "active" | "done" | "error";
 
 const labels: Record<"en" | "zh", Record<Step, string>> = {
-  en: { validating: "Validate", analyzing: "Analyze", generating: "Generate", verifying: "Verify", correcting: "Correct", complete: "Finish" },
-  zh: { validating: "校验", analyzing: "分析", generating: "生成", verifying: "核对", correcting: "修正", complete: "完成" },
+  en: { validating: "Check the lecture", analyzing: "Find the main topics", generating: "Write summary, key points, quiz and flashcards", verifying: "Check every item against the source", complete: "Done" },
+  zh: { validating: "检查讲稿", analyzing: "分析主题", generating: "撰写摘要、要点、测验和闪卡", verifying: "逐条对照原文核对", complete: "完成" },
 };
+const correctingLabel = { en: "Fix items that did not pass the check", zh: "修正未通过核对的内容" };
 
+/**
+ * Stages run in this order, so every stage before the reported one has finished.
+ * `correcting` re-runs writing after a failed check: it is shown on the writing
+ * row (relabelled), and verification is pending again until it passes.
+ */
 function stepIndex(stage: GenerationStage | null) {
   if (!stage) return -1;
-  return steps.indexOf(stage);
+  return steps.indexOf(stage === "correcting" ? "generating" : stage);
 }
 
 function formatElapsed(ms: number) {
@@ -36,11 +42,44 @@ export function useElapsed(startedAt: number | null, running: boolean) {
   return startedAt === null || now === null ? null : Math.max(0, now - startedAt);
 }
 
+export type ProgressStep = { id: string; label: string; stage?: string };
+
 /**
- * Stage stepper shared by guest streaming and account background jobs.
- * Purely presentational: text never includes a percentage because stage
- * durations vary widely and a fake percentage would mislead.
+ * Vertical checklist: finished steps get a check mark, the current one a spinner.
+ * Purely presentational; never shows a percentage because step durations vary.
  */
+export function ProgressSteps({ steps: items, current, status, startedAt = null, estimate, doneMessage, label }: {
+  steps: ProgressStep[];
+  current: number;
+  status: "running" | "done" | "failed";
+  startedAt?: number | null;
+  estimate?: string;
+  doneMessage?: string;
+  label: string;
+}) {
+  const { language } = useSettings();
+  const zh = language === "zh";
+  const elapsed = useElapsed(startedAt, status === "running");
+  return <div className="gen-checklist-wrap" data-status={status}>
+    {status === "done" && doneMessage && <p className="gen-done" role="status"><span className="gen-check" data-state="done" aria-hidden="true"><Check /></span>{doneMessage}</p>}
+    <ol className="gen-checklist" aria-label={label}>
+      {items.map((step, index) => {
+        const state: StepState = status === "done" || index < current ? "done" : index === current ? (status === "failed" ? "error" : "active") : "pending";
+        return <li key={step.id} className="gen-check-row gen-step" data-state={state} data-stage={step.stage ?? step.id} aria-current={state === "active" ? "step" : undefined}>
+          <span className="gen-check" data-state={state} aria-hidden="true">{state === "done" ? <Check /> : state === "error" ? <X /> : null}</span>
+          <span className="gen-check-label">{step.label}</span>
+          {state === "done" && <span className="sr-only">{zh ? "已完成" : "completed"}</span>}
+        </li>;
+      })}
+    </ol>
+    {elapsed !== null && status === "running" && <div className="gen-progress-meta" aria-hidden="true">
+      <span>{zh ? `已用时 ${formatElapsed(elapsed)}` : `Elapsed ${formatElapsed(elapsed)}`}</span>
+      {estimate && <span>{estimate}</span>}
+    </div>}
+  </div>;
+}
+
+/** Lecture generation stages (guest streaming and account background jobs). */
 export function GenerationSteps({ stage, failed = false, startedAt = null, running = true }: {
   stage: GenerationStage | null;
   failed?: boolean;
@@ -50,28 +89,12 @@ export function GenerationSteps({ stage, failed = false, startedAt = null, runni
   const { language } = useSettings();
   const zh = language === "zh";
   const text = labels[zh ? "zh" : "en"];
-  const current = stepIndex(stage);
+  const correcting = stage === "correcting";
+  const items = steps.map((step) => ({ id: step, stage: correcting && step === "generating" ? "correcting" : step, label: correcting && step === "generating" ? correctingLabel[zh ? "zh" : "en"] : text[step] }));
   const done = stage === "complete" && !running;
-  const elapsed = useElapsed(startedAt, running && !failed);
-
-  return <div className="gen-steps-wrap">
-    <ol className="gen-steps" aria-label={zh ? "生成阶段" : "Generation stages"}>
-      {steps.map((step, index) => {
-        // The API reports the current stage, not a history of completed stages.
-        const state: StepState = index !== current ? "pending" : failed ? "error" : done ? "done" : "active";
-        return <li key={step} className="gen-step" data-state={state} data-stage={step} aria-label={text[step]} aria-current={state === "active" ? "step" : undefined}>
-          <span className="gen-step-bar" aria-hidden="true" />
-          <span className="gen-step-label">
-            <span className="gen-step-dot" aria-hidden="true">{state === "done" && <Check />}</span>
-            <span>{text[step]}</span>
-          </span>
-        </li>;
-      })}
-    </ol>
-    {elapsed !== null && running && !failed && <div className="gen-progress-meta" aria-hidden="true">
-      <span>{zh ? `已用时 ${formatElapsed(elapsed)}` : `Elapsed ${formatElapsed(elapsed)}`}</span>
-    </div>}
-  </div>;
+  return <ProgressSteps steps={items} current={stepIndex(stage)} status={failed ? "failed" : done ? "done" : "running"} startedAt={startedAt}
+    label={zh ? "生成阶段" : "Generation stages"}
+    doneMessage={zh ? "学习材料已生成，全部内容已对照原文核对" : "Study materials are ready and checked against the source"} />;
 }
 
 /** Placeholder shaped like the study dashboard while the first result is on its way. */

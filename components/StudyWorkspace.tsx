@@ -62,7 +62,13 @@ function AccountWorkspace({ userId, username, refreshAuth, prep }: { userId: str
   const [youtubeUrl, setYoutubeUrl] = useState("");
   
   const [progress, setProgress] = useState("");
-  const [liveStage, setLiveStage] = useState<{ stage: GenerationStage | null; startedAt: number } | null>(null);
+  const [liveStage, setLiveStage] = useState<{ stage: GenerationStage | null; startedAt: number; done?: boolean } | null>(null);
+  // Keep the finished checklist visible briefly so the user sees every step ticked off.
+  useEffect(() => {
+    if (!liveStage?.done) return;
+    const timer = window.setTimeout(() => setLiveStage((value) => value?.done ? null : value), 6000);
+    return () => window.clearTimeout(timer);
+  }, [liveStage?.done]);
   const [dragging, setDragging] = useState(false);
   const operation = useRef<Operation | null>(null);
   const extraction = useRef<AbortController | null>(null);
@@ -233,6 +239,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep }: { userId: str
       const latest = historyRef.current;
       save({ ...latest, sessions: latest.sessions.map((session) => session.id === current.sessionId ? { ...session, kit, tab: "summary", updatedAt: Date.now() } : session) });
       setProgress("Study materials ready.");
+      setLiveStage((value) => value && { ...value, stage: "complete", done: true });
     } catch (caught) {
       if (operation.current !== current) return;
       if (timedOut) setError(new GenerationClientError("TIMEOUT", true));
@@ -240,7 +247,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep }: { userId: str
       else setError(caught instanceof GenerationClientError ? caught : new GenerationClientError("NETWORK_ERROR", true));
     } finally {
       clearTimeout(timeout);
-      if (operation.current === current) { operation.current = null; setPending(false); setLiveStage(null); }
+      if (operation.current === current) { operation.current = null; setPending(false); setLiveStage((value) => value?.done ? value : null); }
     }
   }
 
@@ -295,7 +302,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep }: { userId: str
             {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
             <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · saved on this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
-            {pending && liveStage && <div className="gen-progress"><GenerationSteps stage={liveStage.stage} startedAt={liveStage.startedAt} /></div>}
+            {liveStage && (pending || liveStage.done) && <div className="gen-progress"><GenerationSteps stage={liveStage.stage} startedAt={liveStage.startedAt} running={!liveStage.done} /></div>}
           </form>
           {userId && <GenerationJobStatus task={task} />}
         </section>
