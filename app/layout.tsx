@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./motion.css";
 import "./sidebar.css";
+import "./workspace.css";
 import { SettingsProvider } from "@/lib/i18n/SettingsContext";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 

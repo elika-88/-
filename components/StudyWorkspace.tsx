@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, BookOpen, Check, FileText, Link, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square, Upload } from "lucide-react";
+import { AlertCircle, BookOpen, Check, CircleHelp, FileText, Layers, Link, ListChecks, LoaderCircle, PanelLeft, RotateCcw, Sparkles, Square, Upload } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { CustomLanguageSelect } from '@/components/CustomLanguageSelect';
 import { HistorySidebar } from "@/components/HistorySidebar";
@@ -255,37 +255,57 @@ function AccountWorkspace({ userId, username, refreshAuth, prep }: { userId: str
       </div></header>
       {prep ? <main className="workspace-main prep-main"><PrepArea exam={prep.exam} /></main> : <main className="workspace-main">
         <StudySyncStatus sync={sync} username={username} />
-        <section className="input-section" aria-labelledby="input-heading">
-          <div className="input-heading-row"><h1 id="input-heading">Build your study materials</h1></div>
+        <section className="input-section composer" aria-labelledby="input-heading">
+          <div className="composer-intro">
+            <h1 id="input-heading">What are you studying today?</h1>
+            <p>Paste a lecture or import a file. Lumina turns it into a summary, key points, a quiz and flashcards, each linked back to the original text.</p>
+          </div>
           <form onSubmit={submit} noValidate aria-busy={pending || importing || backgroundBusy}>
-            <fieldset disabled={!ready || pending || importing || submitting} className="lecture-fields">
-              <div><label htmlFor="lecture-title">Lecture title <span className="optional">(optional)</span></label><input className="text-field" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder="Untitled lecture" /></div>
-              <div className="course-import" aria-label="Import course source">
-                <div className="course-import-heading"><FileText aria-hidden="true" /><div><strong>Import course content</strong><span>PDF, PPTX, DOCX, TXT or Markdown up to 15 MB</span></div></div>
-                <div className="course-import-controls">
-                  <div className="file-dropzone" data-dragging={dragging || undefined} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }} onDrop={(event) => { event.preventDefault(); setDragging(false); importFile(event.dataTransfer.files[0]); }}>
-                    <input ref={courseFileInput} id="course-file" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={(event) => { importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-                    <label htmlFor="course-file"><Upload aria-hidden="true" />{dragging ? "Release to import" : "Drop a course file here or browse"}</label>
+            <div className="lecture-fields">
+              <div className="composer-box" data-dragging={dragging || undefined}
+                onDragEnter={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
+                onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
+                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+                onDrop={(event) => { if (!event.dataTransfer.files.length) return; event.preventDefault(); setDragging(false); importFile(event.dataTransfer.files[0]); }}>
+                <fieldset className="composer-fields" disabled={!ready || pending || importing || submitting}>
+                <label className="sr-only" htmlFor="lecture-title">Lecture title (optional)</label>
+                <input className="composer-title" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder="Untitled lecture" />
+                <label className="sr-only" htmlFor="lecture">Lecture text</label>
+                <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder="Paste lecture notes, a transcript or an article here. At least a few paragraphs works best." />
+                </fieldset>
+                <div className="composer-bar">
+                  <span id="lecture-count" className="composer-count">{countWords(active.lecture).toLocaleString("en-US")} words · {active.lecture.length.toLocaleString("en-US")} / 60,000</span>
+                  <div className="composer-actions">
+                    <CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending || importing || submitting} onChange={(val) => updateSession({ outputLanguage: val })} />
+                    {pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}
+                    <Button type="submit" className="composer-submit" disabled={!ready || pending || importing || Boolean(userId && task.blocked)}>{pending || importing || backgroundBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : displayedKit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? "Importing" : task.action === 'saving' ? 'Saving lecture' : task.restoring ? 'Checking tasks' : pending || backgroundBusy ? "Generating" : displayedKit ? "Regenerate materials" : "Generate materials"}</Button>
                   </div>
-                  <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">YouTube video link</label><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="Paste a YouTube link" inputMode="url" /><Button type="button" variant="outline" onClick={importYouTube} title="Import YouTube captions"><Link aria-hidden="true" />Import captions</Button></div>
                 </div>
-                <p className="course-import-note">YouTube videos must be public and have captions. Save legacy PowerPoint files as .pptx first.</p>
+                {dragging && <div className="composer-drop" aria-hidden="true"><Upload />Drop to import this file</div>}
               </div>
-              <div><div className="field-heading"><label htmlFor="lecture">Lecture text</label><span id="lecture-count">{countWords(active.lecture).toLocaleString("en-US")} words · {active.lecture.length.toLocaleString("en-US")} / 60,000</span></div>
-                <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder="Lecture text" /></div>
-            </fieldset>
-            <div className="input-toolbar"><CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending || importing || submitting} onChange={(val) => updateSession({ outputLanguage: val })} />
-              <div className="generate-actions">{pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}<Button type="submit" disabled={!ready || pending || importing || Boolean(userId && task.blocked)}>{pending || importing || backgroundBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : displayedKit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? "Importing" : task.action === 'saving' ? 'Saving lecture' : task.restoring ? 'Checking tasks' : pending || backgroundBusy ? "Generating" : displayedKit ? "Regenerate materials" : "Generate materials"}</Button></div>
+              <fieldset className="course-import" aria-label="Import course source" disabled={!ready || pending || importing || submitting}>
+                <span className="course-import-label">Or import from</span>
+                <div className="file-dropzone">
+                  <input ref={courseFileInput} id="course-file" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={(event) => { importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                  <label htmlFor="course-file"><FileText aria-hidden="true" />A file <span>PDF, PPTX, DOCX, TXT, MD · 15 MB</span></label>
+                </div>
+                <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">YouTube video link</label><Link aria-hidden="true" /><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); importYouTube(); } }} placeholder="A YouTube link with captions" inputMode="url" /><Button type="button" variant="ghost" onClick={importYouTube} title="Import YouTube captions">Import captions</Button></div>
+              </fieldset>
             </div>
             {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
-            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
+            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · saved on this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
             {pending && liveStage && <div className="gen-progress"><GenerationSteps stage={liveStage.stage} startedAt={liveStage.startedAt} /></div>}
           </form>
           {userId && <GenerationJobStatus task={task} />}
         </section>
         {staleKit && <div className="notice warning" role="status"><AlertCircle aria-hidden="true" /><p>These materials are from the previous version of this lecture. Regenerate to update them.</p></div>}
-        {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : pending || (userId && isActiveJob(task.job)) ? <MaterialsSkeleton /> : <section className="empty-materials" aria-label="Study materials"><BookOpen aria-hidden="true" /><h2>No study materials yet</h2><div className="empty-tabs"><span>Summary</span><span>Key points</span><span>Quiz</span><span>Flashcards</span></div></section>}
+        {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : pending || (userId && isActiveJob(task.job)) ? <MaterialsSkeleton /> : <section className="empty-materials" aria-labelledby="empty-heading"><h2 id="empty-heading">No study materials yet</h2><p className="empty-lead">Here is what you will get once you generate:</p><ul className="empty-grid">
+          <li><BookOpen aria-hidden="true" /><strong>Summary</strong><span>An overview and the main sections in plain language.</span></li>
+          <li><ListChecks aria-hidden="true" /><strong>Key points</strong><span>The ideas worth remembering, marked by importance.</span></li>
+          <li><CircleHelp aria-hidden="true" /><strong>Quiz</strong><span>Multiple-choice questions with explanations.</span></li>
+          <li><Layers aria-hidden="true" /><strong>Flashcards</strong><span>Cards to flip, with a review mode for mistakes.</span></li>
+        </ul><p className="empty-foot">Every item links to the sentence it came from, so you can check it.</p></section>}
       </main>}
     </div>
     <dialog className="history-dialog" ref={editDialog} aria-labelledby="edit-title" onClose={() => setEdit(null)}>
