@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { BookOpenText, Check, LoaderCircle, RotateCcw, Sparkles, SquarePen, X } from "lucide-react";
+import { Check, LoaderCircle, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EXAMS, PASSAGE_LIMITS, estimateIeltsBand, type ExamId } from "@/lib/prep/exams";
 import type { ReadingQuestion } from "@/lib/prep/schema";
 import { clearSet, recordAttempt, saveSet, usePrepState } from "@/lib/client/prep-store";
@@ -75,7 +76,7 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
 
   if (!saved) {
     const count = passage.length;
-    return <section className={styles.compose} aria-busy={loading}>
+    return <section className={styles.card} aria-busy={loading}>
       <div className={styles.fieldHead}>
         <label htmlFor="prep-passage">{c.passage}</label>
         <span className={count > PASSAGE_LIMITS.maxCharacters ? styles.over : undefined}>{c.characters(count, PASSAGE_LIMITS.maxCharacters)}</span>
@@ -89,18 +90,18 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
           const on = types.includes(type.id);
           return <label key={type.id} className={`${styles.chip} ${on ? styles.chipOn : ""}`}>
             <input type="checkbox" checked={on} onChange={() => setTypes(on ? types.filter((id) => id !== type.id) : [...types, type.id])} />
-            {on && <Check size={13} aria-hidden="true" />}{type.name[lang]}
+            {type.name[lang]}
           </label>;
         })}
       </fieldset>
       <div className={styles.composeActions}>
         <label className={styles.toggle}><input type="checkbox" checked={zhExplanations} disabled={loading} onChange={(event) => setZhExplanations(event.target.checked)} />{c.explanationLanguage}</label>
         <div className={styles.actionGroup}>
-          {loading && <button type="button" className={styles.secondaryButton} onClick={cancel}>{c.cancel}</button>}
-          <button type="button" className={styles.primaryButton} onClick={generate} disabled={loading}>
-            {loading ? <LoaderCircle className="animate-spin" size={16} aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}
+          {loading && <Button type="button" variant="ghost" onClick={cancel}>{c.cancel}</Button>}
+          <Button type="button" onClick={generate} disabled={loading}>
+            {loading && <LoaderCircle className="animate-spin" aria-hidden="true" />}
             {loading ? c.generating : c.generate}
-          </button>
+          </Button>
         </div>
       </div>
       {loading && <p className={`${styles.hint} shimmer-text`} role="status">{c.generatingHint}</p>}
@@ -126,21 +127,22 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
 
   return <section className={styles.practice}>
     <article className={styles.passagePanel} aria-label={c.passage}>
-      <header><BookOpenText size={16} aria-hidden="true" /><h2>{saved.set.title}</h2></header>
+      <header><p className={styles.kicker}>{c.passage}</p><h2>{saved.set.title}</h2></header>
       <div className={styles.passageText}>
         {range ? <>{saved.passage.slice(0, range[0])}<mark ref={markRef}>{saved.passage.slice(range[0], range[1])}</mark>{saved.passage.slice(range[1])}</> : saved.passage}
       </div>
     </article>
 
     <div className={styles.questions}>
-      {submitted && <div className={styles.resultCard} role="status">
-        <p className={styles.eyebrow}>{c.results}</p>
-        <p className={styles.resultScore}>{correct}<span> / {questions.length}</span></p>
-        <p>{band !== null ? c.band(band) : c.percent(Math.round((correct / questions.length) * 100))}</p>
-        <p className={styles.muted}>{c.estimateNote}</p>
+      {submitted && <div className={styles.result} role="status">
+        <div>
+          <p className={styles.kicker}>{c.results}</p>
+          <p className={styles.resultScore}>{correct}<span>/{questions.length}</span></p>
+          <p className={styles.resultNote}>{band !== null ? c.band(band) : c.percent(Math.round((correct / questions.length) * 100))} — {c.estimateNote}</p>
+        </div>
         <div className={styles.actionGroup}>
-          <button type="button" className={styles.secondaryButton} onClick={retry}><RotateCcw size={15} aria-hidden="true" />{c.retry}</button>
-          <button type="button" className={styles.primaryButton} onClick={newPassage}><SquarePen size={15} aria-hidden="true" />{c.newSet}</button>
+          <Button type="button" variant="outline" onClick={retry}>{c.retry}</Button>
+          <Button type="button" onClick={newPassage}>{c.newSet}</Button>
         </div>
       </div>}
 
@@ -151,7 +153,7 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
           const state = submitted ? (right ? styles.qRight : styles.qWrong) : "";
           return <li key={question.id} className={`${styles.question} ${state}`} style={{ animationDelay: `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
             <div className={styles.qHead}>
-              <span className={styles.qNumber}>{index + 1}</span>
+              <span className={styles.qNumber}>{String(index + 1).padStart(2, "0")}</span>
               <span className={styles.qType}>{typeName(question.type)}</span>
               {submitted && <span className={styles.qVerdict}>{right ? <><Check size={14} aria-hidden="true" />{c.correct}</> : <><X size={14} aria-hidden="true" />{c.incorrect}</>}</span>}
             </div>
@@ -171,7 +173,7 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
             {submitted && <div className={`${styles.explanation} explanation-enter`}>
               {!right && <p><strong>{c.correctAnswer}:</strong> {question.answerText}</p>}
               <p>{question.explanation}</p>
-              {question.evidence[0] && <button type="button" className={styles.linkButton} onClick={() => setHighlight(question.evidence[0])}><BookOpenText size={14} aria-hidden="true" />{c.showInPassage}</button>}
+              {question.evidence[0] && <button type="button" className={styles.linkButton} onClick={() => setHighlight(question.evidence[0])}>{c.showInPassage}</button>}
             </div>}
           </li>;
         })}
@@ -180,8 +182,8 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
       {!submitted && <div className={styles.submitBar}>
         <span>{c.answered(answeredCount, questions.length)}</span>
         <div className={styles.actionGroup}>
-          <button type="button" className={styles.secondaryButton} onClick={newPassage}>{c.newSet}</button>
-          <button type="button" className={styles.primaryButton} onClick={submit} disabled={answeredCount === 0}><Check size={16} aria-hidden="true" />{c.submit}</button>
+          <Button type="button" variant="ghost" onClick={newPassage}>{c.newSet}</Button>
+          <Button type="button" onClick={submit} disabled={answeredCount === 0}>{c.submit}</Button>
         </div>
       </div>}
     </div>

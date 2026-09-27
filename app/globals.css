@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Noto Serif SC", "Source Han Serif SC", "Songti SC", "PingFang SC", "Microsoft YaHei", serif;
   --background: #f7f8fa;
   --foreground: #20252b;
   --primary: #20252b;
@@ -1999,3 +2000,7 @@ html:root .gpt-admin-table-container { overflow-x: auto; }
   .gpt-theme-grid { gap: 8px; }
   .gpt-theme-card { padding: 14px 8px; }
 }
+
+/* Display serif for page-level headings (Claude-style editorial feel), shared by workspace and prep. */
+html:root .input-section h1 { font-family: var(--font-display); font-weight: 400; font-size: 30px; letter-spacing: -0.015em; }
+@media (max-width: 767px) { html:root .input-section h1 { font-size: 25px; } }

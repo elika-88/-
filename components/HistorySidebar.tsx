@@ -144,7 +144,6 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
             <Link href="/prep" className={`gpt-nav-item sb-prep ${prepActive ? "is-active" : ""}`} aria-current={prepActive ? "page" : undefined} onClick={() => setPeek(false)}>
               <GraduationCap size={18} />
               <span>{t.examPrep}</span>
-              <span className="sb-badge">SAT · IELTS · TOEFL</span>
             </Link>
           </div>
 

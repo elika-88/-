@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, Target } from "lucide-react";
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EXAMS, EXAM_IDS, estimateIeltsBand, type ExamId } from "@/lib/prep/exams";
 import { daysUntil, saveProfile, usePrepState } from "@/lib/client/prep-store";
 import { usePrepCopy } from "./copy";
@@ -13,9 +14,11 @@ export function PrepArea({ exam }: { exam: ExamId | null }) {
   return exam ? <ExamView key={exam} exam={exam} /> : <PrepHome />;
 }
 
-function formatScore(exam: ExamId, correct: number, total: number, c: ReturnType<typeof usePrepCopy>["c"]) {
-  if (exam === "ielts") { const band = estimateIeltsBand(correct, total); return band === null ? c.score(correct, total) : `${c.score(correct, total)} · ${c.band(band)}`; }
-  return `${c.score(correct, total)} · ${c.percent(Math.round((correct / Math.max(total, 1)) * 100))}`;
+type Copy = ReturnType<typeof usePrepCopy>["c"];
+
+function formatScore(exam: ExamId, correct: number, total: number, c: Copy) {
+  const band = exam === "ielts" ? estimateIeltsBand(correct, total) : null;
+  return band !== null ? `${c.score(correct, total)} · ${c.band(band)}` : `${c.score(correct, total)} · ${c.percent(Math.round((correct / Math.max(total, 1)) * 100))}`;
 }
 
 function PrepHome() {
@@ -24,29 +27,34 @@ function PrepHome() {
   const [now] = useState(() => Date.now());
   return <div className={styles.page}>
     <header className={styles.hero}>
-      <p className={styles.eyebrow}>{c.eyebrow}</p>
-      <h1>{c.homeTitle}</h1>
+      <p className={styles.kicker}>{c.eyebrow}</p>
+      <h1 className={styles.display}>{c.homeTitle}</h1>
       <p className={styles.lead}>{c.homeLead}</p>
     </header>
-    <div className={styles.examGrid}>
-      {EXAM_IDS.map((id, index) => {
+
+    <ul className={styles.examList}>
+      {EXAM_IDS.map((id) => {
         const exam = EXAMS[id];
         const profile = state.profiles[id];
         const days = daysUntil(profile?.date ?? null, now);
         const last = state.attempts.find((attempt) => attempt.exam === id);
-        return <Link key={id} href={`/prep/${id}`} className={styles.examCard} style={{ "--exam": exam.accent, animationDelay: `${index * 60}ms` } as CSSProperties}>
-          <span className={styles.examMark} aria-hidden="true">{exam.name.slice(0, 1)}</span>
-          <span className={styles.examName}>{exam.name}</span>
-          <span className={styles.examTagline}>{exam.tagline[lang]}</span>
-          <span className={styles.examMeta}>
-            <span><Target size={14} aria-hidden="true" />{profile?.target ? `${c.target} ${profile.target}` : c.noTarget}</span>
-            <span><CalendarDays size={14} aria-hidden="true" />{days === null ? c.noDate : c.daysLeft(days)}</span>
-          </span>
-          <span className={styles.examLast}>{last ? `${c.lastScore}: ${formatScore(id, last.correct, last.total, c)}` : c.noPractice}</span>
-          <span className={styles.examCta}>{c.start}<ArrowRight size={16} aria-hidden="true" /></span>
-        </Link>;
+        const meta = [
+          profile?.target ? `${c.target} ${profile.target}` : null,
+          days !== null ? c.daysLeft(days) : null,
+          last ? `${c.lastScore} ${formatScore(id, last.correct, last.total, c)}` : null,
+        ].filter(Boolean);
+        return <li key={id}>
+          <Link href={`/prep/${id}`} className={styles.examRow}>
+            <span className={styles.examText}>
+              <span className={styles.examName}>{exam.name}</span>
+              <span className={styles.examTagline}>{exam.tagline[lang]}</span>
+            </span>
+            <span className={styles.examMeta}>{meta.length ? meta.join(" · ") : c.noPractice}</span>
+            <ArrowUpRight className={styles.examArrow} size={18} aria-hidden="true" />
+          </Link>
+        </li>;
       })}
-    </div>
+    </ul>
     <p className={styles.disclaimer}>{c.disclaimer}</p>
   </div>;
 }
@@ -72,29 +80,30 @@ function ExamView({ exam: examId }: { exam: ExamId }) {
     window.setTimeout(() => setSavedFlash(false), 1600);
   }
 
-  return <div className={styles.page} style={{ "--exam": exam.accent } as CSSProperties}>
-    <Link href="/prep" className={styles.backLink}><ArrowLeft size={15} aria-hidden="true" />{c.back}</Link>
+  return <div className={styles.page}>
+    <Link href="/prep" className={styles.backLink}><ArrowLeft size={14} aria-hidden="true" />{c.back}</Link>
     <header className={styles.examHeader}>
-      <span className={styles.examMark} aria-hidden="true">{exam.name.slice(0, 1)}</span>
-      <div>
-        <h1>{exam.name}</h1>
-        <p className={styles.lead}>{exam.tagline[lang]}{days !== null && <> · <strong>{c.daysLeft(days)}</strong></>}</p>
-      </div>
+      <h1 className={styles.display}>{exam.name}</h1>
+      <p className={styles.lead}>{exam.tagline[lang]}{days !== null && <> · {c.daysLeft(days)}</>}</p>
     </header>
 
     <div className={styles.examLayout}>
       <div className={styles.examMain}>
         <nav className={styles.sectionTabs} aria-label={c.sections}>
-          {exam.sections.map((section) => <span key={section.id} className={section.id === exam.readingSection ? styles.sectionActive : styles.sectionSoon} aria-current={section.id === exam.readingSection ? "page" : undefined}>
-            {section.name[lang]}{!section.available && <small>{c.soon}</small>}
-          </span>)}
+          {exam.sections.map((section) => {
+            const current = section.id === exam.readingSection;
+            return <span key={section.id} className={`${styles.sectionTab} ${current ? styles.sectionCurrent : ""}`} aria-current={current ? "page" : undefined} aria-disabled={!section.available || undefined} title={section.available ? undefined : c.soon}>
+              {section.name[lang]}
+            </span>;
+          })}
         </nav>
+        {exam.sections.some((section) => !section.available) && <p className={styles.tabNote}>{c.moreSoon}</p>}
         <ReadingPractice exam={examId} />
       </div>
 
       <aside className={styles.examAside}>
-        <section className={styles.panel}>
-          <h2>{c.profile}</h2>
+        <section className={styles.card}>
+          <h2 className={styles.cardTitle}>{c.profile}</h2>
           <label className={styles.field}><span>{exam.scoreLabel[lang]}</span>
             <select value={target} onChange={(event) => setTarget(event.target.value)}>
               <option value="">—</option>
@@ -104,10 +113,10 @@ function ExamView({ exam: examId }: { exam: ExamId }) {
           <label className={styles.field}><span>{c.examDate}</span>
             <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </label>
-          <button type="button" className={styles.secondaryButton} onClick={submitProfile}>{savedFlash ? c.saved : c.save}</button>
+          <Button type="button" variant="outline" className={styles.fullWidth} onClick={submitProfile}>{savedFlash ? c.saved : c.save}</Button>
         </section>
-        <section className={styles.panel}>
-          <h2>{c.history}</h2>
+        <section className={styles.card}>
+          <h2 className={styles.cardTitle}>{c.history}</h2>
           {attempts.length ? <ul className={styles.attempts}>
             {attempts.map((attempt) => <li key={attempt.id}>
               <span>{attempt.title}</span>
