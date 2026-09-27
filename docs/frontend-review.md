@@ -2,6 +2,15 @@
 
 发布分支：`codex/publish-frontend-motion`，基于最新 `main` 整合。
 
+## 2026-09-27 发布验证
+
+从 `xiaomao-new` 整合新版侧栏（预览、置顶）和 SAT / IELTS / TOEFL 备考阅读练习区，基于远程 `main` 的 `690285a` 保留已上线的生成修复。备考计划和练习记录目前保存在本机浏览器。
+
+- `npm run check` 通过：ESLint、Next 类型生成、TypeScript、284 项测试和生产构建。
+- `npx playwright test --workers=2` 完整回归 82/82 通过，覆盖桌面与手机端。新增备考生成、答题、评分、刷新恢复、错误反馈、窄屏和侧栏置顶/导航测试；备考出题的浏览器测试使用模拟响应，未调用线上模型。
+- 对比度测试补充 `color(srgb …)` 色值解析，保留原有 4.5:1 阈值。
+- 既有后台生成任务实现未修改；本次新增的备考生成接口随本地备考功能一并发布。
+
 ## 一、本次已完成
 
 动效风格参考 claude.ai / chatgpt.com：时长短（120–320 ms）、减速曲线 `cubic-bezier(.2,0,0,1)`、位移小（≤ 8 px），正文内容不做弹跳。所有动画在 `prefers-reduced-motion: reduce` 下都会关闭。

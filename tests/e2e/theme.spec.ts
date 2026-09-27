@@ -7,7 +7,9 @@ async function checkContrast(page: Page, selector: string) {
   const failures = () => page.locator(selector).evaluateAll(elements => {
     const parse = (color: string) => {
       const values = color.match(/[\d.]+/g)?.map(Number) ?? [];
-      return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 1];
+      // color-mix() computes to color(srgb ...), whose RGB channels use 0–1.
+      const scale = color.startsWith('color(srgb ') ? 255 : 1;
+      return [(values[0] ?? 0) * scale, (values[1] ?? 0) * scale, (values[2] ?? 0) * scale, values[3] ?? 1];
     };
     const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => {
       const channel = value / 255;
