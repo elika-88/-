@@ -60,9 +60,9 @@ describe('prep quality boundaries',()=>{
   });
   it('reviews the masked TOEFL context and returns only audited questions',async()=>{
     const evidenceId=citationCatalog(segmentLecture(passage))[0].sourceId;
-    const questions=valid.questions.map((q,i)=>({...q,id:'q'+(i+1),type:'complete_words',options:[],answerIndex:-1,answerText:'Honeybees',context:'Honeybees communicate through a dance to signal where food is located.',evidence:[evidenceId],optionReasons:[],strategy:'Check the context.',wordLimit:1}));
+    const questions=valid.questions.map((q,i)=>({...q,id:'q'+(i+1),type:'complete_words',options:[],answerIndex:-1,answerText:'Honeybees',context:'Honeybees communicate through a dance to signal where food is located.',evidence:[evidenceId],optionReasons:[],strategy:'Check the context.',wordLimit:1,allowNumber:false,answerIndices:[],taskId:null,graphic:null}));
     const output=(value:unknown)=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});
-    const create=vi.fn().mockResolvedValueOnce(output({title:'Bees',questions})).mockResolvedValueOnce(output({items:questions.map(q=>({id:q.id,valid:true,reason:''}))}));
+    const create=vi.fn().mockResolvedValueOnce(output({title:'Bees',questions,tasks:[]})).mockResolvedValueOnce(output({items:questions.map(q=>({id:q.id,valid:true,reason:''}))}));
     const result=await generateReadingSet({...request,exam:'toefl',types:['complete_words'],count:4},{client:{responses:{create}},model:'test-model',apiFormat:'responses'} as never,new AbortController().signal);
     const reviewed=JSON.parse(create.mock.calls[1][0].input[1].content).set;
     expect(reviewed.questions[0].context).toContain('Hone_____');

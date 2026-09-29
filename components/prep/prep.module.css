@@ -20,6 +20,30 @@
 .examGuide summary, .toolSection summary, .passagePanel summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
 .examGuide a { color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; }
 .practiceBlock { min-width: 0; }
+.skillPicker { margin-top: 24px; }
+.skillGroup { border: 0; border-top: 1px solid var(--border); padding: 12px 0; margin-top: 12px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; }
+.skillGroup legend { padding-right: 8px; font-size: 13px; font-weight: 600; }
+.skillOption { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.skillOption input { margin-top: 4px; flex-shrink: 0; accent-color: var(--foreground); }
+.skillOption:has(input:disabled) { color: var(--muted-foreground); }
+.skillTips { font-size: 13px; line-height: 1.8; }
+.skillTips summary { cursor: pointer; }
+.taskMaterial { min-width: 0; margin: 0 0 20px; padding: 12px 0; border-block: 1px solid var(--border); overflow-wrap: anywhere; color: var(--foreground); }
+.taskMaterial h3, .taskMaterial figcaption { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+.taskInstruction { font-size: 12px; line-height: 1.7; font-weight: 600; }
+.taskText { white-space: pre-wrap; font-size: 14px; line-height: 1.8; }
+.sharedOptions { list-style: none; padding: 0; font-size: 14px; line-height: 1.7; }
+.sharedOptions li { padding: 4px 0; }
+.tableScroll, .diagramScroll { max-width: 100%; overflow-x: auto; margin: 12px 0; }
+.diagramScroll svg { display: block; width: 100%; height: auto; }
+.taskMaterial table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.taskMaterial th, .taskMaterial td { padding: 10px; border: 1px solid var(--border); text-align: left; min-width: 90px; }
+.taskMaterial caption { text-align: left; padding: 6px 0; color: var(--muted-foreground); }
+.graphLegend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; }
+.graphLegend > span { display: inline-flex; align-items: center; gap: 5px; }
+.graphLegend span span { display: inline-block; width: 12px; height: 12px; }
+.field select { width: 100%; min-width: 0; }
+.qHead { flex-wrap: wrap; }
 .practiceToolbar { border-bottom: 1px solid var(--border); margin-bottom: 20px; padding-bottom: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .practiceToolbar h2 { font-family: var(--font-display); font-weight: 400; font-size: 22px; flex: 1; }
 .questionNav { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }

@@ -7,6 +7,7 @@ import { PrepStateSchema, REASONS, skillSummary } from '@/lib/prep/progress';
 import { addVocabulary, changeReview, importLegacy, prepKey, rateReview, readPrep, removeReview, removeVocabulary, replacePrep, usePrepState } from '@/lib/client/prep-store';
 import { usePrepOwner } from './PrepContext';
 import { usePrepCopy } from './copy';
+import { TaskMaterial, DataGraphic } from './TaskMaterial';
 import styles from './prep.module.css';
 
 const cloudSchema=z.object({revision:z.number().int().nonnegative(),state:PrepStateSchema});
@@ -26,9 +27,11 @@ export function LearningTools({exam}:{exam:ExamId}) {
       {!reviews.length&&<p>{zh?'完成练习后，错题和标记题会出现在这里。':'Missed and flagged questions appear here after you submit a practice set.'}</p>}
       {reviews.slice(0,10).map(r=><article key={r.id} className={styles.reviewItem}>
         <p className={styles.hint}>{EXAMS[exam].readingTypes.find(t=>t.id===r.question.type)?.name[lang]} · {zh?'复习日期':'Due'} {new Date(r.dueAt).toLocaleDateString()}</p>
-        {r.question.context&&<div className={styles.itemContext}>{r.question.context}</div>}
+        {(r.source||r.question.context)&&<details><summary>{zh?'阅读材料':'Reading material'}</summary><div className={styles.itemContext}>{r.source||r.question.context}</div></details>}
+        {r.task&&<TaskMaterial task={r.task} headings={r.question.type==='heading'} zh={zh}/>}
+        {r.question.graphic&&<DataGraphic graphic={r.question.graphic} zh={zh}/>}
         <p><strong>{r.question.prompt}</strong></p>
-        {r.question.options.length>0&&<ol type="A">{r.question.options.map((v,i)=><li key={i}>{v}</li>)}</ol>}
+        {!r.task&&r.question.options.length>0&&<ol type="A">{r.question.options.map((v,i)=><li key={i}>{v}</li>)}</ol>}
         <label className={styles.field}>{zh?'先回忆你的答案（不计分）':'Recall your answer first (unscored)'}<input autoComplete="off" /></label>
         <Button variant="outline" onClick={()=>setRevealed(revealed.includes(r.id)?revealed.filter(id=>id!==r.id):[...revealed,r.id])}>{revealed.includes(r.id)?(zh?'隐藏解析':'Hide explanation'):(zh?'展开答案与解析':'Reveal answer and explanation')}</Button>
         {revealed.includes(r.id)&&<div className={styles.explanation}><p><strong>{r.question.answerText}</strong></p><p>{r.question.explanation}</p><p>{r.question.strategy}</p>

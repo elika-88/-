@@ -43,7 +43,7 @@ describe('prep reading sets', () => {
 
   it('retries with validation feedback, then returns a valid set', async () => {
     const evidenceId=citationCatalog(segmentLecture(passage))[0].sourceId;
-    const provider={...valid,questions:valid.questions.map(q=>({...q,context:passage,optionReasons:q.options.length?q.options.map(()=> 'Reason'):[],strategy:'Find evidence',wordLimit:q.type==='completion'?2:0,evidence:q.evidence.length?[evidenceId]:[]}))};
+    const provider={...valid,tasks:[],questions:valid.questions.map(q=>({...q,allowNumber:false,answerIndices:[],taskId:null,graphic:null,context:passage,optionReasons:q.options.length?q.options.map(()=> 'Reason'):[],strategy:'Find evidence',wordLimit:q.type==='completion'?2:0,evidence:q.evidence.length?[evidenceId]:[]}))};
     const bad={...provider,questions:provider.questions.map(q=>({...q,evidence:['missing-id']}))};
     const output=(value:unknown)=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});
     const create = vi.fn().mockResolvedValueOnce(output(bad)).mockResolvedValueOnce(output(provider)).mockResolvedValueOnce(output({items:valid.questions.map((q,i)=>({id:'q'+(i+1),valid:true,reason:''}))}));

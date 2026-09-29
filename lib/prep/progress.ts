@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { EXAM_IDS, type ExamId } from './exams';
 import { ReadingQuestionSchema, ReadingSetSchema, type ReadingQuestion } from './schema';
-const AnswerSchema=z.union([z.number().int().min(0).max(3),z.string().max(200)]);
+import { ReadingTaskSchema, withinWordLimit } from './tasks';
+const AnswerSchema=z.union([z.number().int().min(0).max(11),z.string().max(200),z.array(z.number().int().min(0).max(11)).max(3)]);
+export type PrepAnswer=z.infer<typeof AnswerSchema>;
 export const REASONS=['vocabulary','evidence','inference','grammar','timing','careless','uncertain'] as const;
 const Profile=z.object({target:z.number().nullable(),date:z.string().nullable(),minutes:z.number().min(5).max(120).optional()});
 const Session=z.object({answers:z.record(z.string(),AnswerSchema),flags:z.array(z.string()),submitted:z.boolean(),startedAt:z.number(),deadline:z.number().nullable(),submittedAt:z.number().optional()});
 const SavedSet=z.object({exam:z.enum(EXAM_IDS),passage:z.string().max(12000),types:z.array(z.string()),set:ReadingSetSchema,createdAt:z.number(),session:Session.optional()});
 const Attempt=z.object({id:z.string(),exam:z.enum(EXAM_IDS),title:z.string(),correct:z.number().min(0),total:z.number().min(1),at:z.number(),seconds:z.number().nonnegative().optional(),skills:z.record(z.string(),z.object({correct:z.number(),total:z.number()})).optional()});
-const Review=z.object({id:z.string(),exam:z.enum(EXAM_IDS),question:ReadingQuestionSchema,reason:z.enum(REASONS),note:z.string().max(1200),dueAt:z.number(),streak:z.number().int().min(0).max(6)});
+const Review=z.object({id:z.string(),exam:z.enum(EXAM_IDS),question:ReadingQuestionSchema,task:ReadingTaskSchema.optional(),source:z.string().max(13000).optional(),reason:z.enum(REASONS),note:z.string().max(1200),dueAt:z.number(),streak:z.number().int().min(0).max(6)});
 const Vocabulary=z.object({id:z.string(),exam:z.enum(EXAM_IDS),term:z.string().min(1).max(120),meaning:z.string().max(500),context:z.string().max(1200),at:z.number()});
 export const PrepStateSchema=z.object({
   profiles:z.partialRecord(z.enum(EXAM_IDS),Profile),attempts:z.array(Attempt).max(100),sets:z.partialRecord(z.enum(EXAM_IDS),SavedSet),
@@ -22,12 +24,20 @@ export type SavedSet=z.infer<typeof SavedSet>;
 export type ExamProfile=z.infer<typeof Profile>;
 export const emptyPrepState=():PrepState=>({profiles:{},attempts:[],sets:{},reviews:[],vocabulary:[],drafts:{}});
 export function isCorrect(question:ReadingQuestion,answer:unknown) {
+  if(question.answerIndices?.length){const score=scoreQuestion(question,answer);return score.correct===score.total;}
   if(question.answerIndex>=0) return answer===question.answerIndex;
   if(typeof answer!=='string') return false;
   // Preserve punctuation and hyphens: IELTS spelling must not be silently repaired.
   const clean=(s:string)=>s.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
-  return clean(answer)===clean(question.answerText) && answer.trim().split(/\s+/).length<=(question.wordLimit??2);
+  return clean(answer)===clean(question.answerText) && withinWordLimit(answer,question.wordLimit??2,question.allowNumber);
 }
+export function scoreQuestion(question:ReadingQuestion,answer:unknown):{correct:number;total:number} {
+  const keys=question.answerIndices;
+  if(!keys?.length)return {correct:Number(isCorrect(question,answer)),total:1};
+  if(!Array.isArray(answer)||answer.length>keys.length||new Set(answer).size!==answer.length||answer.some(i=>!Number.isInteger(i)||i<0||i>=question.options.length))return {correct:0,total:keys.length};
+  return {correct:answer.filter(i=>keys.includes(i)).length,total:keys.length};
+}
+export function hasAnswer(answer:unknown){return Array.isArray(answer)?answer.length>0:typeof answer==='string'?answer.trim().length>0:typeof answer==='number';}
 export function reviewDue(streak:number,remembered:boolean,now=Date.now()) {
   const next=remembered?Math.min(streak+1,5):0;
   const days=[1,3,7,14,30,60][next];
