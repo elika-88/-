@@ -55,21 +55,30 @@ export default function AdminPage() {
   async function refresh() {
     const response = await fetch("/api/admin", { cache: "no-store" });
     const data = await response.json();
+    if (response.status !== 401 && !response.ok) {
+      throw new Error(data.error ?? "Could not load settings.");
+    }
     setAuthenticated(data.authenticated === true);
     if (data.configured !== undefined) setConfigured(data.configured);
     setSetupError(data.setupError ?? "");
     setSettings(data.settings ?? null);
     setAudit(data.audit ?? []);
-    if (response.status !== 401 && !response.ok) {
-      throw new Error(data.error ?? "Could not load settings.");
-    }
   }
 
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/admin/status", { cache: "no-store", signal: controller.signal })
-      .then((response) => response.json())
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "Could not load administration.");
+        if (!data.authenticated) return data;
+        const details = await fetch("/api/admin", { cache: "no-store", signal: controller.signal });
+        const body = await details.json();
+        if (!details.ok && details.status !== 401) throw new Error(body.error ?? "Could not load settings.");
+        return body;
+      })
       .then((data) => {
+        if (controller.signal.aborted) return;
         setAuthenticated(data.authenticated === true);
         if (data.configured !== undefined) setConfigured(data.configured);
         setSetupError(data.setupError ?? "");
@@ -87,7 +96,7 @@ export default function AdminPage() {
   }, []);
 
   async function handleFetchModels() {
-    if (!settings?.baseURL) return;
+    if (!settings?.baseURL || busy || fetchingModels) return;
     setFetchingModels(true);
     setFetchedModels([]);
     setModelFetchMsg("");
@@ -122,7 +131,7 @@ export default function AdminPage() {
 
   async function action(event: FormEvent, name: "login" | "save" | "logout") {
     event.preventDefault();
-    if (busy) return;
+    if (busy || fetchingModels) return;
     setBusy(true);
     setMessage("");
     setErrorMsg("");
@@ -154,9 +163,18 @@ export default function AdminPage() {
 
       setPassword("");
       setApiKey("");
-      await refresh();
       if (name === "save") {
+        setSettings(data.settings);
+        if (data.audit) setAudit(data.audit);
         setMessage(t.saveChangesBtn + " ✓");
+      } else if (name === "logout") {
+        setAuthenticated(false);
+        setSettings(null);
+        setAudit([]);
+        setFetchedModels([]);
+        setModelFetchMsg("");
+      } else {
+        await refresh();
       }
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Operation failed.");
@@ -253,7 +271,7 @@ export default function AdminPage() {
             type="button"
             className="gpt-admin-logout-link"
             onClick={(e) => action(e, "logout")}
-            disabled={busy}
+            disabled={busy || fetchingModels}
             title={t.signOut}
           >
             <LogOut size={15} />
@@ -319,7 +337,7 @@ export default function AdminPage() {
                     type="button"
                     className="gpt-pill-btn primary"
                     onClick={(e) => action(e, "save")}
-                    disabled={busy}
+                    disabled={busy || fetchingModels}
                   >
                     <Save size={15} />
                     <span>{busy ? "Saving..." : t.saveChangesBtn}</span>
@@ -336,7 +354,7 @@ export default function AdminPage() {
                       type="button"
                       className="gpt-fetch-models-btn"
                       onClick={handleFetchModels}
-                      disabled={fetchingModels || !settings.baseURL}
+                      disabled={busy || fetchingModels || !settings.baseURL}
                       title="Fetch available models from endpoint"
                     >
                       <RefreshCw size={13} className={fetchingModels ? "animate-spin" : ""} />
@@ -425,6 +443,7 @@ export default function AdminPage() {
                             type="button"
                             className={`gpt-model-chip ${settings.model === m ? "active" : ""}`}
                             onClick={() => setSettings({ ...settings, model: m })}
+                            disabled={busy}
                           >
                             <span>{m}</span>
                           </button>

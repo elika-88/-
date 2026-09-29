@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 import { GET } from '@/app/api/admin/status/route';
+import { NextRequest } from 'next/server';
+const request = () => new NextRequest('https://lumina.test/api/admin/status');
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -9,7 +11,7 @@ describe('admin readiness endpoint', () => {
     vi.stubEnv('ADMIN_PASSWORD', undefined);
     vi.stubEnv('ADMIN_ENCRYPTION_KEY', undefined);
     vi.stubEnv('VERCEL', undefined);
-    const response = await GET();
+    const response = await GET(request());
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.configured).toBe(false);
@@ -21,7 +23,7 @@ describe('admin readiness endpoint', () => {
     vi.stubEnv('ADMIN_PASSWORD', undefined);
     vi.stubEnv('ADMIN_ENCRYPTION_KEY', undefined);
     vi.stubEnv('VERCEL', '1');
-    const body = await (await GET()).json();
+    const body = await (await GET(request())).json();
     expect(body.setupError).toContain('in Vercel');
     expect(body.setupError).not.toContain('npm run admin:setup');
   });
@@ -32,7 +34,7 @@ describe('admin readiness endpoint', () => {
     vi.stubEnv('VERCEL', '1');
     vi.stubEnv('TURSO_DATABASE_URL', undefined);
     vi.stubEnv('TURSO_AUTH_TOKEN', undefined);
-    const body = await (await GET()).json();
+    const body = await (await GET(request())).json();
     expect(body.configured).toBe(false);
     expect(body.setupError).toContain('TURSO_DATABASE_URL');
   });

@@ -22,9 +22,9 @@ function sameOrigin(request: NextRequest) {
 async function settingsView() {
   const stored = await readStoredSettings();
   return {
-    baseURL: stored?.settings.baseURL ?? process.env.OPENAI_BASE_URL ?? DEFAULT_API_BASE_URL,
-    model: stored?.settings.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL,
-    apiFormat: stored?.settings.apiFormat ?? process.env.OPENAI_API_FORMAT ?? 'responses',
+    baseURL: stored?.settings.baseURL ?? (process.env.OPENAI_BASE_URL || DEFAULT_API_BASE_URL),
+    model: stored?.settings.model ?? (process.env.OPENAI_MODEL || DEFAULT_MODEL),
+    apiFormat: stored?.settings.apiFormat ?? (process.env.OPENAI_API_FORMAT || 'responses'),
     hasApiKey: Boolean(stored?.settings.apiKey ?? process.env.OPENAI_API_KEY),
     revision: stored?.revision ?? 0, updatedAt: stored?.updatedAt ?? null,
     source: stored ? 'database' : 'environment',
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       const target = ApiBaseUrlSchema.safeParse(body.baseURL);
       if (!target.success) return json({ error: 'Enter a valid HTTPS API base URL, without credentials, query or fragment.' }, 400);
       const stored = (await readStoredSettings())?.settings;
-      const previous = ApiBaseUrlSchema.safeParse(stored?.baseURL ?? process.env.OPENAI_BASE_URL ?? DEFAULT_API_BASE_URL);
+      const previous = ApiBaseUrlSchema.safeParse(stored?.baseURL ?? (process.env.OPENAI_BASE_URL || DEFAULT_API_BASE_URL));
       const enteredKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
       const sameDestination = previous.success && target.data === previous.data;
       if (!sameDestination && !enteredKey) return json({ error: 'A changed API URL requires a new API key.' }, 400);
@@ -113,11 +113,11 @@ export async function POST(request: NextRequest) {
     const {revision, ...input} = parsed.data;
     const old = (await readStoredSettings())?.settings;
     // Never forward a previous key to a newly selected destination.
-    const previousURL = old?.baseURL ?? process.env.OPENAI_BASE_URL ?? DEFAULT_API_BASE_URL;
+    const previousURL = old?.baseURL ?? (process.env.OPENAI_BASE_URL || DEFAULT_API_BASE_URL);
     const key = input.apiKey.trim() || (input.baseURL === previousURL.replace(/[/]+$/, '') ? old?.apiKey ?? process.env.OPENAI_API_KEY : undefined);
     const config = AdminSettingsSchema.safeParse({ ...input, apiKey: key });
     if (!config.success) return json({ error: 'Enter an API key. A changed API URL requires a new key.' }, 400);
     await saveStoredSettings(config.data, revision);
-    return json({ settings: await settingsView() });
+    return json({ settings: await settingsView(), audit: await withAdminDb(async (db) => (await db.execute('SELECT event,created_at FROM audit ORDER BY id DESC LIMIT 20')).rows) });
   } catch (error) { return json({ error: error instanceof Error && error.message === 'CONFLICT' ? 'Settings changed in another session. Reload before saving.' : 'Could not save configuration.' }, error instanceof Error && error.message === 'CONFLICT' ? 409 : 503); }
 }

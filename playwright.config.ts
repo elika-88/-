@@ -6,6 +6,8 @@ process.env.LUMINA_E2E_DATABASE_PATH = e2eDatabasePath;
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  // Keep the shared local Next server and SQLite responsive on developer machines.
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: "list",
@@ -19,14 +21,20 @@ export default defineConfig({
     { name: "mobile", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
-    command: "npm run dev -- --port 3100",
+    command: process.env.LUMINA_E2E_PRODUCTION === '1'
+      ? "node node_modules/next/dist/bin/next build --webpack && node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100"
+      : "npm run dev -- --port 3100",
     url: "http://127.0.0.1:3100",
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: process.env.LUMINA_E2E_PRODUCTION === '1' ? 300_000 : 120_000,
     env: {
       LUMINA_E2E: '1',
       ADMIN_DATABASE_PATH: e2eDatabasePath,
       TURSO_DATABASE_URL: '', TURSO_AUTH_TOKEN: '', VERCEL: '', AUTH_TRUST_PROXY: '',
+      ADMIN_PASSWORD: 'e2e-only-admin-password',
+      ADMIN_ENCRYPTION_KEY: 'ab'.repeat(32),
+      OPENAI_API_KEY: '', OPENAI_BASE_URL: 'https://provider.example.invalid/v1', OPENAI_MODEL: 'e2e-model', OPENAI_API_FORMAT: 'responses',
+      INNGEST_EVENT_KEY: '', INNGEST_SIGNING_KEY: '',
     },
   },
 });

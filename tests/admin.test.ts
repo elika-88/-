@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 import { GET, POST } from '@/app/api/admin/route';
+import { GET as getStatus } from '@/app/api/admin/status/route';
 import { loginAdmin, readStoredSettings, saveStoredSettings, validAdminSession } from '@/lib/server/admin-db';
 import { readOpenAIEnvironment, readApiFormat } from '@/lib/server/env';
 let directory: string;
@@ -28,6 +29,22 @@ function request(body: unknown, token = '', origin = 'http://localhost') {
   return new NextRequest('http://localhost/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: `lumina_admin=${token}` }, body: JSON.stringify(body) });
 }
 describe('admin database', () => {
+  it('uses consistent defaults for blank environment fields and keeps the key at the same destination', async () => {
+    vi.stubEnv('OPENAI_BASE_URL', '');
+    vi.stubEnv('OPENAI_MODEL', '');
+    vi.stubEnv('OPENAI_API_FORMAT', '');
+    const login = await POST(request({ action: 'login', password: 'test-only-admin-password' }));
+    const token = login.cookies.get('lumina_admin')!.value;
+    const view = await (await GET(new NextRequest('http://localhost/api/admin', { headers: { Cookie: `lumina_admin=${token}` } }))).json();
+    expect(view.settings.baseURL).toBe('https://api.openai.com/v1');
+    expect(view.settings.model).not.toBe('');
+    expect(view.settings.apiFormat).toBe('responses');
+    const save = await POST(request({ action: 'save', settings: { baseURL: view.settings.baseURL, model: view.settings.model, apiFormat: view.settings.apiFormat, apiKey: '', revision: 0 } }, token));
+    expect(save.status).toBe(200);
+    expect((await readStoredSettings())?.settings.apiKey).toBe('test-only-environment-key');
+    expect(await save.text()).not.toContain('test-only-environment-key');
+  });
+
   it('accepts an existing nine-character administrator password', async () => {
     vi.stubEnv('ADMIN_PASSWORD', 'test-1234');
     expect(await loginAdmin('test-1234')).toHaveProperty('token');
@@ -61,6 +78,10 @@ describe('admin database', () => {
     expect(login.status).toBe(200);
     expect(login.headers.get('set-cookie')).toContain('HttpOnly');
     const token = login.cookies.get('lumina_admin')!.value;
+    const sessionStatus = () => getStatus(new NextRequest('http://localhost/api/admin/status', { headers: { Cookie: `lumina_admin=${token}` } }));
+    const restored = await sessionStatus();
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toMatchObject({ authenticated: true, configured: true });
     const save = await POST(request({ action: 'save', settings: { ...settings, revision: 0 } }, token));
     expect(save.status).toBe(200);
     expect(await save.text()).not.toContain(settings.apiKey);
@@ -79,6 +100,7 @@ describe('admin database', () => {
     expect(changedURL.status).toBe(400);
     await POST(request({ action: 'logout' }, token));
     expect(await validAdminSession(token)).toBe(false);
+    expect(await (await sessionStatus()).json()).toMatchObject({ authenticated: false });
   });
   it('limits repeated login failures and invalidates sessions after password change', async () => {
     const login = await loginAdmin('test-only-admin-password');

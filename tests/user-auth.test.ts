@@ -94,7 +94,8 @@ describe('real account database and HTTP boundaries', () => {
     expect((await POST(invalid)).status).toBe(400);
   });
 
-  it('limits password guessing and ignores untrusted forwarded IP headers', async () => {
+  // This integration case performs over twenty real scrypt verifications.
+  it('limits password guessing and ignores untrusted forwarded IP headers', { timeout: 20_000 }, async () => {
     const req = request(); req.headers.set('x-forwarded-for', '203.0.113.1'); req.headers.set('x-real-ip', '203.0.113.2');
     expect(authClientAddress(req)).toBeNull();
     vi.stubEnv('VERCEL', '1'); req.headers.set('x-vercel-forwarded-for', '203.0.113.3');
