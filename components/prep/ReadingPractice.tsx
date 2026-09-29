@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { EXAMS, PASSAGE_LIMITS, minimumCharacters, type ExamId } from '@/lib/prep/exams';
 import { PrepGenerateResponseSchema } from '@/lib/prep/schema';
 import { isCorrect, scoreQuestion, hasAnswer, type PrepSession, type SavedSet, type PrepReview } from '@/lib/prep/progress';
-import { TASK_TYPES, labelPassage, passageParagraphs } from '@/lib/prep/tasks';
+import { TASK_TYPES, labelPassage, optionLabel, sourceSupportIssue } from '@/lib/prep/tasks';
 import { TaskMaterial, DataGraphic } from './TaskMaterial';
 import { QuestionInput } from './QuestionInput';
 import { SkillPicker } from './SkillPicker';
@@ -43,7 +43,16 @@ export function ReadingPractice({exam:examId}:{exam:ExamId}) {
     if(text.length<minimumCharacters(examId)){setError(c.tooShort(minimumCharacters(examId)));return;}
     if(!types.length){setError(c.pickType);return;}
     if(types.reduce((n,id)=>n+(TASK_TYPES[id]?2:1),0)>count){setError(zh?'共用题组至少需要 2 道题，请增加题数。':'Shared tasks need at least two items each. Increase the question count.');return;}
-    if(examId==='ielts'&&types.some(id=>['heading','matching_info'].includes(id))&&passageParagraphs(text).length<2){setError(zh?'段落匹配需要至少两段素材，请用空行分段或使用示例素材。':'Paragraph matching needs at least two paragraphs. Separate them with blank lines or use the sample.');return;}
+    const issue=sourceSupportIssue(examId,text,types,count);
+    if(issue){
+      const messages={
+        too_many_paragraphs:[`段落信息匹配最多支持 12 段；请缩短素材或换一种题型。`,`Matching information supports up to 12 paragraphs. Shorten the source or choose another type.`],
+        needs_paragraphs:[`段落匹配至少需要两段素材；请用空行分段。`,`Paragraph matching needs at least two paragraphs separated by blank lines.`],
+        needs_heading_paragraphs:[`标题匹配每题需要不同段落；请增加段落或减少题数。`,`Matching headings needs a distinct paragraph per question. Add paragraphs or reduce the question count.`],
+        needs_numeric_data:[`定量证据题至少需要两条原文数字数据；请换素材或题型。`,`Quantitative evidence needs at least two source numbers. Add data or choose another type.`],
+      } as const;
+      setError(messages[issue][zh?0:1]);return;
+    }
     const controller=new AbortController();request.current?.abort();request.current=controller;setLoading(true);setError(null);
     try {
       const response=await fetch('/api/prep/generate',{method:'POST',headers:{'Content-Type':'application/json','X-Lumina-Account':owner},
@@ -58,7 +67,12 @@ export function ReadingPractice({exam:examId}:{exam:ExamId}) {
     }catch(e){if(!controller.signal.aborted)setError(e instanceof Error?e.message:c.networkError);}
     finally{if(request.current===controller){request.current=null;setLoading(false);}}
   }
-  function newPassage(){if(saved)setPassage(saved.passage);try{clearSet(examId,owner);}catch{setError(zh?'本地保存失败，请先导出记录。':'Local storage failed. Export your records first.');}}
+  function newPassage(){
+    const pending=saved?.session&&!saved.session.submitted&&(Object.values(saved.session.answers).some(hasAnswer)||saved.session.flags.length>0);
+    if(pending&&!window.confirm(zh?'当前未提交的答案会丢失。确定换一篇素材？':'Your unsubmitted answers will be lost. Start a new passage?'))return;
+    if(saved)setPassage(saved.passage);
+    try{clearSet(examId,owner);}catch{setError(zh?'本地保存失败，请先导出记录。':'Local storage failed. Export your records first.');}
+  }
   if(saved)return <PracticeSession key={saved.createdAt} saved={saved} onNew={newPassage}/>;
   return <section className={styles.card} aria-busy={loading}>
     <div className={styles.fieldHead}><label htmlFor="prep-passage">{c.passage}</label><span>{c.characters(passage.length,PASSAGE_LIMITS.maxCharacters)}</span></div>
@@ -144,7 +158,7 @@ function PracticeSession({saved,onNew}:{saved:SavedSet;onNew:()=>void}) {
       <div><p className={styles.kicker}>{c.results}</p><p className={styles.resultScore}>{total===questions.length?c.score(correct,total):`${correct} / ${total} ${zh?'得分':'points'}`}</p><p className={styles.resultNote}>{c.percent(Math.round(correct/total*100))} · {c.estimateNote}</p>
       <p className={styles.hint}>{zh?'错题和标记题已加入复习队列。重做同一套不重复计入统计。':'Missed and flagged questions entered your review queue. Repeating this set does not inflate your statistics.'}</p></div>
       <div className={styles.actionGroup}><Button variant="outline" onClick={()=>setFilter(!filter)}>{filter?(zh?'查看全部':'Show all'):(zh?'只看错题':'Missed only')}</Button>
-      <Button variant="outline" onClick={()=>{persist({answers:{},flags:[],submitted:false,startedAt:Date.now(),deadline:null});setHighlight(null);setFilter(false);setRound(n=>n+1);}}>{c.retry}</Button><Button onClick={onNew}>{c.newSet}</Button></div>
+      <Button variant="outline" onClick={()=>{const startedAt=Date.now();const duration=session.deadline===null?null:session.deadline-session.startedAt;persist({answers:{},flags:[],submitted:false,startedAt,deadline:duration===null?null:startedAt+duration});setNow(startedAt);setHighlight(null);setFilter(false);setRound(n=>n+1);}}>{c.retry}</Button><Button onClick={onNew}>{c.newSet}</Button></div>
     </div>}
     <div className={fullSource?styles.practice:styles.singlePractice}>
       {(fullSource||session.submitted)&&<details className={styles.passagePanel} open={fullSource||!!highlight}><summary>{c.passage} · {zh?'原始素材':'Original source'}</summary>
@@ -166,7 +180,7 @@ function PracticeSession({saved,onNew}:{saved:SavedSet;onNew:()=>void}) {
           <QuestionInput key={`${q.id}-${round}`} question={q} task={task} answer={session.answers[q.id]} onChange={answer=>persist({...session,answers:{...session.answers,[q.id]:answer}})} locked={locked} submitted={session.submitted} label={c.questionOf(index+1,questions.length)} zh={zh} used={used}/>
           {session.submitted&&<div className={styles.explanation}>
             <p><strong>{c.correctAnswer}:</strong> {q.answerText}</p>{!!q.answerIndices?.length&&<p>{scoreQuestion(q,session.answers[q.id]).correct} / {q.answerIndices.length} {zh?'得分':'points'}</p>}<p>{q.explanation}</p>
-            {q.optionReasons?.length? <details><summary>{zh?'逐项排除理由':'Why each option works or fails'}</summary><ol>{q.optionReasons.map((reason,i)=><li key={i}><strong>{String.fromCharCode(65+i)}.</strong> {reason}</li>)}</ol></details>:null}
+            {q.optionReasons?.length? <details><summary>{zh?'逐项排除理由':'Why each option works or fails'}</summary><ol>{q.optionReasons.map((reason,i)=><li key={i}><strong>{optionLabel(i,q.type==='heading')}.</strong> {reason}</li>)}</ol></details>:null}
             {q.strategy&&<p><strong>{zh?'下次如何做':'Strategy for next time'}:</strong> {q.strategy}</p>}
             {q.evidence[0]&&<button className={styles.linkButton} onClick={()=>setHighlight(q.evidence[0])}>{c.showInPassage}</button>}
           </div>}

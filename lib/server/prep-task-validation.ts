@@ -11,6 +11,9 @@ export function validateTasks(set:ReadingSet,request:PrepGenerateRequest):Readin
   const tasks=set.tasks??[];
   const ids=new Set(tasks.map(t=>t.id));
   if(ids.size!==tasks.length)throw new Error('Task IDs must be distinct.');
+  if(tasks.some((task,i)=>task.id!=='t'+(i+1)))throw new Error('Task IDs must start at t1 and be consecutive.');
+  const sharedTypes=new Set<string>();
+  let previousPosition=-1;
   const paragraphs=passageParagraphs(request.passage);
   for(const q of set.questions){
     if(q.taskId&&!ids.has(q.taskId))throw new Error('Unknown taskId.');
@@ -24,7 +27,11 @@ export function validateTasks(set:ReadingSet,request:PrepGenerateRequest):Readin
     const members=set.questions.filter(q=>q.taskId===task.id);
     const type=members[0]?.type;
     if(request.exam!=='ielts'||members.length<2||members.some(q=>q.type!==type)||task.kind!==TASK_TYPES[type])throw new Error('Every IELTS shared task needs at least two questions of the same type and matching layout.');
+    if(sharedTypes.has(type))throw new Error('Use one shared task per selected question type.');
+    sharedTypes.add(type);
     const positions=members.map(q=>set.questions.indexOf(q));
+    if(positions[0]<=previousPosition)throw new Error('Task IDs must follow question order.');
+    previousPosition=positions[0];
     if(positions.some((p,i)=>i>0&&p!==positions[i-1]+1))throw new Error('Keep shared task questions consecutive.');
     const bank=task.options.length>0;
     if(bank&&(new Set(task.options.map(normalize)).size!==task.options.length||task.options.some(s=>!s.trim())))throw new Error('Shared options must be distinct and nonempty.');

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ExamId } from './exams';
 
 // Shared stimuli are stored once per set. Gaps refer to question IDs, e.g. {{q2}}.
 export const ReadingTaskSchema = z.strictObject({
@@ -27,6 +28,16 @@ export const TASK_TYPES:Record<string,ReadingTask['kind']>={heading:'matching',m
 export const SOURCE_COMPLETION_TYPES=['completion','short','summary','notes','table','flowchart','diagram'];
 export function passageParagraphs(passage:string) {
   return passage.trim().split(/\r?\n\s*\r?\n/).filter(p=>p.trim()).map((text,i)=>({label:String.fromCharCode(65+i),text:text.trim()}));
+}
+export function sourceSupportIssue(exam:ExamId,passage:string,types:string[],count:number) {
+  if(exam==='ielts'){
+    const paragraphs=passageParagraphs(passage).length;
+    if(types.includes('matching_info')&&paragraphs>12)return 'too_many_paragraphs';
+    if(types.some(type=>type==='heading'||type==='matching_info')&&paragraphs<2)return 'needs_paragraphs';
+    if(types.length===1&&types[0]==='heading'&&paragraphs<count)return 'needs_heading_paragraphs';
+  }
+  if(exam==='sat'&&types.includes('quantitative')&&(passage.match(/(?:^|[^\p{L}\p{N}])[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/gu)??[]).length<2)return 'needs_numeric_data';
+  return null;
 }
 export function labelPassage(passage:string){return passageParagraphs(passage).map(p=>p.label+'\n'+p.text).join('\n\n');}
 export function optionLabel(index:number,headings=false){return headings?['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii'][index]??String(index+1):String.fromCharCode(65+index);}

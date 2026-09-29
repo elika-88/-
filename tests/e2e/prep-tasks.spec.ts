@@ -72,3 +72,14 @@ test('skill picker covers all families and prevents impossible question counts',
   await page.goto('/prep/sat');await expect(page.locator('fieldset input[type="checkbox"]')).toHaveCount(11);
   for(const name of ['Information and Ideas','Craft and Structure','Expression of Ideas','Standard English Conventions'])await expect(page.getByRole('group',{name,exact:true})).toBeVisible();
 });
+test('numeric evidence preflight avoids a paid request when the source has no data',async({page})=>{
+  await account(page,'sat');let calls=0;
+  await page.route('**/api/prep/generate',route=>{calls++;return route.abort();});
+  await page.goto('/prep/sat');
+  await page.getByLabel('Passage',{exact:true}).fill('Researchers observed the equipment during a field study. The team described how the collection process worked and discussed the limits of the observations. '.repeat(3));
+  await page.getByRole('checkbox',{name:'Words in context',exact:true}).uncheck();
+  await page.getByRole('checkbox',{name:'Quantitative evidence',exact:true}).check();
+  await page.getByRole('button',{name:'Create questions',exact:true}).click();
+  await expect(page.getByRole('alert').filter({hasText:'Quantitative evidence needs at least two source numbers'})).toBeVisible();
+  expect(calls).toBe(0);
+});

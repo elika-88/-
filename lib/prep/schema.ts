@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { EXAMS, EXAM_IDS, PASSAGE_LIMITS, minimumCharacters } from "./exams";
-import { ReadingTaskSchema, ReadingGraphicSchema, TASK_TYPES } from './tasks';
+import { ReadingTaskSchema, ReadingGraphicSchema, TASK_TYPES, sourceSupportIssue } from './tasks';
 
 export const TFNG_OPTIONS = ["True", "False", "Not Given"] as const;
 
@@ -47,6 +47,8 @@ export const PrepGenerateRequestSchema = z.strictObject({
   if (new Set(value.types).size !== value.types.length || value.types.some(id => !EXAMS[value.exam].readingTypes.some(t=>t.id===id))) ctx.addIssue({code:'custom',path:['types'],message:'Select one to three distinct supported types.'});
   const needed=value.types.reduce((sum,id)=>sum+(TASK_TYPES[id]?2:1),0);
   if(needed>(value.count??6))ctx.addIssue({code:'custom',path:['count'],message:'Choose more questions: each shared task needs at least two items.'});
+  const sourceIssue=sourceSupportIssue(value.exam,value.passage,value.types,value.count??6);
+  if(sourceIssue)ctx.addIssue({code:'custom',path:['passage'],message:sourceIssue});
 });
 export type PrepGenerateRequest = z.infer<typeof PrepGenerateRequestSchema>;
 

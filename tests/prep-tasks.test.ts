@@ -34,6 +34,16 @@ describe('complete IELTS task families',()=>{
     set.tasks![0].reuseOptions=false;
     expect(()=>validateTasks(set,request)).toThrow(/allows reuse/);
   });
+  it('requires consecutive task IDs and one group per selected type',()=>{
+    const {set,request}=taskFixture('summary');
+    set.tasks![0].id='t2';set.questions.forEach(q=>q.taskId='t2');
+    expect(()=>validateTasks(set,request)).toThrow(/start at t1/);
+    set.tasks![0].id='t1';set.questions.forEach(q=>q.taskId='t1');
+    set.tasks![0].content='The {{q1}} contains a {{q2}}.';
+    set.tasks!.push({...set.tasks![0],id:'t2',content:'A {{q3}} joins the tank. A {{q4}} reduces evaporation.'});
+    set.questions.slice(2).forEach(q=>q.taskId='t2');
+    expect(()=>validateTasks(set,request)).toThrow(/one shared task/);
+  });
   it.each(['summary','notes','table','flowchart','diagram'])('rejects duplicate or missing %s gaps',type=>{
     const {set,request}=taskFixture(type);const task=set.tasks![0];
     task.content=task.content.replace('{{q2}}','{{q1}}');
@@ -108,6 +118,16 @@ describe('catalogue and persistence compatibility',()=>{
     const {request}=taskFixture('summary');
     expect(PrepGenerateRequestSchema.safeParse({...request,types:['summary','heading','diagram'],count:4}).success).toBe(false);
     expect(PrepGenerateRequestSchema.safeParse({...request,types:['summary','heading','diagram'],count:6}).success).toBe(true);
+  });
+  it('rejects sources that cannot support selected paragraph or numeric tasks',()=>{
+    const {request}=taskFixture('heading');
+    const twoParagraphs=request.passage.split('\n\n').slice(0,2).join('\n\n');
+    expect(PrepGenerateRequestSchema.safeParse({...request,passage:twoParagraphs,types:['heading'],count:4}).success).toBe(false);
+    expect(PrepGenerateRequestSchema.safeParse({...request,passage:twoParagraphs,types:['heading','summary'],count:4}).success).toBe(true);
+    const manyParagraphs=Array.from({length:13},()=>request.passage.split('\n\n')[0]).join('\n\n');
+    expect(PrepGenerateRequestSchema.safeParse({...request,passage:manyParagraphs,types:['matching_info']}).success).toBe(false);
+    const noData='Researchers compared the collectors under similar weather conditions and recorded their observations for later discussion. '.repeat(3);
+    expect(PrepGenerateRequestSchema.safeParse({...request,exam:'sat',passage:noData,types:['quantitative']}).success).toBe(false);
   });
   it('round-trips array answers and shared review material and accepts old records',()=>{
     const {set,request}=taskFixture('summary');const state=emptyPrepState();

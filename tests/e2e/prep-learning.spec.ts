@@ -36,6 +36,28 @@ test('restored expired timer locks responses and counts unanswered items as miss
   await page.getByRole('button',{name:'Check answers',exact:true}).click();
   await expect(page.getByText('0 / 4 correct',{exact:true})).toBeVisible();
 });
+test('keeps unsubmitted answers when leaving is cancelled',async({page})=>{
+  await account(page);await page.goto('/prep/ielts');
+  await page.getByRole('radio',{name:'Rain',exact:true}).first().check();
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.getByRole('button',{name:'New passage',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Practice fixture',exact:true})).toBeVisible();
+  await expect(page.getByRole('radio',{name:'Rain',exact:true}).first()).toBeChecked();
+  page.once('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'New passage',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Practice fixture',exact:true})).toHaveCount(0);
+});
+test('retry preserves the selected time limit',async({page})=>{
+  const seed=state();seed.sets.ielts.session.deadline=seed.sets.ielts.session.startedAt+300000;
+  await account(page,seed);await page.goto('/prep/ielts');
+  await page.getByRole('radio',{name:'Greater distances',exact:true}).first().check();
+  await page.getByRole('button',{name:'Check answers',exact:true}).click();
+  await page.getByRole('button',{name:'Try again',exact:true}).click();
+  await expect(page.getByRole('radio',{name:'Greater distances',exact:true}).first()).not.toBeChecked();
+  expect(await page.evaluate(key=>{const session=JSON.parse(localStorage.getItem(key)!).sets.ielts.session;return session.deadline-session.startedAt;},key)).toBe(300000);
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Check answers',exact:true})).toBeVisible();
+});
 test('cloud conflicts preserve local work and official 2026 guidance is available',async({page})=>{
   await account(page);
   await page.route('**/api/prep/progress',r=>r.fulfill({status:409,json:{code:'REVISION_CONFLICT',error:'Cloud practice changed. Export this device first, then load the cloud copy.'}}));
