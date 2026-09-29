@@ -4,6 +4,8 @@ import { generateReadingSet, validateReadingSet } from '@/lib/server/prep-genera
 import { estimateIeltsBand } from '@/lib/prep/exams';
 import type { PrepGenerateRequest, ReadingSet } from '@/lib/prep/schema';
 import type { createOpenAIClient } from '@/lib/openai';
+import { citationCatalog } from '@/lib/ai/citation-catalog';
+import { segmentLecture } from '@/lib/source';
 
 const passage = ('Honeybees communicate the location of food through a waggle dance. The angle of the dance relative to vertical indicates the direction of the food source relative to the sun. '
   + 'Longer waggle runs signal greater distances. Researchers first decoded this behaviour in the twentieth century. ').repeat(4);
@@ -40,20 +42,21 @@ describe('prep reading sets', () => {
   });
 
   it('retries with validation feedback, then returns a valid set', async () => {
-    const bad = { ...valid, questions: valid.questions.map((question) => ({ ...question, evidence: question.evidence.length ? ['invented quote here'] : [] })) };
-    const parse = vi.fn()
-      .mockResolvedValueOnce({ status: 'completed', output: [], output_parsed: bad })
-      .mockResolvedValueOnce({ status: 'completed', output: [], output_parsed: valid });
-    const connection = { client: { responses: { parse } }, model: 'test-model', apiFormat: 'responses' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
-    const set = await generateReadingSet(request, connection, new AbortController().signal);
+    const evidenceId=citationCatalog(segmentLecture(passage))[0].sourceId;
+    const provider={...valid,questions:valid.questions.map(q=>({...q,context:passage,optionReasons:q.options.length?q.options.map(()=> 'Reason'):[],strategy:'Find evidence',wordLimit:q.type==='completion'?2:0,evidence:q.evidence.length?[evidenceId]:[]}))};
+    const bad={...provider,questions:provider.questions.map(q=>({...q,evidence:['missing-id']}))};
+    const output=(value:unknown)=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]});
+    const create = vi.fn().mockResolvedValueOnce(output(bad)).mockResolvedValueOnce(output(provider)).mockResolvedValueOnce(output({items:valid.questions.map((q,i)=>({id:'q'+(i+1),valid:true,reason:''}))}));
+    const connection = { client: { responses: { create } }, model: 'test-model', apiFormat: 'responses' } as unknown as Awaited<ReturnType<typeof createOpenAIClient>>;
+    const set = await generateReadingSet({...request,count:4}, connection, new AbortController().signal);
     expect(set.questions).toHaveLength(4);
-    expect(parse).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(parse.mock.calls[1][0].input[1].content).previousValidationError).toMatch(/exact quote/);
+    expect(create).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(create.mock.calls[1][0].input[1].content).feedback).toMatch(/excerpt IDs/);
   });
 
-  it('estimates IELTS bands from scaled raw scores', () => {
-    expect(estimateIeltsBand(8, 8)).toBe(9);
-    expect(estimateIeltsBand(6, 8)).toBe(7);
-    expect(estimateIeltsBand(0, 8)).toBe(2);
+  it('never extrapolates small uncalibrated practice sets into IELTS bands', () => {
+    expect(estimateIeltsBand(8, 8)).toBeNull();
+    expect(estimateIeltsBand(6, 8)).toBeNull();
+    expect(estimateIeltsBand(0, 8)).toBeNull();
   });
 });

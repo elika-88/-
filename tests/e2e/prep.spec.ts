@@ -14,9 +14,15 @@ const set: ReadingSet = {
 async function guest(page: Page) {
   await page.route('**/api/auth', route => route.fulfill({ json: { user: null } }));
 }
+const prepUser={id:'a20e5041-118e-4de0-b7b6-6ecf279c5b23',username:'PrepStudent',email:'prep@example.invalid',createdAt:'2026-09-23T00:00:00.000Z'};
+async function account(page:Page){
+  await page.route('**/api/auth',route=>route.fulfill({json:{user:prepUser}}));
+  await page.route('**/api/study-sessions',route=>route.fulfill({json:{userId:prepUser.id,sessions:[],revisions:{},storage:'local'}}));
+  await page.route('**/api/generation-jobs?*',route=>route.fulfill({json:{userId:prepUser.id,jobs:[],nextCursor:null}}));
+}
 
 test('exam prep creates, grades and restores reading practice and the saved plan', async ({ page }) => {
-  await guest(page);
+  await account(page);
   let requests = 0;
   await page.route('**/api/prep/generate', async route => {
     requests++;
@@ -33,7 +39,7 @@ test('exam prep creates, grades and restores reading practice and the saved plan
   await expect(page.getByRole('heading', { name: set.title, exact: true })).toBeVisible();
   for (const option of await page.getByRole('radio', { name: 'Greater distances', exact: true }).all()) await option.click();
   await page.getByRole('button', { name: 'Check answers', exact: true }).click();
-  await expect(page.getByText('4 / 4 correct', { exact: false })).toBeVisible();
+  await expect(page.getByText('4 / 4 correct', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Show in passage', exact: true }).first().click();
   await expect(page.locator('mark')).toHaveText('Longer waggle runs signal greater distances.');
   await page.reload();
@@ -46,13 +52,15 @@ test('exam prep creates, grades and restores reading practice and the saved plan
 });
 
 test('prep keeps text after a failed request and fits light and dark phone layouts', async ({ page }) => {
-  await guest(page);
+  await account(page);
   await page.route('**/api/prep/generate', route => route.fulfill({ status: 503, json: { error: { message: 'Please try again later.' } } }));
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/prep/ielts');
   await page.getByLabel('Passage', { exact: true }).fill(passage);
   await page.getByRole('button', { name: 'Create questions', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Please try again later.' })).toBeVisible();
+  await expect(page.getByLabel('Passage', { exact: true })).toHaveValue(passage);
+  await page.reload();
   await expect(page.getByLabel('Passage', { exact: true })).toHaveValue(passage);
   for (const theme of ['light', 'dark']) {
     await page.evaluate(value => document.documentElement.classList.toggle('dark', value === 'dark'), theme);
