@@ -18,10 +18,8 @@ const sdk = `window.paypal = { Buttons(options) {
     const button = document.createElement('button');
     button.textContent = 'Mock PayPal subscribe';
     button.onclick = async () => {
-      const id = await options.createSubscription({}, { subscription: { create: async () => {
-        localStorage.setItem('mock-paypal-creates', String(Number(localStorage.getItem('mock-paypal-creates') || 0) + 1));
-        return 'I-APPROVED1';
-      } } });
+      const id = await options.createSubscription({}, { subscription: { create: async () => 'I-APPROVED1' } });
+      localStorage.setItem('mock-paypal-creates', String(Number(localStorage.getItem('mock-paypal-creates') || 0) + 1));
       await options.onApprove({ subscriptionID: id });
     };
     element.appendChild(button);
@@ -33,6 +31,10 @@ async function mockBilling(page: Page) {
   await page.route('**/api/auth', route => route.fulfill({ json: { user } }));
   await page.route('**/api/study-sessions', route => route.fulfill({ json: { userId: user.id, sessions: [], revisions: {}, storage: 'local' } }));
   await page.route('**/api/billing', route => route.fulfill({ json: summary(state.confirmed) }));
+  await page.route('**/api/billing/checkout', async route => {
+    expect(route.request().postDataJSON()).toEqual({ provider: 'paypal', tier: 'basic', interval: 'yearly' });
+    await route.fulfill({ json: { subscriptionId: 'I-APPROVED1' } });
+  });
   await page.route(url => url.hostname === 'www.paypal.com' && url.pathname === '/sdk/js', route => route.fulfill({ contentType: 'application/javascript', body: sdk }));
   await page.route('**/api/billing/paypal/confirm', async route => {
     expect(route.request().postDataJSON()).toEqual({ subscriptionId: 'I-APPROVED1' });

@@ -78,11 +78,11 @@ async function accessToken(config: PayPalConfig, fetcher: typeof fetch) {
   return cachedToken.value;
 }
 
-export async function paypalRequest<T>(config: PayPalConfig, path: string, init: { method?: string; body?: unknown } = {}, fetcher: typeof fetch = fetch): Promise<T | null> {
+export async function paypalRequest<T>(config: PayPalConfig, path: string, init: { method?: string; body?: unknown; requestId?: string } = {}, fetcher: typeof fetch = fetch): Promise<T | null> {
   const token = await accessToken(config, fetcher);
   const response = await fetcher(`${config.baseUrl}${path}`, {
     method: init.method ?? "GET",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json", ...(init.requestId ? { 'PayPal-Request-Id': init.requestId } : {}) },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     signal: AbortSignal.timeout(20_000),
   });

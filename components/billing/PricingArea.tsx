@@ -9,6 +9,9 @@ import { PLAN_LIMITS, PLAN_PRICES, PLAN_RANK, type BillingInterval, type Billing
 import { refreshBilling, setBillingSummary, useBilling } from "@/lib/client/billing";
 import { clearPendingPayPal, isPayPalSubscriptionId, savePendingPayPal, usePendingPayPal } from "@/lib/client/pending-paypal";
 import { PayPalSubscribeButton } from "./PayPalSubscribeButton";
+import { RevenueCatSubscribeButton } from "./RevenueCatSubscribeButton";
+import { setPendingRevenueCat, usePendingRevenueCat } from '@/lib/client/pending-revenuecat';
+import { useSettings } from '@/lib/i18n/SettingsContext';
 import { useBillingCopy } from "./copy";
 import styles from "./billing.module.css";
 
@@ -52,18 +55,25 @@ export function PricingArea() {
 
 function PricingContent({ user }: { user: Account | null }) {
   const { c, locale } = useBillingCopy();
+  const { language } = useSettings();
+  const zh = language === 'zh';
   const { summary, error } = useBilling(user?.id ?? null);
   const [interval, setBillingInterval] = useState<BillingInterval>("yearly");
   const [status, setStatus] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [restoreId, setRestoreId] = useState("");
   const pendingId = usePendingPayPal(user?.id ?? null);
+  const pendingRevenueCat = usePendingRevenueCat(user?.id ?? null);
+  const [selectedProvider, setSelectedProvider] = useState<'paypal' | 'revenuecat'>('revenuecat');
   const confirming = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const paypal = summary?.paypal ?? null;
+  const revenuecat = summary?.revenuecat ?? null;
+  const provider = selectedProvider === 'revenuecat' && revenuecat ? 'revenuecat' : paypal ? 'paypal' : 'revenuecat';
   const current = summary?.plan ?? "free";
   const sub = summary?.subscription ?? null;
+  const now = summary?.resetsAt ? summary.resetsAt - 24 * 60 * 60 * 1000 : 0;
   const date = (time: number | null) => time ? new Date(time).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }) : "";
   const money = (value: string | undefined, currency: string) => value ? new Intl.NumberFormat(locale, { style: "currency", currency }).format(Number(value)) : "—";
   // Until checkout is configured, show the advertised USD catalogue. Once a
@@ -102,21 +112,39 @@ function PricingContent({ user }: { user: Account | null }) {
     finally { setBusy(false); }
   }
 
+  async function syncRevenueCat() {
+    if (!user) return;
+    setBusy(true);
+    try {
+      const result = await postJson('/api/billing/revenuecat/sync');
+      if (!mounted.current) return;
+      setBillingSummary(result);
+      const active = result.subscriptions?.some(s => s.provider === 'revenuecat' && (s.status === 'ACTIVE' || (s.cancelled && (s.paidThrough ?? 0) > Date.now())));
+      if (active) { setPendingRevenueCat(user.id, false); setStatus({ kind: 'success', text: c.welcome }); }
+      else setStatus({ kind: 'info', text: zh ? '尚未查到有效的 RevenueCat 订阅。若刚刚付款，请稍后重试同步，不要重复支付。' : 'No active RevenueCat subscription was found yet. If you just paid, retry syncing shortly; do not pay again.' });
+    } catch (error) {
+      if (mounted.current) setStatus({ kind: 'error', text: error instanceof Error ? error.message : 'Could not sync subscription.' });
+    } finally { if (mounted.current) setBusy(false); }
+  }
+
   function action(tier: PaidPlanId) {
     if (!summary) return error ? <p className={styles.error}>{error}</p> : <p className={styles.muted}>{c.loading}</p>;
-    if (pendingId || busy) return <p className={styles.muted}>{busy ? c.activating : c.pendingConfirmation}</p>;
+    if (pendingId || pendingRevenueCat || busy) return <p className={styles.muted}>{busy ? c.activating : pendingId ? c.pendingConfirmation : (zh ? '请在下方同步 RevenueCat 订阅，避免重复支付。' : 'Sync your RevenueCat subscription below before purchasing again.')}</p>;
     const plan = paypal?.plans[tier][interval] ?? null;
     if (current === tier && sub) return <div className={styles.manage}>
       <p className={styles.currentTag}>{c.current}{sub.interval ? ` · ${c.interval[sub.interval]}` : ""}</p>
       <p className={styles.muted}>{sub.cancelled ? c.endsOn(date(sub.paidThrough)) : sub.nextBillingAt ? c.renews(date(sub.nextBillingAt)) : ""}</p>
-      {!sub.cancelled && <Button type="button" variant="outline" disabled={busy} onClick={cancel}>{c.cancel}</Button>}
+      {sub.provider === 'revenuecat' ? (sub.managementUrl ? <Button asChild variant="outline"><a href={sub.managementUrl} target="_blank" rel="noopener noreferrer">{zh ? '管理订阅' : 'Manage subscription'}</a></Button> : <p className={styles.muted}>{zh ? '请通过购买确认邮件管理订阅。' : 'Manage your subscription through your purchase confirmation email.'}</p>) : !sub.cancelled && <Button type="button" variant="outline" disabled={busy} onClick={cancel}>{c.cancel}</Button>}
     </div>;
     if (PLAN_RANK[current] > PLAN_RANK[tier]) return <p className={styles.muted}>{c.switchLater}</p>;
-    if (!paypal || !plan) return <p className={styles.muted}>{c.notConfigured}</p>;
+    if (current !== 'free' && (provider === 'revenuecat' || sub?.provider === 'revenuecat')) return <p className={styles.muted}>{zh ? '请先管理当前订阅，待其到期后再切换，避免重复收费。' : 'Manage your existing subscription and switch after it expires to avoid duplicate charges.'}</p>;
+    if (!paypal && !revenuecat) return <p className={styles.muted}>{c.notConfigured}</p>;
     if (!user) return <Button asChild className={styles.fullWidth}><Link href="/login">{c.signIn}</Link></Button>;
+    if (provider === 'revenuecat' && revenuecat) return <RevenueCatSubscribeButton key={`${tier}-${interval}`} config={revenuecat} tier={tier} interval={interval} userId={user.id} onPurchased={syncRevenueCat} onBusy={setBusy} onError={message => { if (mounted.current) setStatus({ kind: 'error', text: message }); }} />;
+    if (!paypal || !plan) return <p className={styles.muted}>{c.notConfigured}</p>;
     return <>
       {current === "basic" && tier === "pro" && <p className={styles.muted}>{c.upgradeNote}</p>}
-      <PayPalSubscribeButton key={plan.id} clientId={paypal.clientId} currency={paypal.currency} planId={plan.id} userId={user.id}
+      <PayPalSubscribeButton key={plan.id} clientId={paypal.clientId} currency={paypal.currency} planId={plan.id} userId={user.id} tier={tier} interval={interval}
         onApproved={approved} onError={(message) => setStatus({ kind: "error", text: message === "paypal" ? c.paypalError : message })} />
     </>;
   }
@@ -126,7 +154,8 @@ function PricingContent({ user }: { user: Account | null }) {
     const monthly = priceFor(tier, "monthly");
     const yearly = priceFor(tier, "yearly");
     const saving = monthly.currency === yearly.currency ? savingPercent(monthly.value, yearly.value) : null;
-    const showPrice = !(current === tier && sub);
+    // RevenueCat's actual price is fetched from its offering beside the checkout.
+    const showPrice = !(current === tier && sub) && !(provider === 'revenuecat' && revenuecat && user);
     return <section className={`${styles.plan} ${tier === "pro" ? styles.planPro : ""}`} aria-labelledby={`plan-${tier}`}>
       <h2 id={`plan-${tier}`}>{tier === "pro" ? c.pro : c.basic}</h2>
       <p className={styles.planNote}>{tier === "pro" ? c.proNote : c.basicNote}</p>
@@ -144,8 +173,12 @@ function PricingContent({ user }: { user: Account | null }) {
       <p className={styles.lead}>{c.lead}</p>
     </header>
 
+    {paypal && revenuecat && <div className={styles.toggle} role="radiogroup" aria-label={zh ? '付款方式' : 'Payment method'}>
+      {(['revenuecat', 'paypal'] as const).map(value => <button key={value} type="button" role="radio" aria-checked={provider === value} disabled={busy || Boolean(pendingId) || pendingRevenueCat} className={provider === value ? styles.toggleOn : undefined} onClick={() => setSelectedProvider(value)}>{value === 'paypal' ? 'PayPal' : 'RevenueCat'}</button>)}
+    </div>}
+
     <div className={styles.toggle} role="radiogroup" aria-label={c.kicker}>
-      {(["monthly", "yearly"] as const).map((value) => <button key={value} type="button" role="radio" aria-checked={interval === value} className={interval === value ? styles.toggleOn : undefined} onClick={() => setBillingInterval(value)}>
+      {(["monthly", "yearly"] as const).map((value) => <button key={value} type="button" role="radio" aria-checked={interval === value} disabled={busy} className={interval === value ? styles.toggleOn : undefined} onClick={() => setBillingInterval(value)}>
         {value === "monthly" ? c.monthly : c.yearly}
       </button>)}
     </div>
@@ -164,6 +197,13 @@ function PricingContent({ user }: { user: Account | null }) {
 
     {status && <p className={`${styles.status} ${styles[status.kind]}`} role={status.kind === "error" ? "alert" : "status"}>{status.text}</p>}
     {user && <section className={styles.recovery} aria-label={c.restoreTitle}>
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void syncRevenueCat()}>{zh ? '同步 RevenueCat 订阅（不重复付款）' : 'Sync RevenueCat subscription (no new payment)'}</Button>
+      {pendingRevenueCat && <p role="status">{zh ? '订阅待确认，请同步已有购买，不要重新付款。' : 'Subscription confirmation is pending. Sync your existing purchase; do not pay again.'}</p>}
+      {(summary?.subscriptions ?? []).filter(s => s.provider !== sub?.provider && (s.status === 'ACTIVE' || s.cancelled && (s.paidThrough ?? 0) > now)).map(s => <div key={s.provider}>
+        <p>{s.provider === 'paypal' ? 'PayPal' : 'RevenueCat'} · {s.tier} · {s.cancelled ? c.endsOn(date(s.paidThrough)) : c.renews(date(s.nextBillingAt))}</p>
+        {s.provider === 'paypal' && !s.cancelled && <Button variant="outline" disabled={busy} onClick={cancel}>{c.cancel}</Button>}
+        {s.provider === 'revenuecat' && s.managementUrl && <a href={s.managementUrl} target="_blank" rel="noopener noreferrer">{zh ? '管理订阅' : 'Manage subscription'}</a>}
+      </div>)}
       {pendingId && <div role="status">
         <p>{c.pendingConfirmation}</p>
         <p>{c.subscriptionId}: <code>{pendingId}</code></p>
@@ -187,6 +227,6 @@ function PricingContent({ user }: { user: Account | null }) {
       <small>{c.resets}</small>
     </section>}
 
-    <p className={styles.fineprint}>{c.secure}</p>
+    <p className={styles.fineprint}>{zh ? '付款由所选支付渠道处理。可通过订阅管理入口取消自动续费。' : 'Payments are handled by your selected provider. Manage your subscription to cancel renewal.'}</p>
   </div>;
 }

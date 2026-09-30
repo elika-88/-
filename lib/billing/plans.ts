@@ -8,6 +8,17 @@ export type PlanId = "free" | "basic" | "pro";
 export type PaidPlanId = Exclude<PlanId, "free">;
 export const PAID_PLANS: readonly PaidPlanId[] = ["basic", "pro"];
 export type BillingInterval = "monthly" | "yearly";
+export type BillingProvider = "paypal" | "revenuecat";
+export type BillingSubscription = {
+  provider?: BillingProvider;
+  managementUrl?: string | null;
+  tier: PaidPlanId;
+  status: string;
+  interval: BillingInterval | null;
+  nextBillingAt: number | null;
+  paidThrough: number | null;
+  cancelled: boolean;
+};
 export type UsageKind = "lecture" | "prep";
 
 export type PlanLimits = {
@@ -39,13 +50,13 @@ export type BillingSummary = {
   limits: PlanLimits;
   usage: Record<UsageKind, BillingUsage>;
   resetsAt: number;
-  subscription: null | {
-    tier: PaidPlanId;
-    status: string;
-    interval: BillingInterval | null;
-    nextBillingAt: number | null;
-    paidThrough: number | null;
-    cancelled: boolean;
+  subscription: BillingSubscription | null;
+  subscriptions?: BillingSubscription[];
+  revenuecat?: null | {
+    publicApiKey: string;
+    offeringId: string;
+    sandbox: boolean;
+    products: Record<PaidPlanId, Record<BillingInterval, string>>;
   };
   paypal: null | {
     clientId: string;

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import styles from "./billing.module.css";
+import type { BillingInterval, PaidPlanId } from '@/lib/billing/plans';
 
 type PayPalButtons = { render: (element: HTMLElement) => Promise<void>; close?: () => Promise<void> };
 type PayPalNamespace = {
@@ -36,11 +37,13 @@ function loadPayPal(clientId: string, currency: string) {
   return promise;
 }
 
-export function PayPalSubscribeButton({ clientId, currency, planId, userId, onApproved, onError }: {
+export function PayPalSubscribeButton({ clientId, currency, planId, userId, tier, interval, onApproved, onError }: {
   clientId: string;
   currency: string;
   planId: string;
   userId: string;
+  tier: PaidPlanId;
+  interval: BillingInterval;
   onApproved: (subscriptionId: string) => Promise<void> | void;
   onError: (message: string) => void;
 }) {
@@ -58,8 +61,13 @@ export function PayPalSubscribeButton({ clientId, currency, planId, userId, onAp
       element.replaceChildren();
       buttons = paypal.Buttons({
         style: { layout: "vertical", color: "black", shape: "rect", label: "subscribe", height: 44, tagline: false },
-        // custom_id ties the subscription to this account; the server checks it before granting Pro.
-        createSubscription: (_data, actions) => actions.subscription.create({ plan_id: planId, custom_id: userId }),
+        // The server owns the channel switch, plan mapping and account identity.
+        createSubscription: async () => {
+          const response = await fetch('/api/billing/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'paypal', tier, interval }), signal: AbortSignal.timeout(45_000) });
+          const data = await response.json();
+          if (!response.ok || !data.subscriptionId) { callbacks.current.onError(data.error ?? 'Checkout unavailable.'); throw new Error('Checkout unavailable.'); }
+          return data.subscriptionId;
+        },
         onApprove: async (data) => { if (data.subscriptionID) await callbacks.current.onApproved(data.subscriptionID); },
         onError: () => callbacks.current.onError("paypal"),
       });
@@ -67,7 +75,7 @@ export function PayPalSubscribeButton({ clientId, currency, planId, userId, onAp
       if (!cancelled) setReady(true);
     }).catch((error: unknown) => { if (!cancelled) callbacks.current.onError(error instanceof Error ? error.message : "paypal"); });
     return () => { cancelled = true; void buttons?.close?.().catch(() => undefined); };
-  }, [clientId, currency, planId, userId]);
+  }, [clientId, currency, planId, userId, tier, interval]);
 
   return <div className={styles.paypalSlot} aria-busy={!ready}>
     {!ready && <div className={styles.paypalLoading}><LoaderCircle className="animate-spin" size={16} aria-hidden="true" /></div>}

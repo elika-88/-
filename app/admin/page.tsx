@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
+import { BillingControls } from "@/components/admin/BillingControls";
 
 type Settings = {
   baseURL: string;
@@ -30,10 +31,10 @@ type Settings = {
   updatedAt: number | null;
 };
 
-type AdminTab = "relay" | "logs";
+type AdminTab = "relay" | "logs" | "billing";
 
 export default function AdminPage() {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const [authenticated, setAuthenticated] = useState(false);
   const [configured, setConfigured] = useState(true);
   const [setupError, setSetupError] = useState("");
@@ -276,6 +277,10 @@ export default function AdminPage() {
               >
                 <Cpu size={16} />
                 <span>{t.aiRelayTab}</span>
+              </button>
+              <button type="button" className={`gpt-admin-nav-item ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>
+                <Settings size={16} />
+                <span>{language === 'zh' ? '订阅渠道' : 'Subscriptions'}</span>
               </button>
               <button
                 type="button"
@@ -533,6 +538,8 @@ export default function AdminPage() {
               </div>
             </section>
           )}
+
+          {activeTab === "billing" && <BillingControls />}
         </main>
       </div>
 
