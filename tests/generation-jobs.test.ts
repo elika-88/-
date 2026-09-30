@@ -5,24 +5,33 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
 vi.mock('server-only', () => ({}));
-import { initializeUserTables } from '@/lib/server/user-auth';
-import { withDatabase } from '@/lib/server/database';
+import { POST as authPost } from '@/app/api/auth/route';
+import { POST as verifyPost } from '@/app/api/auth/verify/route';
 import { saveStudySession } from '@/lib/server/study-records';
 import { claimGenerationJob, completeGenerationJob, createGenerationJob, getGenerationJob, listGenerationJobs } from '@/lib/server/generation-jobs';
 import { studyKitFixture } from './fixtures/studyKit';
 
 let directory: string;
 const lecture = ('A schema defines a data structure. This paragraph provides enough source material for a durable generation task. ').repeat(12);
+function request(body: unknown) {
+  return new Request('https://lumina.test/api/auth', { method: 'POST', headers: { Origin: 'https://lumina.test', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
 async function register() {
-  const id = randomUUID();
-  await withDatabase(async db => {
-    await initializeUserTables(db);
-    await db.execute({
-      sql: 'INSERT INTO app_users (id, username, username_key, email, email_key, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      args: [id, 'JobUser', 'jobuser', 'jobs@example.invalid', 'jobs@example.invalid', 'disabled-test-password', new Date().toISOString()],
-    });
-  });
-  return { id };
+  let link = '';
+  vi.stubEnv('APP_BASE_URL', 'https://lumina.test');
+  vi.stubEnv('RESEND_API_KEY', 're_test');
+  vi.stubEnv('RESEND_FROM_EMAIL', 'no-reply@example.invalid');
+  vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body ?? '{}')) as { text?: string };
+    link = body.text?.match(/https:\/\/lumina\.test\/verify-email#token=([a-f0-9]{64})/)?.[1] ?? '';
+    return new Response(JSON.stringify({ id: 'email-test' }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }));
+  const response = await authPost(request({ action: 'register', username: 'JobUser', email: 'jobs@example.invalid' }));
+  expect(response.status).toBe(202);
+  expect(link).toMatch(/^[a-f0-9]{64}$/);
+  const verified = await verifyPost(request({ token: link, password: 'Unit-test-password-48!' }));
+  expect(verified.status).toBe(201);
+  return (await verified.json()).user as { id: string };
 }
 function resultFor(jobId: string) {
   const result = structuredClone(studyKitFixture());
