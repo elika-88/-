@@ -4,10 +4,12 @@ import { studyKitFixture } from '../fixtures/studyKit';
 test.use({ reducedMotion: 'reduce' });
 
 async function checkContrast(page: Page, selector: string) {
-  const failures = await page.locator(selector).evaluateAll(elements => {
+  const failures = () => page.locator(selector).evaluateAll(elements => {
     const parse = (color: string) => {
       const values = color.match(/[\d.]+/g)?.map(Number) ?? [];
-      return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 1];
+      // color-mix() computes to color(srgb ...), whose RGB channels use 0–1.
+      const scale = color.startsWith('color(srgb ') ? 255 : 1;
+      return [(values[0] ?? 0) * scale, (values[1] ?? 0) * scale, (values[2] ?? 0) * scale, values[3] ?? 1];
     };
     const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => {
       const channel = value / 255;
@@ -25,7 +27,7 @@ async function checkContrast(page: Page, selector: string) {
       return ratio < 4.5 ? [{ text: element.textContent?.trim().slice(0, 60) || element.getAttribute('aria-label') || element.tagName, color: style.color, background, ratio: Number(ratio.toFixed(2)) }] : [];
     });
   });
-  expect(failures, `Low-contrast text in ${selector}`).toEqual([]);
+  await expect.poll(failures, { message: `Low-contrast text in ${selector}` }).toEqual([]);
 }
 
 for (const theme of ['light', 'dark']) {

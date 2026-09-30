@@ -48,13 +48,14 @@ export function SourceEvidence({ source, evidence, onClose }: {
   }, []);
 
   useEffect(() => {
-    quoteRef.current?.scrollIntoView({ block: "center" });
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    quoteRef.current?.scrollIntoView({ block: "center", behavior: selected === 0 || reducedMotion ? "instant" : "smooth" });
   }, [selected]);
 
   return (
     <dialog
       ref={dialogRef}
-      className={styles.sourceDialog}
+      className={`${styles.sourceDialog} lumina-dialog`}
       aria-labelledby={titleId}
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onClick={(event) => {

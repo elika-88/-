@@ -47,6 +47,18 @@ function request(url = baseURL, apiKey = '', session = token) {
 }
 
 describe('admin model discovery', () => {
+  it('requires same-origin administrator authentication for diagnostics and rejects provider overrides', async () => {
+    const diagnostic = (session: string, origin: string, input: unknown) => new NextRequest('http://localhost/api/admin', {
+      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: `lumina_admin=${session}` },
+      body: JSON.stringify({ action: 'diagnose_ai', input }),
+    });
+    const input = { title: '', lecture: 'evidence '.repeat(80), outputLanguage: 'auto' };
+    expect((await POST(diagnostic('', 'http://localhost', input))).status).toBe(401);
+    expect((await POST(diagnostic(token, 'https://other.example', input))).status).toBe(403);
+    expect((await POST(diagnostic(token, 'http://localhost', { ...input, provider: { baseURL, apiKey: 'test-key', model: 'test-model' } }))).status).toBe(400);
+    expect((await POST(diagnostic(token, 'http://localhost', { ...input, lecture: 'text '.repeat(1250) }))).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it('requires an administrator session before querying providers', async () => {
     expect((await POST(request(baseURL, '', ''))).status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();

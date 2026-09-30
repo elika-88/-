@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { ArrowUpRight, BookOpen, CircleHelp, Layers, ListChecks, ShieldCheck } from "lucide-react";
 import type { Evidence, StudyKit } from "@/lib/schemas/studyMaterials";
 import { FlashcardsView } from "./FlashcardsView";
@@ -56,7 +56,8 @@ function StudyDashboardContent({ kit, tab, onTabChange }: DashboardProps) {
         </div>
         <p className={styles.verificationNote}>AI review results. Confirm important details against the lecture source.</p>
       </header>
-      <div className={styles.tabs} role="tablist" aria-label="Study material type">
+      <div className={styles.tabs} role="tablist" aria-label="Study material type" style={{ "--tab-index": Math.max(0, tabs.findIndex((item) => item.id === tab)) } as CSSProperties}>
+        <span className={styles.tabIndicator} aria-hidden="true" />
         {tabs.map((item, index) => {
           const Icon = item.icon;
           return <button

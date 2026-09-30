@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, CircleCheck, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { QuizQuestion, Topic } from "@/lib/schemas/studyMaterials";
@@ -50,13 +50,21 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
     onWrongTopicsChange([]);
   }
 
+  function handleKeys(event: KeyboardEvent<HTMLDivElement>) {
+    if (!question || answered || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.target instanceof HTMLElement && event.target.closest("input:not([type=radio]), textarea, select")) return;
+    const key = event.key.toUpperCase();
+    const index = /^[1-9]$/.test(key) ? Number(key) - 1 : /^[A-I]$/.test(key) ? key.charCodeAt(0) - 65 : -1;
+    if (index >= 0 && index < question.options.length) { event.preventDefault(); setSelection(index); }
+  }
+
   if (!question) return <p className={styles.emptyState}>No quiz questions in these materials.</p>;
 
   if (finished) return (
     <div className={styles.quizResult} aria-live="polite">
       <CircleCheck size={32} strokeWidth={1.5} aria-hidden="true" />
       <h3>Quiz complete</h3>
-      <p className={styles.score}>{score}<span> / {questions.length}</span></p>
+      <ScoreRing score={score} total={questions.length} />
       <p className={styles.muted}>{score} correct, {questions.length - score} incorrect</p>
       {wrongTopics.length > 0 && <p className={styles.reviewTopics}>Topics to revisit: {wrongTopics.map((topic) => topic.title).join(", ")}</p>}
       <div className={styles.actionRow}>
@@ -67,13 +75,15 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
   );
 
   return (
-    <div className={styles.quiz}>
+    <div className={styles.quiz} onKeyDown={handleKeys}>
       <div className={styles.studyToolbar}>
         <p className={styles.muted}>Question {current + 1} of {questions.length}</p>
         <span className={styles.questionKind}>{questionKinds[question.kind]}</span>
       </div>
-      <progress className={styles.progress} value={Object.keys(answers).length} max={questions.length} aria-label="Quiz progress" />
-      <fieldset className={styles.question} disabled={Boolean(answered)}>
+      <div className={styles.progress} role="progressbar" aria-label="Quiz progress" aria-valuemin={0} aria-valuemax={questions.length} aria-valuenow={Object.keys(answers).length}>
+        <span style={{ transform: `scaleX(${questions.length ? Object.keys(answers).length / questions.length : 0})` }} />
+      </div>
+      <fieldset key={question.id} className={styles.question} disabled={Boolean(answered)}>
         <legend ref={questionRef} tabIndex={-1}>{question.question}</legend>
         <div className={styles.options}>
           {question.options.map((option, index) => {
@@ -81,7 +91,7 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
             const isCorrect = answered && question.correctAnswer === index;
             const isWrong = answered && isSelected && !isCorrect;
             return (
-              <label key={index} className={`${styles.option} ${isSelected ? styles.optionSelected : ""} ${isCorrect ? styles.optionCorrect : ""} ${isWrong ? styles.optionWrong : ""}`}>
+              <label key={index} style={{ animationDelay: `${60 + index * 40}ms` }} className={`${styles.option} ${isSelected ? styles.optionSelected : ""} ${isCorrect ? styles.optionCorrect : ""} ${isWrong ? styles.optionWrong : ""}`}>
                 <input type="radio" aria-label={option} name={`quiz-${question.id}`} value={index} checked={isSelected} onChange={() => setSelection(index)} />
                 <span className={styles.optionLetter} aria-hidden="true">{String.fromCharCode(65 + index)}</span>
                 <span className={styles.optionText}>{option}</span>
@@ -93,7 +103,7 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
         </div>
       </fieldset>
       {answered && (
-        <div className={styles.explanation} role="status">
+        <div className={`${styles.explanation} explanation-enter`} role="status">
           <p className={styles.answerStatus}>{checkedAnswer === question.correctAnswer ? "Correct answer" : `Correct answer: ${String.fromCharCode(65 + question.correctAnswer)}`}</p>
           <p>{question.explanation}</p>
           <EvidenceButton evidence={question.evidence} onEvidence={onEvidence} />
@@ -105,6 +115,43 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
           {current === questions.length - 1 ? "See results" : "Next question"}<ArrowRight aria-hidden="true" />
         </Button> : <Button type="button" disabled={selection === null} onClick={submit}><Check aria-hidden="true" />Check answer</Button>}
       </div>
+      {!answered && <p className={styles.keyHint} aria-hidden="true">Tip: press 1–{Math.min(question.options.length, 9)} to choose, then Check answer</p>}
+    </div>
+  );
+}
+
+function useCountUp(target: number, duration = 700) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches || target === 0) {
+      const frame = requestAnimationFrame(() => setValue(target));
+      return () => cancelAnimationFrame(frame);
+    }
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      setValue(Math.round(target * (1 - Math.pow(1 - progress, 3))));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, duration]);
+  return value;
+}
+
+function ScoreRing({ score, total }: { score: number; total: number }) {
+  const shown = useCountUp(score);
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = total ? score / total : 0;
+  return (
+    <div className={styles.scoreRing}>
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle className={styles.scoreTrack} cx="60" cy="60" r={radius} />
+        <circle className={styles.scoreValue} cx="60" cy="60" r={radius} strokeDasharray={circumference} style={{ strokeDashoffset: circumference * (1 - ratio), "--ring-length": circumference } as CSSProperties} />
+      </svg>
+      <p className={styles.score}><span className="sr-only">{score} / {total}</span><span aria-hidden="true">{shown}<span> / {total}</span></span></p>
     </div>
   );
 }

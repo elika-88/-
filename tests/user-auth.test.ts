@@ -139,13 +139,77 @@ describe('real account database and HTTP boundaries', () => {
 
   it('limits password guessing and ignores untrusted forwarded IP headers', async () => {
     const req = request(); req.headers.set('x-forwarded-for', '203.0.113.1'); req.headers.set('x-real-ip', '203.0.113.2');
-    expect(authClientAddress(req)).toBe('direct');
+    expect(authClientAddress(req)).toBeNull();
     vi.stubEnv('VERCEL', '1'); req.headers.set('x-vercel-forwarded-for', '203.0.113.3');
     expect(authClientAddress(req)).toBe('203.0.113.3'); vi.stubEnv('VERCEL', '');
+    await register();
+    for (let i = 0; i < 10; i++) expect((await POST(request({ action: 'login', identifier: 'Alice', password: 'wrong-password' }))).status).toBe(401);
+    expect((await POST(request({ action: 'login', identifier: 'Alice', password }))).status).toBe(429);
     for (let i = 0; i < 10; i++) expect((await POST(request({ action: 'login', identifier: 'Nobody', password }))).status).toBe(401);
     const limited = await POST(request({ action: 'login', identifier: 'NOBODY', password }));
     expect(limited.status).toBe(429); expect((await limited.json()).code).toBe('RATE_LIMITED');
+    const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 15 * 60 * 1000 + 1);
+    expect((await POST(request({ action: 'login', identifier: 'Alice', password }))).status).toBe(200);
+  }, 15_000);
+
+  it('shares the login budget across username, email and different source IPs', async () => {
+    await register(); vi.stubEnv('AUTH_TRUST_PROXY', 'true');
+    for (let i = 0; i < 10; i++) {
+      const req = request({ action: 'login', identifier: i % 2 ? 'ALICE@EXAMPLE.INVALID' : 'Alice', password: 'wrong-password' });
+      req.headers.set('x-real-ip', `203.0.113.${i + 1}`);
+      expect((await POST(req)).status).toBe(401);
+    }
+    const candidate = request({ action: 'login', identifier: 'alice@example.invalid', password });
+    candidate.headers.set('x-real-ip', '203.0.113.20');
+    const response = await POST(candidate);
+    expect(response.status).toBe(429);
+    expect(response.headers.get('set-cookie')).toBeNull();
   });
+
+  it('reserves the password verification budget atomically under concurrent requests', async () => {
+    await register();
+    const responses = await Promise.all(Array.from({ length: 12 }, () => POST(request({ action: 'login', identifier: 'Alice', password: 'wrong-password' }))));
+    expect(responses.filter(response => response.status === 401)).toHaveLength(10);
+    expect(responses.filter(response => response.status === 429)).toHaveLength(2);
+  });
+
+  it('registers without mail configuration and never contacts a mail provider', async () => {
+    vi.stubEnv('RESEND_API_KEY', ''); vi.stubEnv('RESEND_FROM_EMAIL', ''); vi.stubEnv('APP_BASE_URL', '');
+    const network = vi.fn(() => { throw new Error('Registration must not send mail.'); });
+    vi.stubGlobal('fetch', network);
+    const response = await POST(request({ action: 'register', username: 'NoEmail', email: 'no-email@example.invalid' }));
+    expect(response.status).toBe(503); expect(response.headers.get('set-cookie')).toBeNull(); expect(network).not.toHaveBeenCalled();
+  });
+
+  it('accepts passwordless registration and waits for email verification', async () => {
+    const response = await POST(request({ action: 'register', username: account.username, email: account.email }));
+    expect(response.status).toBe(202);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('replaces concurrent pending registrations and creates one account on verification', async () => {
+    const registration = { action: 'register' as const, username: account.username, email: account.email };
+    const responses = await Promise.all([POST(request(registration)), POST(request(registration))]);
+    expect(responses.map(response => response.status).sort()).toEqual([202, 202]);
+    const verified = await VERIFY(request({ token: sentToken, password } , '', '/api/auth/verify'));
+    expect(verified.status).toBe(201);
+    const count = await withDatabase(async db => (await db.execute('SELECT COUNT(*) AS count FROM app_users')).rows[0].count);
+    expect(Number(count)).toBe(1);
+  });
+
+  it('limits registration attempts for a normalized email address', async () => {
+    await register();
+    for (let i = 0; i < 4; i++) expect((await POST(request({ action: 'register', username: 'another', email: ' ALICE@EXAMPLE.INVALID ' }))).status).toBe(202);
+    expect((await POST(request({ action: 'register', username: account.username, email: account.email }))).status).toBe(429);
+  });
+
+  it('does not impose a shared direct-client registration bucket', async () => {
+    for (let i = 0; i < 12; i++) {
+      const response = await POST(request({ action: 'register', username: `Student${i}`, email: `student${i}@example.invalid` }));
+      expect(response.status).toBe(202);
+    }
+  });
+
 });
 
 describe('account study record isolation and concurrent edits', () => {

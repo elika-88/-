@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { ArrowLeft, ArrowRight, Layers, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Flashcard, Topic } from "@/lib/schemas/studyMaterials";
@@ -17,14 +17,25 @@ export function FlashcardsView({ cards, topics, wrongTopicIds, onlyWrong, onFilt
 }) {
   const [current, setCurrent] = useState(0);
   const [flippedId, setFlippedId] = useState<string | null>(null);
+  const [direction, setDirection] = useState<"next" | "prev" | null>(null);
+  const cardRef = useRef<HTMLButtonElement>(null);
   const filtered = onlyWrong ? cards.filter((card) => wrongTopicIds.includes(card.topicId)) : cards;
   const currentIndex = Math.min(current, Math.max(0, filtered.length - 1));
   const card = filtered[currentIndex];
   const flipped = Boolean(card && flippedId === card.id);
 
-  function move(index: number) {
+  function move(index: number, refocus = false) {
+    setDirection(index > currentIndex ? "next" : index < currentIndex ? "prev" : null);
     setCurrent(index);
     setFlippedId(null);
+    if (refocus) requestAnimationFrame(() => cardRef.current?.focus());
+  }
+
+  function handleKeys(event: KeyboardEvent<HTMLDivElement>) {
+    if (!card || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select")) return;
+    if (event.key === "ArrowRight" && currentIndex < filtered.length - 1) { event.preventDefault(); move(currentIndex + 1, true); }
+    else if (event.key === "ArrowLeft" && currentIndex > 0) { event.preventDefault(); move(currentIndex - 1, true); }
   }
 
   function changeFilter(value: boolean) {
@@ -33,7 +44,7 @@ export function FlashcardsView({ cards, topics, wrongTopicIds, onlyWrong, onFilt
   }
 
   return (
-    <div className={styles.flashcards}>
+    <div className={styles.flashcards} onKeyDown={handleKeys}>
       <div className={styles.studyToolbar}>
         <label className={styles.filterControl}>
           <input type="checkbox" checked={onlyWrong} onChange={(event) => changeFilter(event.target.checked)} />
@@ -46,7 +57,9 @@ export function FlashcardsView({ cards, topics, wrongTopicIds, onlyWrong, onFilt
         <div className={styles.cardTopic}>{topics.find((topic) => topic.id === card.topicId)?.title ?? "Review card"}</div>
         <button
           type="button"
-          className={styles.flashcard}
+          key={card.id}
+          ref={cardRef}
+          className={`${styles.flashcard} ${direction === "next" ? styles.enterNext : direction === "prev" ? styles.enterPrev : ""}`}
           aria-label={flipped ? `Answer: ${card.back}. Show question` : `Question: ${card.front}. Show answer`}
           aria-pressed={flipped}
           onClick={() => setFlippedId(flipped ? null : card.id)}
@@ -69,6 +82,8 @@ export function FlashcardsView({ cards, topics, wrongTopicIds, onlyWrong, onFilt
           <span aria-live="polite">{currentIndex + 1} / {filtered.length}</span>
           <Button type="button" variant="outline" size="icon" aria-label="Next card" title="Next card" disabled={currentIndex === filtered.length - 1} onClick={() => move(currentIndex + 1)}><ArrowRight aria-hidden="true" /></Button>
         </div>
+        <div className={styles.cardProgress} aria-hidden="true"><span style={{ transform: `scaleX(${(currentIndex + 1) / filtered.length})` }} /></div>
+        <p className={styles.keyHint} aria-hidden="true">Space to flip · ← → to move between cards</p>
         <div className={styles.cardEvidence}><EvidenceButton evidence={card.evidence} onEvidence={onEvidence} /></div>
       </> : <div className={styles.emptyState}>
         <Layers size={28} strokeWidth={1.5} aria-hidden="true" />

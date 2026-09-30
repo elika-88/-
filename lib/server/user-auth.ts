@@ -84,7 +84,7 @@ export function authClientAddress(request: Request) {
   const raw = vercel ? request.headers.get('x-vercel-forwarded-for')
     : process.env.AUTH_TRUST_PROXY === 'true' ? request.headers.get('x-real-ip') : null;
   const address = raw?.split(',')[0].trim();
-  return address && isIP(address) ? address : 'direct';
+  return address && isIP(address) ? address : null;
 }
 
 async function reserveAttempt(buckets: { key: string; limit: number; window: number }[]) {
@@ -128,7 +128,7 @@ export async function registerUser(input: { username: string; email: string }, r
   const { username, email } = parsed.data;
   await reserveAttempt([
     { key: `register:email:${identityKey(email)}`, limit: 5, window: REGISTER_WINDOW },
-    { key: `register:ip:${address}`, limit: 20, window: REGISTER_WINDOW },
+    ...(address ? [{ key: `register:ip:${address}`, limit: 20, window: REGISTER_WINDOW }] : []),
   ]);
   const verificationToken = randomBytes(32).toString('hex');
   const pending = await withDatabase(async (db) => {
@@ -197,14 +197,16 @@ export async function verifyEmailToken(token: string, password: string) {
 
 export async function loginUser(identifier: string, password: string, request: Request) {
   const key = identityKey(identifier);
-  await reserveAttempt([
-    { key: `login:identity:${key}`, limit: 10, window: LOGIN_WINDOW },
-    { key: `login:ip:${authClientAddress(request)}`, limit: 60, window: LOGIN_WINDOW },
-  ]);
   const row = await withDatabase(async (db) => {
     await initializeUserTables(db);
     return (await db.execute({ sql: `SELECT * FROM app_users WHERE ${key.includes('@') ? 'email_key' : 'username_key'} = ?`, args: [key] })).rows[0];
   });
+  const address = authClientAddress(request);
+  const bucket = row ? `login:user:${row.id}` : `login:identity:${key}`;
+  await reserveAttempt([
+    { key: bucket, limit: 10, window: LOGIN_WINDOW },
+    ...(address ? [{ key: `login:ip:${address}`, limit: 60, window: LOGIN_WINDOW }] : []),
+  ]);
   if (!await verifyPassword(password, row ? String(row.password_hash) : undefined) || !row) {
     throw new AccountError('INVALID_CREDENTIALS', 'Incorrect username, email, or password.', 401);
   }
@@ -212,7 +214,7 @@ export async function loginUser(identifier: string, password: string, request: R
     const tx = await db.transaction('write');
     try {
       const token = await issueSession(tx, String(row.id));
-      await tx.execute({ sql: 'DELETE FROM user_auth_limits WHERE bucket = ?', args: [digest(`login:identity:${key}`)] });
+      await tx.execute({ sql: 'DELETE FROM user_auth_limits WHERE bucket = ?', args: [digest(bucket)] });
       await tx.commit();
       return { user: profile(row), token };
     } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
