@@ -9,6 +9,8 @@
 // Needs PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET and PAYPAL_ENV (live | sandbox) in .env.local.
 // Running it twice creates new plans; keep the ids from the first run.
 
+import prices from "../lib/billing/prices.json" with { type: "json" };
+
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, all) => {
   if (value.startsWith("--")) pairs.push([value.slice(2), all[index + 1]?.startsWith("--") ? "true" : all[index + 1]]);
   return pairs;
@@ -21,8 +23,8 @@ process.on("uncaughtException", (error) => {
   console.error(`\n✖ ${error instanceof SetupError ? error.message : error?.stack ?? error}\n`);
   process.exitCode = 1;
 });
-// Defaults: Basic $9.90/month, Pro $12.90/month, yearly = 12 months at 20% off (rounded).
-const DEFAULTS = { "basic-monthly": "9.90", "basic-yearly": "95.00", "pro-monthly": "12.90", "pro-yearly": "124.00" };
+// Use the same defaults as the public pricing page.
+const DEFAULTS = { "basic-monthly": prices.basic.monthly, "basic-yearly": prices.basic.yearly, "pro-monthly": prices.pro.monthly, "pro-yearly": prices.pro.yearly };
 const price = (name) => {
   const value = args[name] ?? DEFAULTS[name];
   if (!/^\d+(\.\d{1,2})?$/.test(value ?? "")) fail(`--${name} must be a price such as ${DEFAULTS[name]}`);
@@ -40,8 +42,8 @@ if (clientId.includes("@") || clientId.length < 50 || secret.length < 50) {
 }
 const env = process.env.PAYPAL_ENV?.trim() === "sandbox" ? "sandbox" : "live";
 const base = env === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
-const currency = (args.currency ?? process.env.PAYPAL_CURRENCY ?? "USD").toUpperCase();
-const prices = Object.fromEntries(Object.keys(DEFAULTS).map((name) => [name, price(name)]));
+const currency = (args.currency ?? process.env.PAYPAL_CURRENCY ?? prices.currency).toUpperCase();
+const selectedPrices = Object.fromEntries(Object.keys(DEFAULTS).map((name) => [name, price(name)]));
 const webhookUrl = args["webhook-url"];
 const webhookOnly = args["webhook-only"] === "true";
 if (webhookOnly && !webhookUrl) fail("--webhook-only needs --webhook-url.");
@@ -77,7 +79,7 @@ const plan = (name, unit, value) => call("/v1/billing/plans", json({
 }));
 for (const [tier, label] of [["basic", "Basic"], ["pro", "Pro"]]) {
   for (const [interval, unit, name] of [["monthly", "MONTH", "Monthly"], ["yearly", "YEAR", "Yearly"]]) {
-    const value = prices[`${tier}-${interval}`];
+    const value = selectedPrices[`${tier}-${interval}`];
     const result = await plan(`Lumina ${label} — ${name}`, unit, value);
     created[`${tier}-${interval}`] = { id: result.id, value };
     console.log(`✓ ${label} ${name.toLowerCase()} ${result.id} (${value} ${currency})`);

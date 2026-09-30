@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/components/auth/AuthProvider";
-import { PLAN_LIMITS, PLAN_RANK, type BillingInterval, type BillingSummary, type PaidPlanId } from "@/lib/billing/plans";
+import { useAuth, type Account } from "@/components/auth/AuthProvider";
+import { PLAN_LIMITS, PLAN_PRICES, PLAN_RANK, type BillingInterval, type BillingSummary, type PaidPlanId } from "@/lib/billing/plans";
 import { refreshBilling, setBillingSummary, useBilling } from "@/lib/client/billing";
+import { clearPendingPayPal, isPayPalSubscriptionId, savePendingPayPal, usePendingPayPal } from "@/lib/client/pending-paypal";
 import { PayPalSubscribeButton } from "./PayPalSubscribeButton";
 import { useBillingCopy } from "./copy";
 import styles from "./billing.module.css";
@@ -18,7 +19,7 @@ function savingPercent(monthly?: string, yearly?: string) {
 }
 
 async function postJson(url: string, body?: unknown): Promise<BillingSummary> {
-  const response = await fetch(url, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  const response = await fetch(url, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}), signal: AbortSignal.timeout(45_000) });
   const data = await response.json().catch(() => null) as (BillingSummary & { error?: string }) | null;
   if (!response.ok || !data || data.error) throw new Error(data?.error || "Request failed.");
   return data;
@@ -46,22 +47,52 @@ function features(c: Copy, tier: "free" | PaidPlanId) {
 
 export function PricingArea() {
   const { user } = useAuth();
+  return <PricingContent key={user?.id ?? "guest"} user={user} />;
+}
+
+function PricingContent({ user }: { user: Account | null }) {
   const { c, locale } = useBillingCopy();
   const { summary, error } = useBilling(user?.id ?? null);
   const [interval, setBillingInterval] = useState<BillingInterval>("yearly");
   const [status, setStatus] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [restoreId, setRestoreId] = useState("");
+  const pendingId = usePendingPayPal(user?.id ?? null);
+  const confirming = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const paypal = summary?.paypal ?? null;
   const current = summary?.plan ?? "free";
   const sub = summary?.subscription ?? null;
-  const saving = savingPercent(paypal?.plans.pro.monthly?.price, paypal?.plans.pro.yearly?.price);
   const date = (time: number | null) => time ? new Date(time).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }) : "";
-  const money = (value?: string) => value && paypal ? new Intl.NumberFormat(locale, { style: "currency", currency: paypal.currency }).format(Number(value)) : "—";
+  const money = (value: string | undefined, currency: string) => value ? new Intl.NumberFormat(locale, { style: "currency", currency }).format(Number(value)) : "—";
+  // Until checkout is configured, show the advertised USD catalogue. Once a
+  // plan exists, use its configured price/currency rather than masking it.
+  const priceFor = (tier: PaidPlanId, period: BillingInterval) => {
+    const plan = paypal?.plans[tier][period];
+    return plan && paypal
+      ? { value: plan.price, currency: paypal.currency }
+      : { value: PLAN_PRICES[tier][period], currency: PLAN_PRICES.currency };
+  };
 
   async function approved(subscriptionId: string) {
+    if (!user || confirming.current) return;
+    if (!isPayPalSubscriptionId(subscriptionId)) { setStatus({ kind: "error", text: c.invalidSubscriptionId }); return; }
+    const userId = user.id;
+    savePendingPayPal(userId, subscriptionId);
+    confirming.current = true;
+    setBusy(true);
     setStatus({ kind: "info", text: c.activating });
-    try { setBillingSummary(await postJson("/api/billing/paypal/confirm", { subscriptionId })); setStatus({ kind: "success", text: c.welcome }); }
-    catch (caught) { setStatus({ kind: "error", text: caught instanceof Error ? caught.message : c.paypalError }); void refreshBilling(); }
+    try {
+      const result = await postJson("/api/billing/paypal/confirm", { subscriptionId });
+      clearPendingPayPal(userId, subscriptionId);
+      if (!mounted.current) return;
+      setBillingSummary(result); setRestoreId(""); setStatus({ kind: "success", text: c.welcome });
+    } catch (caught) {
+      if (!mounted.current) return;
+      setStatus({ kind: "error", text: `${c.pendingConfirmation} ${caught instanceof Error ? caught.message : ""}` });
+      void refreshBilling();
+    } finally { confirming.current = false; if (mounted.current) setBusy(false); }
   }
   async function cancel() {
     if (!window.confirm(c.cancelConfirm)) return;
@@ -73,6 +104,7 @@ export function PricingArea() {
 
   function action(tier: PaidPlanId) {
     if (!summary) return error ? <p className={styles.error}>{error}</p> : <p className={styles.muted}>{c.loading}</p>;
+    if (pendingId || busy) return <p className={styles.muted}>{busy ? c.activating : c.pendingConfirmation}</p>;
     const plan = paypal?.plans[tier][interval] ?? null;
     if (current === tier && sub) return <div className={styles.manage}>
       <p className={styles.currentTag}>{c.current}{sub.interval ? ` · ${c.interval[sub.interval]}` : ""}</p>
@@ -90,12 +122,16 @@ export function PricingArea() {
   }
 
   function paidCard(tier: PaidPlanId) {
-    const plan = paypal?.plans[tier][interval];
+    const price = priceFor(tier, interval);
+    const monthly = priceFor(tier, "monthly");
+    const yearly = priceFor(tier, "yearly");
+    const saving = monthly.currency === yearly.currency ? savingPercent(monthly.value, yearly.value) : null;
     const showPrice = !(current === tier && sub);
     return <section className={`${styles.plan} ${tier === "pro" ? styles.planPro : ""}`} aria-labelledby={`plan-${tier}`}>
       <h2 id={`plan-${tier}`}>{tier === "pro" ? c.pro : c.basic}</h2>
       <p className={styles.planNote}>{tier === "pro" ? c.proNote : c.basicNote}</p>
-      {showPrice && <p className={styles.price}>{money(plan?.price)}<span>{interval === "monthly" ? c.perMonth : c.perYear}</span></p>}
+      {showPrice && <p className={styles.price}>{money(price.value, price.currency)}<span>{interval === "monthly" ? c.perMonth : c.perYear}</span></p>}
+      {showPrice && interval === "yearly" && saving && <p className={styles.planNote}>{c.save(saving)}</p>}
       {features(c, tier)}
       <div className={styles.action}>{action(tier)}</div>
     </section>;
@@ -110,7 +146,7 @@ export function PricingArea() {
 
     <div className={styles.toggle} role="radiogroup" aria-label={c.kicker}>
       {(["monthly", "yearly"] as const).map((value) => <button key={value} type="button" role="radio" aria-checked={interval === value} className={interval === value ? styles.toggleOn : undefined} onClick={() => setBillingInterval(value)}>
-        {value === "monthly" ? c.monthly : c.yearly}{value === "yearly" && saving ? <small>{c.save(saving)}</small> : null}
+        {value === "monthly" ? c.monthly : c.yearly}
       </button>)}
     </div>
 
@@ -127,6 +163,22 @@ export function PricingArea() {
     </div>
 
     {status && <p className={`${styles.status} ${styles[status.kind]}`} role={status.kind === "error" ? "alert" : "status"}>{status.text}</p>}
+    {user && <section className={styles.recovery} aria-label={c.restoreTitle}>
+      {pendingId && <div role="status">
+        <p>{c.pendingConfirmation}</p>
+        <p>{c.subscriptionId}: <code>{pendingId}</code></p>
+        <Button type="button" disabled={busy} onClick={() => void approved(pendingId)}>{busy ? c.activating : c.retryConfirmation}</Button>
+      </div>}
+      <details>
+        <summary>{c.restoreTitle}</summary>
+        <p id="restore-help">{c.restoreHelp}</p>
+        <form onSubmit={event => { event.preventDefault(); void approved(restoreId.trim().toUpperCase()); }}>
+          <label htmlFor="restore-subscription">{c.subscriptionId}</label>
+          <input id="restore-subscription" aria-describedby="restore-help" value={restoreId} onChange={event => setRestoreId(event.target.value)} placeholder="I-…" maxLength={42} autoComplete="off" spellCheck={false} required disabled={busy} />
+          <Button type="submit" disabled={busy}>{busy ? c.activating : c.retryConfirmation}</Button>
+        </form>
+      </details>
+    </section>}
     {summary && current === "free" && sub?.status === "SUSPENDED" && <p className={`${styles.status} ${styles.error}`}>{c.suspended}</p>}
 
     {summary && <section className={styles.usage} aria-label={c.usageTitle}>

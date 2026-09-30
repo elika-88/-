@@ -44,6 +44,14 @@
 .fineprint { margin: 20px 0 0; text-align: center; font-size: 12px; color: var(--muted-foreground); line-height: 1.7; }
 
 .paypalSlot { position: relative; min-height: 48px; }
+.recovery { margin-top: 24px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--foreground); overflow-wrap: anywhere; }
+.recovery p { margin: 12px 0; line-height: 1.6; }
+.recovery details { margin-top: 16px; }
+.recovery summary { cursor: pointer; font-weight: 600; }
+.recovery form { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.recovery label { width: 100%; }
+.recovery input { flex: 1 1 220px; min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--foreground); background: var(--background); }
+.recovery button { white-space: normal; height: auto; min-height: 40px; }
 .paypalLoading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted-foreground); }
 
 /* Locked prep panel and sidebar upgrade link reuse these. */

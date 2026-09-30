@@ -1,5 +1,8 @@
 // Plan catalogue shared by the server (enforcement) and the client (display).
-// Prices themselves live in PayPal; see docs/billing.md.
+// Advertised prices and setup defaults share a catalogue. PayPal controls actual charges.
+import prices from "./prices.json";
+
+export const PLAN_PRICES = prices;
 
 export type PlanId = "free" | "basic" | "pro";
 export type PaidPlanId = Exclude<PlanId, "free">;

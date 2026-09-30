@@ -1,0 +1,5 @@
+{
+  "currency": "USD",
+  "basic": { "monthly": "9.90", "yearly": "95.00" },
+  "pro": { "monthly": "12.90", "yearly": "124.00" }
+}
