@@ -14,7 +14,13 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, inde
   return pairs;
 }, []));
 
-const fail = (message) => { console.error(`\n✖ ${message}\n`); process.exit(1); };
+// Throwing (instead of process.exit) lets Windows close pending sockets cleanly.
+class SetupError extends Error {}
+const fail = (message) => { throw new SetupError(message); };
+process.on("uncaughtException", (error) => {
+  console.error(`\n✖ ${error instanceof SetupError ? error.message : error?.stack ?? error}\n`);
+  process.exitCode = 1;
+});
 // Defaults: Basic $9.90/month, Pro $12.90/month, yearly = 12 months at 20% off (rounded).
 const DEFAULTS = { "basic-monthly": "9.90", "basic-yearly": "95.00", "pro-monthly": "12.90", "pro-yearly": "124.00" };
 const price = (name) => {
@@ -26,6 +32,12 @@ const price = (name) => {
 const clientId = process.env.PAYPAL_CLIENT_ID?.trim();
 const secret = process.env.PAYPAL_CLIENT_SECRET?.trim();
 if (!clientId || !secret) fail("Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in .env.local first.");
+// App credentials are long random strings (about 80 characters). A short secret or an email
+// address usually means the PayPal login was pasted instead of the app's Client ID / Secret.
+if (clientId.includes("@") || clientId.length < 50 || secret.length < 50) {
+  fail(`PAYPAL_CLIENT_ID (${clientId.length} characters) or PAYPAL_CLIENT_SECRET (${secret.length} characters) does not look like REST API app credentials.
+  Use developer.paypal.com → Apps & Credentials → (Live) your app → Client ID and Secret, not your PayPal email or password.`);
+}
 const env = process.env.PAYPAL_ENV?.trim() === "sandbox" ? "sandbox" : "live";
 const base = env === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 const currency = (args.currency ?? process.env.PAYPAL_CURRENCY ?? "USD").toUpperCase();
@@ -38,6 +50,7 @@ if (webhookUrl && !/^https:\/\//.test(webhookUrl)) fail("--webhook-url must be a
 async function call(path, init = {}) {
   const response = await fetch(`${base}${path}`, init);
   const body = await response.json().catch(() => ({}));
+  if (response.status === 401 && path.includes("oauth2")) fail(`PayPal rejected the credentials (401). Check that the Client ID and Secret come from the same ${env === "live" ? "Live" : "Sandbox"} app, and that PAYPAL_ENV=${env} matches the Live/Sandbox switch in the developer dashboard.`);
   if (!response.ok) fail(`PayPal ${init.method ?? "GET"} ${path} failed (${response.status}): ${body.message ?? body.error_description ?? JSON.stringify(body).slice(0, 300)}`);
   return body;
 }
@@ -80,7 +93,9 @@ if (webhookUrl) {
   console.log(`✓ Webhook ${webhookId} → ${webhookUrl}`);
 }
 
-if (webhookOnly) { console.log(`\nAdd this line to .env.local, then restart the server:\n\nPAYPAL_WEBHOOK_ID=${webhookId}\n`); process.exit(0); }
+if (webhookOnly) console.log(`\nAdd this line to .env.local, then restart the server:\n\nPAYPAL_WEBHOOK_ID=${webhookId}\n`);
+else printPlans();
+function printPlans() {
 const line = (tier, interval) => `PAYPAL_PLAN_${tier.toUpperCase()}_${interval.toUpperCase()}_ID=${created[`${tier}-${interval}`].id}\nPAYPAL_PRICE_${tier.toUpperCase()}_${interval.toUpperCase()}=${created[`${tier}-${interval}`].value}`;
 console.log(`\nAdd these lines to .env.local, then restart the server:\n
 PAYPAL_CURRENCY=${currency}
@@ -89,3 +104,4 @@ ${line("basic", "yearly")}
 ${line("pro", "monthly")}
 ${line("pro", "yearly")}${webhookId ? `\nPAYPAL_WEBHOOK_ID=${webhookId}` : "\n# PAYPAL_WEBHOOK_ID=  (later: npm run paypal:setup -- --webhook-only --webhook-url https://your.site/api/billing/paypal/webhook)"}
 `);
+}
