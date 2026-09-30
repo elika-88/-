@@ -76,6 +76,8 @@
 .composeActions { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
 .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-body); cursor: pointer; }
 .toggle input { width: 16px; height: 16px; accent-color: var(--foreground); }
+.progress { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.progress :global(.gen-checklist-wrap) { margin-top: 0; }
 .error { margin: 16px 0 0; color: var(--destructive); font-size: 13px; line-height: 1.7; }
 
 /* ---------- Practice ---------- */

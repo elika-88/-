@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock('server-only', () => ({}));
+// Plan limits have their own tests; here every request is within the free plan.
+vi.mock('@/lib/server/billing', async (original) => ({
+  ...await original<typeof import('@/lib/server/billing')>(),
+  resolveSubject: vi.fn(async () => ({ key: 'anon:test', userId: null, newAnonId: null })),
+  assertAllowance: vi.fn(async () => 'free'),
+  recordUsage: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/ai/pipeline', async (original) => ({ ...await original<typeof import('@/lib/ai/pipeline')>(), generateStudyKit: vi.fn().mockRejectedValue(new Error('test failure')) }));
 beforeEach(() => { vi.stubEnv('OPENAI_API_KEY', ''); vi.mocked(generateStudyKit).mockReset().mockRejectedValue(new Error('test failure')); });
 afterEach(() => vi.unstubAllEnvs());

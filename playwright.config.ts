@@ -28,6 +28,8 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       LUMINA_E2E: '1',
+      // Job e2e tests mock the task API; the server switch only tells the page to use it.
+      LUMINA_BACKGROUND_GENERATION: 'true',
       ADMIN_DATABASE_PATH: e2eDatabasePath,
       TURSO_DATABASE_URL: '', TURSO_AUTH_TOKEN: '', VERCEL: '', AUTH_TRUST_PROXY: '',
     },

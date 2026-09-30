@@ -9,6 +9,7 @@ import { togglePinnedLecture, usePinnedLectures } from "@/lib/client/pinned-lect
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { SidebarPlan } from "@/components/billing/SidebarPlan";
 
 type Props = {
   sessions: StudySession[];
@@ -21,6 +22,7 @@ type Props = {
   onClose: () => void;
   onExport?: () => void;
   prepActive?: boolean;
+  pricingActive?: boolean;
 };
 
 const shortcut = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘B" : "Ctrl+B";
@@ -33,7 +35,7 @@ const PEEK_CLOSE_DELAY = 220;
  *  - collapsed: a slim icon rail; hovering the Recents icon "peeks" the full panel
  *    as a floating card without changing the layout, clicking pins it open.
  */
-export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse, onNew, onSelect, onEdit, onExport, prepActive = false }: Props) {
+export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse, onNew, onSelect, onEdit, onExport, prepActive = false, pricingActive = false }: Props) {
   const { t } = useSettings();
   const [search, setSearch] = useState("");
   const [menu, setMenu] = useState<string | null>(null);
@@ -110,6 +112,7 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
             </button>
           </div>
           <div className="gpt-rail-footer">
+            <SidebarPlan compact active={pricingActive} />
             <button className="gpt-rail-btn" type="button" title={t.settingsTitle} aria-label={t.settingsTitle} onClick={() => setSettingsOpen(true)}>
               <Settings size={18} />
             </button>
@@ -156,8 +159,8 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
                   {section.items.map((session) => {
                     const isPinned = pinnedIds.includes(session.id);
                     return (
-                      <li className={`gpt-chat-item ${activeId === session.id && !prepActive ? "active" : ""} ${menu === session.id ? "menu-open" : ""}`} key={session.id}>
-                        <button className="gpt-chat-btn" type="button" aria-current={activeId === session.id && !prepActive ? "page" : undefined} title={session.title || t.untitled}
+                      <li className={`gpt-chat-item ${activeId === session.id && !prepActive && !pricingActive ? "active" : ""} ${menu === session.id ? "menu-open" : ""}`} key={session.id}>
+                        <button className="gpt-chat-btn" type="button" aria-current={activeId === session.id && !prepActive && !pricingActive ? "page" : undefined} title={session.title || t.untitled}
                           onClick={() => { setMenu(null); setPeek(false); onSelect(session.id); }}>
                           <span>{session.title || t.untitled}</span>
                         </button>
@@ -186,6 +189,7 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
             ))}
           </nav>
 
+          <SidebarPlan active={pricingActive} />
           <div className="gpt-sidebar-auth-footer">
             <AccountMenu />
             <div className="gpt-footer-user-row">

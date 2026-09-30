@@ -3,8 +3,8 @@ import { z } from "zod";
 import { zodResponseFormat, zodTextFormat } from "openai/helpers/zod";
 import type { createOpenAIClient } from "@/lib/openai";
 import { PipelineError } from "@/lib/ai/pipeline";
-import { EXAMS, PASSAGE_LIMITS } from "@/lib/prep/exams";
-import { ReadingSetSchema, TFNG_OPTIONS, type PrepGenerateRequest, type ReadingQuestion, type ReadingSet } from "@/lib/prep/schema";
+import { EXAMS } from "@/lib/prep/exams";
+import { ReadingSetSchema, TFNG_OPTIONS, type PrepGenerateRequest, type PrepStage, type ReadingQuestion, type ReadingSet } from "@/lib/prep/schema";
 
 type Connection = Awaited<ReturnType<typeof createOpenAIClient>>;
 const MAX_ATTEMPTS = 3;
@@ -17,7 +17,7 @@ export function validateReadingSet(set: ReadingSet, request: PrepGenerateRequest
   const exam = EXAMS[request.exam];
   const passage = normalize(request.passage);
   const ids = new Set<string>();
-  const questions = set.questions.map((question, index): ReadingQuestion => {
+  const questions = set.questions.slice(0, request.count).map((question, index): ReadingQuestion => {
     const label = `Question ${index + 1}`;
     const type = exam.readingTypes.find((item) => item.id === question.type);
     if (!type || !request.types.includes(type.id)) throw new Error(`${label}: type must be one of ${request.types.join(", ")}.`);
@@ -45,18 +45,19 @@ export function validateReadingSet(set: ReadingSet, request: PrepGenerateRequest
     if (!question.evidence.length) throw new Error(`${label}: cite evidence for the correct option.`);
     return { ...question, id, options, answerText: options[question.answerIndex] };
   });
-  if (questions.length < Math.min(4, PASSAGE_LIMITS.questions)) throw new Error("Generate more questions; the passage supports at least four.");
+  const minimum = Math.min(request.count, Math.max(4, Math.floor(request.count * 0.6)));
+  if (questions.length < minimum) throw new Error(`Generate ${request.count} questions (at least ${minimum}); the passage supports them.`);
   return { title: set.title.trim() || "Reading practice", questions };
 }
 
-export async function generateReadingSet(request: PrepGenerateRequest, connection: Connection, signal: AbortSignal): Promise<ReadingSet> {
+export async function generateReadingSet(request: PrepGenerateRequest, connection: Connection, signal: AbortSignal, onStage: (stage: PrepStage, attempt: number) => void = () => {}): Promise<ReadingSet> {
   const { client, model, apiFormat = "responses" } = connection;
   const exam = EXAMS[request.exam];
   const types = exam.readingTypes.filter((type) => request.types.includes(type.id));
   if (!types.length) throw new PipelineError("INVALID_REQUEST", "Choose at least one question type.");
   const instructions = [
     rules,
-    `Create a ${exam.name} reading practice set of ${PASSAGE_LIMITS.questions} questions from the passage, spreading them across these types and across the whole passage:`,
+    `Create a ${exam.name} reading practice set of exactly ${request.count} questions from the passage, spreading them across these types and across the whole passage:`,
     ...types.map((type) => `- type "${type.id}" (${type.name.en}): ${type.guide}`),
     "Field rules: for four-option questions put the options in `options` and the correct index (0-3) in `answerIndex`.",
     `For True/False/Not Given use options ${JSON.stringify(TFNG_OPTIONS)} and answerIndex 0, 1 or 2; Not Given answers may have empty evidence.`,
@@ -67,13 +68,15 @@ export async function generateReadingSet(request: PrepGenerateRequest, connectio
   ].join("\n");
 
   let feedback: string | null = null;
+  const outputTokens = 3_000 + request.count * 450;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     signal.throwIfAborted();
+    onStage("writing", attempt);
     const data = JSON.stringify({ passage: request.passage, previousValidationError: feedback });
     let parsed: unknown;
     if (apiFormat === "chat_completions") {
       const completion = await client.chat.completions.parse({
-        model, store: false, max_completion_tokens: 6_000,
+        model, store: false, max_completion_tokens: outputTokens,
         ...(/^gpt-(5|6)/.test(model) ? { reasoning_effort: "low" as const } : {}),
         messages: [{ role: "developer", content: instructions }, { role: "user", content: data }],
         response_format: zodResponseFormat(ReadingSetSchema, "reading_practice"),
@@ -83,7 +86,7 @@ export async function generateReadingSet(request: PrepGenerateRequest, connectio
       parsed = choice?.finish_reason === "stop" ? choice.message.parsed : null;
     } else {
       const response = await client.responses.parse({
-        model, store: false, max_output_tokens: 6_000,
+        model, store: false, max_output_tokens: outputTokens,
         ...(/^gpt-(5|6)/.test(model) ? { reasoning: { effort: "low" as const } } : {}),
         input: [{ role: "developer", content: instructions }, { role: "user", content: data }],
         text: { format: zodTextFormat(ReadingSetSchema, "reading_practice") },
@@ -91,6 +94,7 @@ export async function generateReadingSet(request: PrepGenerateRequest, connectio
       if (response.output.some((item) => item.type === "message" && item.content.some((part) => part.type === "refusal"))) throw new PipelineError("MODEL_REFUSAL", "The model declined this passage. Try another text.");
       parsed = response.status === "completed" ? response.output_parsed : null;
     }
+    onStage("checking", attempt);
     try {
       if (!parsed) throw new Error("The response was incomplete. Return the full set.");
       return validateReadingSet(ReadingSetSchema.parse(parsed), request);

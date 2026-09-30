@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Check, LoaderCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EXAMS, PASSAGE_LIMITS, estimateIeltsBand, type ExamId } from "@/lib/prep/exams";
-import type { ReadingQuestion } from "@/lib/prep/schema";
+import { EXAMS, PASSAGE_LIMITS, QUESTION_COUNTS, estimateIeltsBand, type ExamId, type QuestionCount } from "@/lib/prep/exams";
+import { PREP_STAGES, type PrepStage, type PrepStreamEvent, type ReadingQuestion, type ReadingSet } from "@/lib/prep/schema";
+import { ProgressSteps } from "@/components/GenerationProgress";
 import { clearSet, recordAttempt, saveSet, usePrepState } from "@/lib/client/prep-store";
 import { usePrepCopy } from "./copy";
 import styles from "./prep.module.css";
@@ -33,7 +34,9 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
   const [passage, setPassage] = useState(saved?.passage ?? "");
   const [types, setTypes] = useState<string[]>(saved?.types ?? exam.readingTypes.map((type) => type.id));
   const [zhExplanations, setZhExplanations] = useState(lang === "zh");
+  const [count, setCount] = useState<QuestionCount>(10);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<{ stage: PrepStage; attempt: number; startedAt: number; status: "running" | "done" | "failed" } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -51,28 +54,51 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
     const controller = new AbortController();
     request.current?.abort(); request.current = controller;
     setLoading(true); setError(null);
+    setProgress({ stage: "reading", attempt: 1, startedAt: Date.now(), status: "running" });
     try {
       const response = await fetch("/api/prep/generate", {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
-        body: JSON.stringify({ exam: examId, passage: text, types, explanationLanguage: zhExplanations ? "zh" : "en" }),
+        body: JSON.stringify({ exam: examId, passage: text, types, count, explanationLanguage: zhExplanations ? "zh" : "en" }),
       });
-      const body: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
+      if (!response.ok || !response.body) {
+        const body: unknown = await response.json().catch(() => null);
         const message = typeof body === "object" && body !== null && "error" in body && typeof (body as { error?: { message?: unknown } }).error?.message === "string" ? (body as { error: { message: string } }).error.message : c.networkError;
         throw new Error(message);
       }
-      const set = (body as { set: Parameters<typeof saveSet>[0]["set"] }).set;
+      // Read NDJSON stage events; each finished stage gets its check mark.
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "";
+      let set: ReadingSet | null = null;
+      while (!set) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += value;
+        let newline: number;
+        while ((newline = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newline).trim(); buffer = buffer.slice(newline + 1);
+          if (!line) continue;
+          const event = JSON.parse(line) as PrepStreamEvent;
+          if (event.type === "stage") setProgress((value) => value && { ...value, stage: event.stage, attempt: event.attempt });
+          else if (event.type === "error") throw new Error(event.error.message);
+          else set = event.set;
+        }
+      }
+      if (!set) throw new Error(c.networkError);
+      setProgress((value) => value && { ...value, stage: "complete", status: "done" });
+      await new Promise((resolve) => window.setTimeout(resolve, 900));
+      if (controller.signal.aborted) return;
       saveSet({ exam: examId, passage: text, types, set, createdAt: Date.now() });
-      setAnswers({}); setSubmitted(false); setHighlight(null);
+      setAnswers({}); setSubmitted(false); setHighlight(null); setProgress(null);
     } catch (caught) {
       if (controller.signal.aborted) return;
+      setProgress((value) => value && { ...value, status: "failed" });
       setError(caught instanceof Error ? caught.message : c.networkError);
     } finally {
       if (request.current === controller) { request.current = null; setLoading(false); }
     }
   }
 
-  function cancel() { request.current?.abort(); request.current = null; setLoading(false); }
+  function cancel() { request.current?.abort(); request.current = null; setLoading(false); setProgress(null); }
 
   if (!saved) {
     const count = passage.length;
@@ -94,6 +120,12 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
           </label>;
         })}
       </fieldset>
+      <fieldset className={styles.typeChips} disabled={loading}>
+        <legend>{c.questionCount}</legend>
+        {QUESTION_COUNTS.map((value) => <label key={value} className={`${styles.chip} ${count === value ? styles.chipOn : ""}`}>
+          <input type="radio" name="prep-count" checked={count === value} onChange={() => setCount(value)} />{c.countOption(value)}
+        </label>)}
+      </fieldset>
       <div className={styles.composeActions}>
         <label className={styles.toggle}><input type="checkbox" checked={zhExplanations} disabled={loading} onChange={(event) => setZhExplanations(event.target.checked)} />{c.explanationLanguage}</label>
         <div className={styles.actionGroup}>
@@ -104,7 +136,16 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
           </Button>
         </div>
       </div>
-      {loading && <p className={`${styles.hint} shimmer-text`} role="status">{c.generatingHint}</p>}
+      {progress && <div className={styles.progress}>
+        <ProgressSteps label={c.generating} status={progress.status} current={PREP_STAGES.indexOf(progress.stage)} startedAt={progress.startedAt}
+          estimate={c.generatingHint} doneMessage={c.readyMessage(count)}
+          steps={[
+            { id: "reading", label: c.stepReading },
+            { id: "writing", label: progress.attempt > 1 && progress.stage === "writing" ? c.stepRewriting(progress.attempt) : c.stepWriting(count) },
+            { id: "checking", label: c.stepChecking },
+            { id: "complete", label: c.stepDone },
+          ]} />
+      </div>}
       {error && <p className={styles.error} role="alert">{error}</p>}
     </section>;
   }
