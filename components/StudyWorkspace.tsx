@@ -18,6 +18,10 @@ import { displayedStudyKit } from '@/lib/client/displayed-study-kit';
 import { AccountMenu } from './auth/AccountMenu';
 import { useRouter } from 'next/navigation';
 import { PrepArea } from './prep/PrepArea';
+import { PricingArea } from './billing/PricingArea';
+import { UsageHint } from './billing/UsageHint';
+import { refreshBilling } from '@/lib/client/billing';
+import NextLink from 'next/link';
 import type { ExamId } from '@/lib/prep/exams';
 import { GenerationSteps, MaterialsSkeleton } from './GenerationProgress';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
@@ -37,14 +41,15 @@ export type PrepRoute = { exam: ExamId | null };
  * `backgroundJobs` comes from the server switch. When it is off, signed-in users
  * generate in this tab (like guests) and the result is saved to their account.
  */
-export function StudyWorkspace({ prep, backgroundJobs = false }: { prep?: PrepRoute; backgroundJobs?: boolean } = {}) {
+export function StudyWorkspace({ prep, pricing = false, backgroundJobs = false }: { prep?: PrepRoute; pricing?: boolean; backgroundJobs?: boolean } = {}) {
   const { user, ready, verified, error, recheckIdentity } = useAuth();
   if (!ready || !verified || error) return <main className="workspace-main"><div className="study-sync" role="status"><p>{error ? 'Account verification is unavailable. Your lectures are hidden until your account can be checked.' : 'Checking your account before opening lectures…'}</p><AccountMenu /></div></main>;
   // Remount synchronously on identity changes: no frame can render the old account's data.
-  return <AccountWorkspace key={user?.id ?? 'guest'} userId={user?.id ?? null} username={user?.username ?? null} refreshAuth={recheckIdentity} prep={prep} backgroundJobs={backgroundJobs} />;
+  return <AccountWorkspace key={user?.id ?? 'guest'} userId={user?.id ?? null} username={user?.username ?? null} refreshAuth={recheckIdentity} prep={prep} pricing={pricing} backgroundJobs={backgroundJobs} />;
 }
 
-function AccountWorkspace({ userId, username, refreshAuth, prep, backgroundJobs }: { userId: string | null; username: string | null; refreshAuth: () => Promise<void>; prep?: PrepRoute; backgroundJobs: boolean }) {
+function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgroundJobs }: { userId: string | null; username: string | null; refreshAuth: () => Promise<void>; prep?: PrepRoute; pricing: boolean; backgroundJobs: boolean }) {
+  const otherView = Boolean(prep || pricing);
   const jobUserId = backgroundJobs ? userId : null;
   const router = useRouter();
   const sync = useStudyHistory(userId, refreshAuth);
@@ -180,7 +185,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, backgroundJobs 
     cancel(""); setError(null); setDraft(emptyDraft);
     save({ ...historyRef.current, activeId: null });
     mobileSidebar.current?.close();
-    if (prep) { router.push("/"); return; }
+    if (otherView) { router.push("/"); return; }
     requestAnimationFrame(() => lectureInput.current?.focus());
   }
 
@@ -191,7 +196,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, backgroundJobs 
     cancel(""); setError(null);
     save({ ...historyRef.current, activeId: id });
     mobileSidebar.current?.close();
-    if (prep) router.push("/");
+    if (otherView) router.push("/");
   }
 
   function openEdit(id: string, action: "rename" | "delete") {
@@ -244,6 +249,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, backgroundJobs 
       const latest = historyRef.current;
       save({ ...latest, sessions: latest.sessions.map((session) => session.id === current.sessionId ? { ...session, kit, tab: "summary", updatedAt: Date.now() } : session) });
       setProgress("Study materials ready.");
+      void refreshBilling();
       setLiveStage((value) => value && { ...value, stage: "complete", done: true });
     } catch (caught) {
       if (operation.current !== current) return;
@@ -256,16 +262,16 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, backgroundJobs 
     }
   }
 
-  const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit, onExport: sync.download, prepActive: Boolean(prep) };
+  const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit, onExport: sync.download, prepActive: Boolean(prep), pricingActive: pricing };
   return <div className={`study-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
     <aside className={`lecture-sidebar ${sidebarCollapsed ? "rail" : ""}`} aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} onClose={() => setSidebarCollapsed(true)} /></aside>
     <dialog ref={mobileSidebar} className="mobile-sidebar" aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={false} onToggleCollapse={() => mobileSidebar.current?.close()} onClose={() => mobileSidebar.current?.close()} /></dialog>
     <div className="workspace">
       <header className="workspace-header"><div className="header-inner">
         <button className="icon-button open-sidebar" type="button" title="Open sidebar" aria-label="Open sidebar" onClick={() => { if (matchMedia("(max-width: 767px)").matches) mobileSidebar.current?.showModal(); else setSidebarCollapsed(false); }}><PanelLeft aria-hidden="true" /></button>
-        <span className="workspace-title">{prep ? "Exam prep" : active.title || "New lecture"}</span>
+        <span className="workspace-title">{prep ? "Exam prep" : pricing ? "Plans" : active.title || "New lecture"}</span>
       </div></header>
-      {prep ? <main className="workspace-main prep-main"><PrepArea exam={prep.exam} /></main> : <main className="workspace-main">
+      {prep ? <main className="workspace-main prep-main"><PrepArea exam={prep.exam} /></main> : pricing ? <main className="workspace-main prep-main"><PricingArea /></main> : <main className="workspace-main">
         <StudySyncStatus sync={sync} username={username} />
         <section className="input-section composer" aria-labelledby="input-heading">
           <div className="composer-intro">
@@ -304,9 +310,9 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, backgroundJobs 
                 <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">YouTube video link</label><Link aria-hidden="true" /><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); importYouTube(); } }} placeholder="A YouTube link with captions" inputMode="url" /><Button type="button" variant="ghost" onClick={importYouTube} title="Import YouTube captions">Import captions</Button></div>
               </fieldset>
             </div>
-            {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}</p></div>}
+            {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}{(error.code === "PLAN_LIMIT" || error.code === "PRO_REQUIRED") && <> <NextLink className="notice-link" href="/pricing">See plans</NextLink></>}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
-            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · saved on this device only'}</span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
+            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · saved on this device only'}<UsageHint /></span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
             {liveStage && (pending || liveStage.done) && <div className="gen-progress"><GenerationSteps stage={liveStage.stage} startedAt={liveStage.startedAt} running={!liveStage.done} /></div>}
           </form>
           {jobUserId && <GenerationJobStatus task={task} />}

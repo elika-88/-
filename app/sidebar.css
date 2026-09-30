@@ -303,3 +303,20 @@ html:root .mobile-sidebar .gpt-expanded-content { width: 100%; }
 html:root .gpt-nav-item.sb-prep { margin-top: 2px; }
 html:root .gpt-nav-item.sb-prep.is-active { background: var(--sb-active); color: var(--foreground); font-weight: 500; }
 html:root .workspace-main.prep-main { max-width: 1180px; }
+
+/* ---------- Plan entry ---------- */
+.sb-plan {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 0 6px; padding: 10px 12px;
+  border: 1px solid var(--sb-line); border-radius: 12px;
+  background: var(--surface); color: var(--foreground); text-decoration: none;
+  transition: border-color 150ms, background-color 150ms, transform 150ms;
+}
+.sb-plan:hover { border-color: color-mix(in srgb, var(--foreground) 30%, var(--sb-line)); }
+.sb-plan:active { transform: scale(.99); }
+.sb-plan > svg { flex-shrink: 0; color: var(--accent); }
+.sb-plan-text { display: grid; min-width: 0; line-height: 1.35; }
+.sb-plan-text strong { font-size: 13.5px; font-weight: 600; }
+.sb-plan-text small { font-size: 11.5px; color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-plan.is-pro { background: transparent; border-color: transparent; padding: 6px 12px; }
+.sb-plan.is-pro:hover, .sb-plan.is-active { background: var(--sb-hover); }

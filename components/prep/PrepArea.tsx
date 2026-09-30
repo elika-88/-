@@ -8,6 +8,10 @@ import { EXAMS, EXAM_IDS, estimateIeltsBand, type ExamId } from "@/lib/prep/exam
 import { daysUntil, saveProfile, usePrepState } from "@/lib/client/prep-store";
 import { usePrepCopy } from "./copy";
 import { ReadingPractice } from "./ReadingPractice";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { useBilling } from "@/lib/client/billing";
+import { useBillingCopy } from "@/components/billing/copy";
+import billingStyles from "@/components/billing/billing.module.css";
 import styles from "./prep.module.css";
 
 export function PrepArea({ exam }: { exam: ExamId | null }) {
@@ -98,7 +102,7 @@ function ExamView({ exam: examId }: { exam: ExamId }) {
           })}
         </nav>
         {exam.sections.some((section) => !section.available) && <p className={styles.tabNote}>{c.moreSoon}</p>}
-        <ReadingPractice exam={examId} />
+        <PrepGate><ReadingPractice exam={examId} /></PrepGate>
       </div>
 
       <aside className={styles.examAside}>
@@ -128,4 +132,17 @@ function ExamView({ exam: examId }: { exam: ExamId }) {
     </div>
     <p className={styles.disclaimer}>{c.disclaimer}</p>
   </div>;
+}
+
+/** Exam prep is a Pro feature; Free users see what it does and a path to upgrade. */
+function PrepGate({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { summary } = useBilling(user?.id ?? null);
+  const { c } = useBillingCopy();
+  if (!summary || summary.limits.prepSetsPerDay > 0) return <>{children}</>;
+  return <section className={billingStyles.locked}>
+    <h2>{c.lockedTitle}</h2>
+    <p>{c.lockedLead}</p>
+    <Button asChild><Link href="/pricing">{c.seePlans}</Link></Button>
+  </section>;
 }

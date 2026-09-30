@@ -4,6 +4,7 @@ import { publicError } from "@/lib/ai/pipeline";
 import { PASSAGE_LIMITS } from "@/lib/prep/exams";
 import { PrepGenerateRequestSchema, type PrepStreamEvent } from "@/lib/prep/schema";
 import { generateReadingSet } from "@/lib/server/prep-generation";
+import { assertAllowance, BillingError, recordUsage, resolveSubject, withAnonCookie, type Subject } from "@/lib/server/billing";
 
 export const runtime = "nodejs";
 export const maxDuration = 200;
@@ -35,6 +36,15 @@ export async function POST(request: Request) {
     return errorResponse({ code: "SERVER_CONFIG", message: "Configure an API key, base URL and model before generating.", retryable: false });
   }
 
+  let subject: Subject;
+  try {
+    subject = await resolveSubject(request);
+    await assertAllowance(subject, "prep", { questions: parsed.data.count });
+  } catch (error) {
+    if (error instanceof BillingError) return errorResponse({ code: error.code, message: error.message, retryable: false });
+    return errorResponse({ code: "SERVER_CONFIG", message: "The usage service is unavailable. Try again shortly.", retryable: true });
+  }
+
   const controller = new AbortController();
   const abort = () => controller.abort();
   request.signal.addEventListener("abort", abort, { once: true });
@@ -49,6 +59,7 @@ export async function POST(request: Request) {
       try {
         send({ type: "stage", stage: "reading", attempt: 1 });
         const set = await generateReadingSet(parsed.data, connection, controller.signal, (stage, attempt) => send({ type: "stage", stage, attempt }));
+        await recordUsage(subject, "prep").catch(() => undefined);
         send({ type: "stage", stage: "complete", attempt: 1 });
         send({ type: "result", set });
       } catch (error) {
@@ -60,5 +71,5 @@ export async function POST(request: Request) {
     },
     cancel() { closed = true; controller.abort(); cleanup(); },
   });
-  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no" } });
+  return withAnonCookie(new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no" } }), subject, request);
 }

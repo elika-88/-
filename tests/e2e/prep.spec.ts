@@ -11,9 +11,18 @@ const set: ReadingSet = {
   })),
 };
 
+// Exam prep is a Pro feature; these tests exercise it with a Pro plan.
+const proBilling = {
+  plan: 'pro', signedIn: false,
+  limits: { lectureGenerationsPerDay: 40, maxLectureCharacters: 60000, prepSetsPerDay: 30, maxPrepQuestions: 15 },
+  usage: { lecture: { used: 0, limit: 40 }, prep: { used: 0, limit: 30 } }, resetsAt: Date.now() + 3_600_000,
+  subscription: null, paypal: null,
+};
 async function guest(page: Page) {
   await page.route('**/api/auth', route => route.fulfill({ json: { user: null } }));
+  await page.route('**/api/billing', route => route.fulfill({ json: proBilling }));
 }
+const streamed = (value: ReadingSet) => [{ type: 'stage', stage: 'reading', attempt: 1 }, { type: 'stage', stage: 'writing', attempt: 1 }, { type: 'stage', stage: 'checking', attempt: 1 }, { type: 'stage', stage: 'complete', attempt: 1 }, { type: 'result', set: value }].map((event) => JSON.stringify(event)).join('\n') + '\n';
 
 test('exam prep creates, grades and restores reading practice and the saved plan', async ({ page }) => {
   await guest(page);
@@ -21,7 +30,7 @@ test('exam prep creates, grades and restores reading practice and the saved plan
   await page.route('**/api/prep/generate', async route => {
     requests++;
     expect(route.request().postDataJSON()).toMatchObject({ exam: 'ielts', passage: passage.trim() });
-    await route.fulfill({ json: { set } });
+    await route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: streamed(set) });
   });
   await page.goto('/prep');
   await page.getByRole('link', { name: /IELTS/ }).click();
@@ -74,4 +83,13 @@ test('sidebar pins lectures and opens exam prep on desktop and mobile', async ({
   await page.getByRole('link', { name: 'Exam prep', exact: true }).filter({ visible: true }).click();
   await expect(page.getByRole('heading', { name: 'Reading practice for SAT, IELTS and TOEFL', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Lecture history', exact: true })).not.toBeVisible();
+});
+
+test('free plan sees an upgrade panel instead of exam prep', async ({ page }) => {
+  await page.route('**/api/auth', route => route.fulfill({ json: { user: null } }));
+  await page.route('**/api/billing', route => route.fulfill({ json: { ...proBilling, plan: 'free', limits: { ...proBilling.limits, prepSetsPerDay: 0 } } }));
+  await page.goto('/prep/ielts');
+  await expect(page.getByRole('heading', { name: 'Exam prep is part of Lumina Pro' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'See plans' })).toHaveAttribute('href', '/pricing');
+  await expect(page.getByLabel('Passage', { exact: true })).toHaveCount(0);
 });

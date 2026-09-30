@@ -1,0 +1,108 @@
+import "server-only";
+import type { BillingInterval } from "@/lib/billing/plans";
+
+// Minimal PayPal REST client for Subscriptions. Secrets stay on the server.
+export type PayPalConfig = {
+  env: "live" | "sandbox";
+  baseUrl: string;
+  clientId: string;
+  clientSecret: string;
+  webhookId: string | null;
+  currency: string;
+  plans: Record<BillingInterval, { id: string; price: string } | null>;
+};
+
+export class PayPalError extends Error {
+  constructor(message: string, public readonly status = 502) { super(message); }
+}
+
+export function paypalConfig(): PayPalConfig | null {
+  const clientId = process.env.PAYPAL_CLIENT_ID?.trim();
+  const clientSecret = process.env.PAYPAL_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return null;
+  const env = process.env.PAYPAL_ENV?.trim() === "sandbox" ? "sandbox" : "live";
+  const plan = (id?: string, price?: string) => id?.trim() ? { id: id.trim(), price: price?.trim() || "" } : null;
+  return {
+    env,
+    baseUrl: env === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com",
+    clientId,
+    clientSecret,
+    webhookId: process.env.PAYPAL_WEBHOOK_ID?.trim() || null,
+    currency: process.env.PAYPAL_CURRENCY?.trim() || "USD",
+    plans: {
+      monthly: plan(process.env.PAYPAL_PLAN_MONTHLY_ID, process.env.PAYPAL_PRICE_MONTHLY),
+      yearly: plan(process.env.PAYPAL_PLAN_YEARLY_ID, process.env.PAYPAL_PRICE_YEARLY),
+    },
+  };
+}
+
+export function intervalForPlan(config: PayPalConfig, planId: string): BillingInterval | null {
+  if (config.plans.monthly?.id === planId) return "monthly";
+  if (config.plans.yearly?.id === planId) return "yearly";
+  return null;
+}
+
+let cachedToken: { key: string; value: string; expiresAt: number } | null = null;
+
+async function accessToken(config: PayPalConfig, fetcher: typeof fetch) {
+  const key = `${config.baseUrl}|${config.clientId}`;
+  if (cachedToken && cachedToken.key === key && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
+  const response = await fetcher(`${config.baseUrl}/v1/oauth2/token`, {
+    method: "POST",
+    headers: { Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=client_credentials",
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = await response.json().catch(() => null) as { access_token?: string; expires_in?: number } | null;
+  if (!response.ok || !body?.access_token) throw new PayPalError("PayPal rejected the API credentials. Check PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET and PAYPAL_ENV.", 503);
+  cachedToken = { key, value: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 300) * 1000 };
+  return cachedToken.value;
+}
+
+export async function paypalRequest<T>(config: PayPalConfig, path: string, init: { method?: string; body?: unknown } = {}, fetcher: typeof fetch = fetch): Promise<T | null> {
+  const token = await accessToken(config, fetcher);
+  const response = await fetcher(`${config.baseUrl}${path}`, {
+    method: init.method ?? "GET",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (response.status === 204) return null;
+  const body = await response.json().catch(() => null);
+  if (response.status === 404) throw new PayPalError("PayPal could not find this subscription.", 404);
+  if (!response.ok) throw new PayPalError(`PayPal request failed (${response.status}).`, 502);
+  return body as T;
+}
+
+export type PayPalSubscription = {
+  id: string;
+  status: "APPROVAL_PENDING" | "APPROVED" | "ACTIVE" | "SUSPENDED" | "CANCELLED" | "EXPIRED" | string;
+  plan_id: string;
+  custom_id?: string;
+  billing_info?: { next_billing_time?: string; last_payment?: { time?: string } };
+};
+
+export const getSubscription = (config: PayPalConfig, id: string, fetcher?: typeof fetch) =>
+  paypalRequest<PayPalSubscription>(config, `/v1/billing/subscriptions/${encodeURIComponent(id)}`, {}, fetcher);
+
+export const cancelSubscription = (config: PayPalConfig, id: string, reason: string, fetcher?: typeof fetch) =>
+  paypalRequest<null>(config, `/v1/billing/subscriptions/${encodeURIComponent(id)}/cancel`, { method: "POST", body: { reason: reason.slice(0, 127) } }, fetcher);
+
+/** Asks PayPal to verify a webhook delivery. Requires PAYPAL_WEBHOOK_ID. */
+export async function verifyWebhook(config: PayPalConfig, headers: Headers, event: unknown, fetcher?: typeof fetch) {
+  if (!config.webhookId) throw new PayPalError("PAYPAL_WEBHOOK_ID is not configured.", 503);
+  const header = (name: string) => headers.get(name) ?? "";
+  const result = await paypalRequest<{ verification_status?: string }>(config, "/v1/notifications/verify-webhook-signature", {
+    method: "POST",
+    body: {
+      auth_algo: header("paypal-auth-algo"),
+      cert_url: header("paypal-cert-url"),
+      transmission_id: header("paypal-transmission-id"),
+      transmission_sig: header("paypal-transmission-sig"),
+      transmission_time: header("paypal-transmission-time"),
+      webhook_id: config.webhookId,
+      webhook_event: event,
+    },
+  }, fetcher);
+  return result?.verification_status === "SUCCESS";
+}
