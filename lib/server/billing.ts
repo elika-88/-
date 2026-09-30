@@ -1,10 +1,10 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import type { Client } from "@libsql/client";
-import { PLAN_LIMITS, type BillingInterval, type BillingSummary, type PlanId, type UsageKind } from "@/lib/billing/plans";
+import { PLAN_LIMITS, type BillingSummary, type PaidPlanId, type PlanId, type UsageKind } from "@/lib/billing/plans";
 import { withDatabase } from "@/lib/server/database";
 import { getUserFromRequest, initializeUserTables } from "@/lib/server/user-auth";
-import { intervalForPlan, paypalConfig, type PayPalConfig, type PayPalSubscription } from "@/lib/server/paypal";
+import { paypalConfig, planForPayPalId, type PayPalConfig, type PayPalSubscription } from "@/lib/server/paypal";
 
 export const ANON_COOKIE = "lumina_anon";
 export const ANON_COOKIE_SECONDS = 365 * 24 * 60 * 60;
@@ -22,14 +22,17 @@ export async function initializeBillingTables(db: Client) {
     `CREATE TABLE IF NOT EXISTS billing_subscriptions (
       user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
       provider TEXT NOT NULL, subscription_id TEXT NOT NULL UNIQUE, plan_id TEXT NOT NULL,
-      billing_interval TEXT, status TEXT NOT NULL, next_billing_at INTEGER, paid_through INTEGER,
-      updated_at INTEGER NOT NULL
+      tier TEXT NOT NULL DEFAULT 'pro', billing_interval TEXT, status TEXT NOT NULL,
+      next_billing_at INTEGER, paid_through INTEGER, updated_at INTEGER NOT NULL
     )`,
     `CREATE TABLE IF NOT EXISTS usage_counters (
       subject TEXT NOT NULL, kind TEXT NOT NULL, day TEXT NOT NULL, count INTEGER NOT NULL,
       PRIMARY KEY (subject, kind, day)
     )`,
   ], "write");
+  // Tables created before tiers existed get the column once (they only held Pro).
+  const columns = await db.execute("PRAGMA table_info(billing_subscriptions)");
+  if (!columns.rows.some((column) => column.name === "tier")) await db.execute("ALTER TABLE billing_subscriptions ADD COLUMN tier TEXT NOT NULL DEFAULT 'pro'");
 }
 
 const dayKey = (now: number) => new Date(now).toISOString().slice(0, 10);
@@ -58,19 +61,20 @@ export function withAnonCookie(response: Response, subject: Subject, request: Re
   return response;
 }
 
-type SubscriptionRow = { status: string; billing_interval: string | null; next_billing_at: number | null; paid_through: number | null };
+type SubscriptionRow = { tier: string; status: string; billing_interval: string | null; next_billing_at: number | null; paid_through: number | null };
+const tierOf = (row: SubscriptionRow): PaidPlanId => row.tier === "basic" ? "basic" : "pro";
 
 function planFor(row: SubscriptionRow | null, now: number): PlanId {
   if (!row) return "free";
-  if (row.status === "ACTIVE") return "pro";
-  // A cancelled subscription keeps Pro until the period that was already paid for ends.
-  if (row.status === "CANCELLED" && row.paid_through && row.paid_through > now) return "pro";
+  if (row.status === "ACTIVE") return tierOf(row);
+  // A cancelled subscription keeps its tier until the period that was already paid for ends.
+  if (row.status === "CANCELLED" && row.paid_through && row.paid_through > now) return tierOf(row);
   return "free";
 }
 
 async function readState(db: Client, subject: Subject, now: number) {
   const row = subject.userId
-    ? (await db.execute({ sql: "SELECT status, billing_interval, next_billing_at, paid_through FROM billing_subscriptions WHERE user_id = ?", args: [subject.userId] })).rows[0] as unknown as SubscriptionRow | undefined
+    ? (await db.execute({ sql: "SELECT tier, status, billing_interval, next_billing_at, paid_through FROM billing_subscriptions WHERE user_id = ?", args: [subject.userId] })).rows[0] as unknown as SubscriptionRow | undefined
     : undefined;
   const counts = await db.execute({ sql: "SELECT kind, count FROM usage_counters WHERE subject = ? AND day = ?", args: [subject.key, dayKey(now)] });
   const used = { lecture: 0, prep: 0 } as Record<UsageKind, number>;
@@ -92,6 +96,7 @@ export async function billingSummary(subject: Subject, now = Date.now()): Promis
     },
     resetsAt: nextUtcMidnight(now),
     subscription: state.row ? {
+      tier: tierOf(state.row),
       status: state.row.status,
       interval: state.row.billing_interval === "monthly" || state.row.billing_interval === "yearly" ? state.row.billing_interval : null,
       nextBillingAt: state.row.next_billing_at,
@@ -109,17 +114,17 @@ export async function billingSummary(subject: Subject, now = Date.now()): Promis
 export async function assertAllowance(subject: Subject, kind: UsageKind, request: { characters?: number; questions?: number } = {}, now = Date.now()) {
   const state = await withDatabase(async (db) => { await initializeBillingTables(db); return readState(db, subject, now); });
   const limits = PLAN_LIMITS[state.plan];
-  if (kind === "prep" && limits.prepSetsPerDay === 0) throw new BillingError("PRO_REQUIRED", "Exam prep is part of Lumina Pro. Upgrade to practise SAT, IELTS and TOEFL reading.", 403);
+  if (kind === "prep" && limits.prepSetsPerDay === 0) throw new BillingError("PRO_REQUIRED", "Exam prep is part of Lumina Pro. Upgrade to Pro to practise SAT, IELTS and TOEFL reading.", 403);
   if (kind === "prep" && request.questions && request.questions > limits.maxPrepQuestions) throw new BillingError("PRO_REQUIRED", `Sets of ${request.questions} questions are part of Lumina Pro.`, 403);
   if (kind === "lecture" && request.characters && request.characters > limits.maxLectureCharacters) {
     throw new BillingError(state.plan === "free" ? "PRO_REQUIRED" : "PLAN_LIMIT", state.plan === "free"
-      ? `Free lectures can be up to ${limits.maxLectureCharacters.toLocaleString("en-US")} characters. Upgrade to Pro for up to ${PLAN_LIMITS.pro.maxLectureCharacters.toLocaleString("en-US")}.`
+      ? `Free lectures can be up to ${limits.maxLectureCharacters.toLocaleString("en-US")} characters. Basic and Pro allow up to ${PLAN_LIMITS.basic.maxLectureCharacters.toLocaleString("en-US")}.`
       : `Lectures can be up to ${limits.maxLectureCharacters.toLocaleString("en-US")} characters.`, 403);
   }
   const limit = kind === "lecture" ? limits.lectureGenerationsPerDay : limits.prepSetsPerDay;
   if (state.used[kind] >= limit) {
     throw new BillingError("PLAN_LIMIT", state.plan === "free"
-      ? `You have used today's ${limit} free generations. Upgrade to Pro or come back tomorrow.`
+      ? `You have used today's ${limit} free generations. Upgrade to Basic or Pro, or come back tomorrow.`
       : `You have reached today's fair-use limit of ${limit}. It resets at midnight UTC.`, 429);
   }
   return state.plan;
@@ -139,26 +144,30 @@ export async function recordUsage(subject: Subject, kind: UsageKind, now = Date.
  * Stores PayPal's view of a subscription for the user named in custom_id.
  * Unknown plans or users are ignored so a foreign subscription cannot grant Pro.
  */
-export async function syncSubscription(config: PayPalConfig, subscription: PayPalSubscription, expectedUserId?: string, now = Date.now()) {
+export async function syncSubscription(config: PayPalConfig, subscription: PayPalSubscription, expectedUserId?: string, options: { replace?: boolean; now?: number } = {}) {
+  const now = options.now ?? Date.now();
   const userId = subscription.custom_id?.trim();
   if (!userId || (expectedUserId && userId !== expectedUserId)) return { applied: false as const, reason: "owner" };
-  const interval: BillingInterval | null = intervalForPlan(config, subscription.plan_id);
-  if (!interval) return { applied: false as const, reason: "plan" };
+  const plan = planForPayPalId(config, subscription.plan_id);
+  if (!plan) return { applied: false as const, reason: "plan" };
   const nextBillingAt = parseTime(subscription.billing_info?.next_billing_time);
   return withDatabase(async (db) => {
     await initializeBillingTables(db);
     const user = await db.execute({ sql: "SELECT id FROM app_users WHERE id = ?", args: [userId] });
     if (!user.rows.length) return { applied: false as const, reason: "user" };
     await db.execute({
-      sql: `INSERT INTO billing_subscriptions (user_id, provider, subscription_id, plan_id, billing_interval, status, next_billing_at, paid_through, updated_at)
-            VALUES (?, 'paypal', ?, ?, ?, ?, ?, ?, ?)
+      // A different subscription only replaces an active one when the user just bought it
+      // (replace = upgrade/switch); stale webhooks for an old subscription cannot override it.
+      sql: `INSERT INTO billing_subscriptions (user_id, provider, subscription_id, plan_id, tier, billing_interval, status, next_billing_at, paid_through, updated_at)
+            VALUES (?, 'paypal', ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
-              subscription_id = excluded.subscription_id, plan_id = excluded.plan_id, billing_interval = excluded.billing_interval,
+              subscription_id = excluded.subscription_id, plan_id = excluded.plan_id, tier = excluded.tier, billing_interval = excluded.billing_interval,
               status = excluded.status, next_billing_at = COALESCE(excluded.next_billing_at, billing_subscriptions.next_billing_at),
-              paid_through = MAX(COALESCE(billing_subscriptions.paid_through, 0), COALESCE(excluded.paid_through, 0)),
+              paid_through = CASE WHEN billing_subscriptions.subscription_id = excluded.subscription_id
+                THEN MAX(COALESCE(billing_subscriptions.paid_through, 0), COALESCE(excluded.paid_through, 0)) ELSE excluded.paid_through END,
               updated_at = excluded.updated_at
-            WHERE billing_subscriptions.subscription_id = excluded.subscription_id OR billing_subscriptions.status <> 'ACTIVE'`,
-      args: [userId, subscription.id, subscription.plan_id, interval, subscription.status, nextBillingAt, nextBillingAt, now],
+            WHERE billing_subscriptions.subscription_id = excluded.subscription_id OR billing_subscriptions.status <> 'ACTIVE' OR ? = 1`,
+      args: [userId, subscription.id, subscription.plan_id, plan.tier, plan.interval, subscription.status, nextBillingAt, nextBillingAt, now, options.replace ? 1 : 0],
     });
     return { applied: true as const, userId };
   });

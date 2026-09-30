@@ -11,7 +11,7 @@ export function UsageHint() {
   const { summary } = useBilling(user?.id ?? null);
   const { c } = useBillingCopy();
   if (!summary) return null;
-  if (summary.plan === "pro") return <span className="usage-hint"> · <span className="usage-pro">{c.proBadge}</span></span>;
+  if (summary.plan !== "free") return <span className="usage-hint"> · <span className="usage-pro">{c.planName[summary.plan]}</span></span>;
   const left = Math.max(0, summary.usage.lecture.limit - summary.usage.lecture.used);
   return <span className="usage-hint"> · {c.remaining(left, summary.usage.lecture.limit)} · <Link href="/pricing">{c.upgrade}</Link></span>;
 }

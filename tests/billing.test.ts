@@ -22,8 +22,10 @@ beforeEach(async () => {
   vi.stubEnv('PAYPAL_CLIENT_ID', 'client-id');
   vi.stubEnv('PAYPAL_CLIENT_SECRET', 'client-secret');
   vi.stubEnv('PAYPAL_WEBHOOK_ID', 'WH-TEST');
-  vi.stubEnv('PAYPAL_PLAN_MONTHLY_ID', 'P-MONTHLY');
-  vi.stubEnv('PAYPAL_PLAN_YEARLY_ID', 'P-YEARLY');
+  vi.stubEnv('PAYPAL_PLAN_BASIC_MONTHLY_ID', 'P-BASIC-M');
+  vi.stubEnv('PAYPAL_PLAN_BASIC_YEARLY_ID', 'P-BASIC-Y');
+  vi.stubEnv('PAYPAL_PLAN_PRO_MONTHLY_ID', 'P-MONTHLY');
+  vi.stubEnv('PAYPAL_PLAN_PRO_YEARLY_ID', 'P-YEARLY');
   await withDatabase(async (db) => {
     await initializeBillingTables(db);
     await db.execute({ sql: 'INSERT INTO app_users (id, username, username_key, email, email_key, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', args: [userId, 'mao', 'mao', 'mao@example.com', 'mao@example.com', 'x', new Date().toISOString()] });
@@ -44,7 +46,8 @@ describe('plan limits', () => {
     await expect(assertAllowance(user, 'lecture', { characters: 25_000 })).rejects.toBeInstanceOf(BillingError);
     const summary = await billingSummary(anon);
     expect(summary).toMatchObject({ plan: 'free', usage: { lecture: { used: 3, limit: 3 } } });
-    expect(summary.paypal?.plans.monthly?.id).toBe('P-MONTHLY');
+    expect(summary.paypal?.plans.pro.monthly?.id).toBe('P-MONTHLY');
+    expect(summary.paypal?.plans.basic.yearly?.id).toBe('P-BASIC-Y');
   });
 
   it('grants Pro for an active subscription owned by the user and a configured plan', async () => {
@@ -54,7 +57,7 @@ describe('plan limits', () => {
     expect(await syncSubscription(config, subscription())).toMatchObject({ applied: true });
     await expect(assertAllowance(user, 'prep', { questions: 15 })).resolves.toBe('pro');
     await expect(assertAllowance(user, 'lecture', { characters: 50_000 })).resolves.toBe('pro');
-    expect((await billingSummary(user)).subscription).toMatchObject({ status: 'ACTIVE', interval: 'monthly', cancelled: false });
+    expect((await billingSummary(user)).subscription).toMatchObject({ tier: 'pro', status: 'ACTIVE', interval: 'monthly', cancelled: false });
   });
 
   it('keeps Pro after cancelling until the paid period ends', async () => {
@@ -63,6 +66,22 @@ describe('plan limits', () => {
     await syncSubscription(config, subscription({ status: 'CANCELLED', billing_info: {} }));
     expect((await billingSummary(user)).plan).toBe('pro');
     expect((await billingSummary(user, Date.now() + 31 * DAY)).plan).toBe('free');
+  });
+});
+
+describe('Basic plan', () => {
+  it('lifts lecture limits but keeps exam prep for Pro, and upgrades replace it', async () => {
+    const config = paypalConfig()!;
+    expect(await syncSubscription(config, subscription({ id: 'I-BASIC0001', plan_id: 'P-BASIC-Y' }))).toMatchObject({ applied: true });
+    expect((await billingSummary(user)).plan).toBe('basic');
+    await expect(assertAllowance(user, 'lecture', { characters: 50_000 })).resolves.toBe('basic');
+    await expect(assertAllowance(user, 'prep')).rejects.toMatchObject({ code: 'PRO_REQUIRED' });
+    // A stale event for another subscription cannot replace the active one...
+    await syncSubscription(config, subscription({ id: 'I-OTHER0001' }));
+    expect((await billingSummary(user)).subscription).toMatchObject({ tier: 'basic', interval: 'yearly' });
+    // ...but a confirmed upgrade does.
+    await syncSubscription(config, subscription({ id: 'I-OTHER0001' }), userId, { replace: true });
+    expect((await billingSummary(user)).subscription).toMatchObject({ tier: 'pro', interval: 'monthly' });
   });
 });
 

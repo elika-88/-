@@ -2,8 +2,8 @@ import { useSettings } from "@/lib/i18n/SettingsContext";
 
 const en = {
   kicker: "Plans",
-  title: "Study more with Lumina Pro",
-  lead: "Start free. Upgrade when you need more generations, longer lectures and the exam prep area.",
+  title: "Choose how you study",
+  lead: "Start free. Basic removes the daily limit for lectures; Pro adds the SAT, IELTS and TOEFL prep area.",
   monthly: "Monthly",
   yearly: "Yearly",
   save: (percent: number) => `Save ${percent}%`,
@@ -12,8 +12,12 @@ const en = {
   free: "Free",
   freePrice: "$0",
   freeNote: "For trying Lumina",
+  basic: "Basic",
+  basicNote: "For regular lecture study",
   pro: "Pro",
-  proNote: "For regular study and exam preparation",
+  proNote: "Everything, including exam prep",
+  upgradeNote: "Your Basic plan is cancelled automatically when Pro starts.",
+  switchLater: "To move to Basic, cancel Pro and subscribe to Basic after it ends.",
   current: "Current plan",
   features: {
     lectures: (n: number) => `${n} lecture generations a day`,
@@ -45,18 +49,20 @@ const en = {
   resets: "Resets at midnight UTC",
   upgrade: "Upgrade",
   upgradeToPro: "Upgrade to Pro",
+  upgradePlan: "Upgrade your plan",
+  planName: { free: "Free", basic: "Basic", pro: "Pro" } as Record<string, string>,
   proBadge: "Pro",
   remaining: (left: number, limit: number) => `${left} of ${limit} free generations left today`,
   lockedTitle: "Exam prep is part of Lumina Pro",
-  lockedLead: "Practise with SAT, IELTS and TOEFL style questions written from any passage, with every answer checked against the text.",
+  lockedLead: "Practise with SAT, IELTS and TOEFL style questions written from any passage, with every answer checked against the text. Basic does not include exam prep.",
   seePlans: "See plans",
 };
 type Copy = typeof en;
 
 const zh: Copy = {
   kicker: "方案",
-  title: "用 Lumina Pro 学得更多",
-  lead: "先免费使用。需要更多生成次数、更长的讲稿和备考专区时再升级。",
+  title: "选择适合你的方案",
+  lead: "先免费使用。基础版解除讲稿每日限制；Pro 再加上 SAT、雅思、托福备考专区。",
   monthly: "按月",
   yearly: "按年",
   save: (percent) => `省 ${percent}%`,
@@ -65,8 +71,12 @@ const zh: Copy = {
   free: "免费版",
   freePrice: "$0",
   freeNote: "适合先试用",
+  basic: "基础版",
+  basicNote: "适合日常讲稿学习",
   pro: "Pro 会员",
-  proNote: "适合日常学习和备考",
+  proNote: "全部功能，包括备考专区",
+  upgradeNote: "开通 Pro 后，基础版订阅会自动取消。",
+  switchLater: "想换成基础版：先取消 Pro，到期后再订阅基础版。",
   current: "当前方案",
   features: {
     lectures: (n) => `每天 ${n} 次讲稿生成`,
@@ -98,10 +108,12 @@ const zh: Copy = {
   resets: "UTC 零点重置",
   upgrade: "升级",
   upgradeToPro: "升级到 Pro",
+  upgradePlan: "升级方案",
+  planName: { free: "免费版", basic: "基础版", pro: "Pro 会员" },
   proBadge: "Pro",
   remaining: (left, limit) => `今天还剩 ${left} / ${limit} 次免费生成`,
   lockedTitle: "备考专区是 Pro 会员功能",
-  lockedLead: "用任意文章生成 SAT、雅思、托福题型的练习，每个答案都对照原文核验。",
+  lockedLead: "用任意文章生成 SAT、雅思、托福题型的练习，每个答案都对照原文核验。基础版不包含备考专区。",
   seePlans: "查看方案",
 };
 

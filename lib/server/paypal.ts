@@ -1,5 +1,5 @@
 import "server-only";
-import type { BillingInterval } from "@/lib/billing/plans";
+import type { BillingInterval, PaidPlanId, PlanPrice } from "@/lib/billing/plans";
 
 // Minimal PayPal REST client for Subscriptions. Secrets stay on the server.
 export type PayPalConfig = {
@@ -9,7 +9,7 @@ export type PayPalConfig = {
   clientSecret: string;
   webhookId: string | null;
   currency: string;
-  plans: Record<BillingInterval, { id: string; price: string } | null>;
+  plans: Record<PaidPlanId, Record<BillingInterval, PlanPrice>>;
 };
 
 export class PayPalError extends Error {
@@ -30,15 +30,25 @@ export function paypalConfig(): PayPalConfig | null {
     webhookId: process.env.PAYPAL_WEBHOOK_ID?.trim() || null,
     currency: process.env.PAYPAL_CURRENCY?.trim() || "USD",
     plans: {
-      monthly: plan(process.env.PAYPAL_PLAN_MONTHLY_ID, process.env.PAYPAL_PRICE_MONTHLY),
-      yearly: plan(process.env.PAYPAL_PLAN_YEARLY_ID, process.env.PAYPAL_PRICE_YEARLY),
+      basic: {
+        monthly: plan(process.env.PAYPAL_PLAN_BASIC_MONTHLY_ID, process.env.PAYPAL_PRICE_BASIC_MONTHLY),
+        yearly: plan(process.env.PAYPAL_PLAN_BASIC_YEARLY_ID, process.env.PAYPAL_PRICE_BASIC_YEARLY),
+      },
+      pro: {
+        monthly: plan(process.env.PAYPAL_PLAN_PRO_MONTHLY_ID, process.env.PAYPAL_PRICE_PRO_MONTHLY),
+        yearly: plan(process.env.PAYPAL_PLAN_PRO_YEARLY_ID, process.env.PAYPAL_PRICE_PRO_YEARLY),
+      },
     },
   };
 }
 
-export function intervalForPlan(config: PayPalConfig, planId: string): BillingInterval | null {
-  if (config.plans.monthly?.id === planId) return "monthly";
-  if (config.plans.yearly?.id === planId) return "yearly";
+/** Maps a PayPal plan id back to our tier and interval; unknown plans grant nothing. */
+export function planForPayPalId(config: PayPalConfig, planId: string): { tier: PaidPlanId; interval: BillingInterval } | null {
+  for (const tier of ["basic", "pro"] as const) {
+    for (const interval of ["monthly", "yearly"] as const) {
+      if (config.plans[tier][interval]?.id === planId) return { tier, interval };
+    }
+  }
   return null;
 }
 

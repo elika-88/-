@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Creates the Lumina Pro product, a monthly and a yearly plan, and optionally the
+// Creates the Lumina product, monthly and yearly plans for Basic and Pro, and optionally the
 // webhook in your PayPal account, then prints the lines to add to .env.local.
 //
-//   npm run paypal:setup -- --monthly 4.99 --yearly 39.99
-//   npm run paypal:setup -- --monthly 4.99 --yearly 39.99 --currency USD --webhook-url https://your.site/api/billing/paypal/webhook
+//   npm run paypal:setup
+//   npm run paypal:setup -- --basic-monthly 9.90 --basic-yearly 95.00 --pro-monthly 12.90 --pro-yearly 124.00
+//   npm run paypal:setup -- --webhook-only --webhook-url https://your.site/api/billing/paypal/webhook
 //
 // Needs PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET and PAYPAL_ENV (live | sandbox) in .env.local.
 // Running it twice creates new plans; keep the ids from the first run.
@@ -14,8 +15,11 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, inde
 }, []));
 
 const fail = (message) => { console.error(`\n✖ ${message}\n`); process.exit(1); };
-const price = (value, name) => {
-  if (!/^\d+(\.\d{1,2})?$/.test(value ?? "")) fail(`Pass --${name} <price>, for example --${name} 4.99`);
+// Defaults: Basic $9.90/month, Pro $12.90/month, yearly = 12 months at 20% off (rounded).
+const DEFAULTS = { "basic-monthly": "9.90", "basic-yearly": "95.00", "pro-monthly": "12.90", "pro-yearly": "124.00" };
+const price = (name) => {
+  const value = args[name] ?? DEFAULTS[name];
+  if (!/^\d+(\.\d{1,2})?$/.test(value ?? "")) fail(`--${name} must be a price such as ${DEFAULTS[name]}`);
   return Number(value).toFixed(2);
 };
 
@@ -25,9 +29,10 @@ if (!clientId || !secret) fail("Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in
 const env = process.env.PAYPAL_ENV?.trim() === "sandbox" ? "sandbox" : "live";
 const base = env === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 const currency = (args.currency ?? process.env.PAYPAL_CURRENCY ?? "USD").toUpperCase();
-const monthly = price(args.monthly, "monthly");
-const yearly = price(args.yearly, "yearly");
+const prices = Object.fromEntries(Object.keys(DEFAULTS).map((name) => [name, price(name)]));
 const webhookUrl = args["webhook-url"];
+const webhookOnly = args["webhook-only"] === "true";
+if (webhookOnly && !webhookUrl) fail("--webhook-only needs --webhook-url.");
 if (webhookUrl && !/^https:\/\//.test(webhookUrl)) fail("--webhook-url must be a public https URL ending in /api/billing/paypal/webhook.");
 
 async function call(path, init = {}) {
@@ -45,7 +50,9 @@ const token = (await call("/v1/oauth2/token", {
 const json = (body) => ({ method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(body) });
 
 console.log(`\nPayPal ${env} · ${currency}\n`);
-const product = await call("/v1/catalogs/products", json({ name: "Lumina Pro", description: "Lumina Pro membership", type: "SERVICE", category: "SOFTWARE" }));
+const created = {};
+if (!webhookOnly) {
+const product = await call("/v1/catalogs/products", json({ name: "Lumina membership", description: "Lumina Basic and Pro plans", type: "SERVICE", category: "SOFTWARE" }));
 console.log(`✓ Product ${product.id}`);
 
 const plan = (name, unit, value) => call("/v1/billing/plans", json({
@@ -55,10 +62,15 @@ const plan = (name, unit, value) => call("/v1/billing/plans", json({
   billing_cycles: [{ frequency: { interval_unit: unit, interval_count: 1 }, tenure_type: "REGULAR", sequence: 1, total_cycles: 0, pricing_scheme: { fixed_price: { value, currency_code: currency } } }],
   payment_preferences: { auto_bill_outstanding: true, setup_fee_failure_action: "CONTINUE", payment_failure_threshold: 2 },
 }));
-const monthlyPlan = await plan("Lumina Pro — Monthly", "MONTH", monthly);
-console.log(`✓ Monthly plan ${monthlyPlan.id} (${monthly} ${currency})`);
-const yearlyPlan = await plan("Lumina Pro — Yearly", "YEAR", yearly);
-console.log(`✓ Yearly plan ${yearlyPlan.id} (${yearly} ${currency})`);
+for (const [tier, label] of [["basic", "Basic"], ["pro", "Pro"]]) {
+  for (const [interval, unit, name] of [["monthly", "MONTH", "Monthly"], ["yearly", "YEAR", "Yearly"]]) {
+    const value = prices[`${tier}-${interval}`];
+    const result = await plan(`Lumina ${label} — ${name}`, unit, value);
+    created[`${tier}-${interval}`] = { id: result.id, value };
+    console.log(`✓ ${label} ${name.toLowerCase()} ${result.id} (${value} ${currency})`);
+  }
+}
+}
 
 let webhookId = "";
 if (webhookUrl) {
@@ -68,10 +80,12 @@ if (webhookUrl) {
   console.log(`✓ Webhook ${webhookId} → ${webhookUrl}`);
 }
 
+if (webhookOnly) { console.log(`\nAdd this line to .env.local, then restart the server:\n\nPAYPAL_WEBHOOK_ID=${webhookId}\n`); process.exit(0); }
+const line = (tier, interval) => `PAYPAL_PLAN_${tier.toUpperCase()}_${interval.toUpperCase()}_ID=${created[`${tier}-${interval}`].id}\nPAYPAL_PRICE_${tier.toUpperCase()}_${interval.toUpperCase()}=${created[`${tier}-${interval}`].value}`;
 console.log(`\nAdd these lines to .env.local, then restart the server:\n
 PAYPAL_CURRENCY=${currency}
-PAYPAL_PLAN_MONTHLY_ID=${monthlyPlan.id}
-PAYPAL_PRICE_MONTHLY=${monthly}
-PAYPAL_PLAN_YEARLY_ID=${yearlyPlan.id}
-PAYPAL_PRICE_YEARLY=${yearly}${webhookId ? `\nPAYPAL_WEBHOOK_ID=${webhookId}` : "\n# PAYPAL_WEBHOOK_ID=  (run again with --webhook-url once the site is public, or create it in the PayPal dashboard)"}
+${line("basic", "monthly")}
+${line("basic", "yearly")}
+${line("pro", "monthly")}
+${line("pro", "yearly")}${webhookId ? `\nPAYPAL_WEBHOOK_ID=${webhookId}` : "\n# PAYPAL_WEBHOOK_ID=  (later: npm run paypal:setup -- --webhook-only --webhook-url https://your.site/api/billing/paypal/webhook)"}
 `);

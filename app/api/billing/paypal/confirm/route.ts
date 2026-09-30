@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { billingSummary, syncSubscription } from "@/lib/server/billing";
-import { getSubscription, paypalConfig, PayPalError } from "@/lib/server/paypal";
+import { activeSubscriptionId, billingSummary, syncSubscription } from "@/lib/server/billing";
+import { cancelSubscription, getSubscription, paypalConfig, PayPalError, planForPayPalId } from "@/lib/server/paypal";
 import { AccountError, getUserFromRequest, readAccountJson, requireSameOrigin } from "@/lib/server/user-auth";
 
 export const runtime = "nodejs";
@@ -28,7 +28,11 @@ export async function POST(request: Request) {
     }
     if (!subscription) return json({ error: "PayPal returned no subscription." }, 502);
     if (subscription.status !== "ACTIVE") return json({ error: `PayPal reports the subscription as ${subscription.status.toLowerCase()}. It will update here automatically once PayPal activates it.` }, 409);
-    const result = await syncSubscription(config, subscription, user.id);
+    if (subscription.custom_id !== user.id || !planForPayPalId(config, subscription.plan_id)) return json({ error: "This subscription does not belong to your account or plan." }, 403);
+    // Switching tier (e.g. Basic -> Pro): stop the previous subscription so the user is not billed twice.
+    const previous = await activeSubscriptionId(user.id);
+    if (previous && previous !== subscription.id) await cancelSubscription(config, previous, "Replaced by a new Lumina plan").catch(() => undefined);
+    const result = await syncSubscription(config, subscription, user.id, { replace: true });
     if (!result.applied) return json({ error: "This subscription does not belong to your account or plan." }, 403);
     return json(await billingSummary({ key: `user:${user.id}`, userId: user.id, newAnonId: null }));
   } catch (error) {
