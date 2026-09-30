@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import styles from "./billing.module.css";
 
 type PayPalButtons = { render: (element: HTMLElement) => Promise<void>; close?: () => Promise<void> };
 type PayPalNamespace = {
@@ -68,8 +69,8 @@ export function PayPalSubscribeButton({ clientId, currency, planId, userId, onAp
     return () => { cancelled = true; void buttons?.close?.().catch(() => undefined); };
   }, [clientId, currency, planId, userId]);
 
-  return <div className="paypal-slot" aria-busy={!ready}>
-    {!ready && <div className="paypal-loading"><LoaderCircle className="animate-spin" size={16} aria-hidden="true" /></div>}
+  return <div className={styles.paypalSlot} aria-busy={!ready}>
+    {!ready && <div className={styles.paypalLoading}><LoaderCircle className="animate-spin" size={16} aria-hidden="true" /></div>}
     <div ref={container} />
   </div>;
 }
