@@ -38,7 +38,8 @@ export function revenueCatSetupIssues(config = revenueCatConfig()) {
   }
   const ids = Object.values(config.products).flatMap(v => Object.values(v)).filter(Boolean);
   if (new Set(ids).size !== ids.length) issues.push('RevenueCat product identifiers must be unique');
-  if (config.entitlements.basic === config.entitlements.pro) issues.push('RevenueCat entitlement identifiers must be different');
+  // Both tiers may share the onboarding entitlement. The verified product ID
+  // below, not the entitlement's display name, determines the granted tier.
   return issues;
 }
 

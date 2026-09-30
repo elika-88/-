@@ -8,7 +8,7 @@ Turning a switch off is a reversible operational control. It blocks new checkout
 
 1. Create a RevenueCat project and a Web Billing configuration. RevenueCat Web Billing requires a connected Stripe, Paddle, or RevenueCat Billing payment setup; a PayPal Client ID cannot be pasted into RevenueCat.
 2. Create four products with stable identifiers matching the Vercel variables below: Basic monthly/yearly and Pro monthly/yearly.
-3. Create two entitlements, `basic` and `pro`, and attach the matching products. Put all four products in the current offering, or change `REVENUECAT_OFFERING_ID` to the offering identifier you use.
+3. Use separate entitlements (`basic` and `pro`), or keep the single entitlement created by onboarding and attach all four products to it. For a shared entitlement, set both `REVENUECAT_ENTITLEMENT_BASIC` and `REVENUECAT_ENTITLEMENT_PRO` to its exact **Identifier**, not its display name. The server still verifies the product identifier to distinguish Basic from Pro; a Basic purchase never grants Pro just because the entitlement is called “LectorAI Pro”. Put all four products in the configured offering, or change `REVENUECAT_OFFERING_ID` to match. The shared mode supports one current subscription per account; use separate entitlements if you need independent overlapping tiers.
 4. Copy the Web Billing public SDK key to `REVENUECAT_PUBLIC_API_KEY`. Copy a RevenueCat secret API v1 key to `REVENUECAT_SECRET_API_KEY`. The secret is server-only.
 5. In RevenueCat Integrations → Webhooks, add:
 

@@ -96,6 +96,29 @@ describe('channel controls', () => {
 });
 
 describe('RevenueCat authoritative membership', () => {
+  it.each([
+    ['basic', 'monthly'], ['basic', 'yearly'], ['pro', 'monthly'], ['pro', 'yearly'],
+  ] as const)('maps a shared entitlement to %s %s by verified product ID', async (tier, interval) => {
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_BASIC', 'lector_access');
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_PRO', 'lector_access');
+    expect(revenueCatSetupIssues()).toEqual([]);
+    const product = `${tier}_${interval}`;
+    const data = snapshot(tier);
+    data.subscriber.entitlements = { lector_access: { product_identifier: product, expires_date: future() } };
+    data.subscriber.subscriptions = { [product]: { expires_date: future(), is_sandbox: false, unsubscribe_detected_at: null } };
+    mockSnapshot(data);
+    await syncRevenueCat(userId);
+    expect(await billingSummary(subject)).toMatchObject({ plan: tier, subscription: { tier, interval } });
+  });
+  it('does not grant a shared entitlement for an unmapped product', async () => {
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_BASIC', 'lector_access');
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_PRO', 'lector_access');
+    const data = snapshot();
+    data.subscriber.entitlements = { lector_access: { product_identifier: 'foreign', expires_date: future() } };
+    data.subscriber.subscriptions = { foreign: { expires_date: future(), is_sandbox: false, unsubscribe_detected_at: null } };
+    mockSnapshot(data); await syncRevenueCat(userId);
+    expect((await billingSummary(subject)).plan).toBe('free');
+  });
   it('grants the server-verified tier and expires it without a webhook', async () => {
     mockSnapshot(); await syncRevenueCat(userId);
     expect((await billingSummary(subject)).plan).toBe('pro');
