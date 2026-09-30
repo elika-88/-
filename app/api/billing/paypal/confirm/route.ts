@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     return json(await billingSummary({ key: `user:${user.id}`, userId: user.id, newAnonId: null }));
   } catch (error) {
     if (error instanceof AccountError) return json({ error: error.message }, error.status);
-    if (error instanceof PayPalError) return json({ error: error.message }, error.status);
-    return json({ error: "Could not confirm the subscription. It may still activate shortly; refresh this page." }, 503);
+    if (error instanceof PayPalError) return json({ error: error.message, code: error.code }, error.status);
+    return json({ error: "Subscription confirmation is pending. If PayPal has charged you, do not pay again. Retry syncing this existing subscription after the server is available.", code: "PAYPAL_CONFIRMATION_PENDING" }, 503);
   }
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import type { BillingInterval, PaidPlanId, PlanPrice } from "@/lib/billing/plans";
 
 // Minimal PayPal REST client for Subscriptions. Secrets stay on the server.
@@ -13,7 +14,7 @@ export type PayPalConfig = {
 };
 
 export class PayPalError extends Error {
-  constructor(message: string, public readonly status = 502) { super(message); }
+  constructor(message: string, public readonly status = 502, public readonly code = "PAYPAL_UPSTREAM_ERROR") { super(message); }
 }
 
 export function paypalConfig(): PayPalConfig | null {
@@ -55,7 +56,7 @@ export function planForPayPalId(config: PayPalConfig, planId: string): { tier: P
 let cachedToken: { key: string; value: string; expiresAt: number } | null = null;
 
 async function accessToken(config: PayPalConfig, fetcher: typeof fetch) {
-  const key = `${config.baseUrl}|${config.clientId}`;
+  const key = createHash("sha256").update(`${config.baseUrl}|${config.clientId}|${config.clientSecret}`).digest("hex");
   if (cachedToken && cachedToken.key === key && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
   const response = await fetcher(`${config.baseUrl}/v1/oauth2/token`, {
     method: "POST",
@@ -63,8 +64,16 @@ async function accessToken(config: PayPalConfig, fetcher: typeof fetch) {
     body: "grant_type=client_credentials",
     signal: AbortSignal.timeout(15_000),
   });
-  const body = await response.json().catch(() => null) as { access_token?: string; expires_in?: number } | null;
-  if (!response.ok || !body?.access_token) throw new PayPalError("PayPal rejected the API credentials. Check PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET and PAYPAL_ENV.", 503);
+  const body = await response.json().catch(() => null) as { access_token?: string; expires_in?: number; error?: string; debug_id?: string } | null;
+  if (!response.ok || !body?.access_token) {
+    const safe = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : undefined;
+    // Do not log credentials, Authorization headers, response bodies or tokens.
+    console.error("PayPal token request failed", { status: response.status, environment: config.env, error: safe(body?.error), debugId: safe(body?.debug_id ?? response.headers.get("paypal-debug-id")) });
+    if (response.status === 401 || body?.error === "invalid_client") {
+      throw new PayPalError("PayPal API authentication failed. The site administrator must check the matching Client ID, Secret and environment. This does not mean the payment failed; do not pay again.", 503, "PAYPAL_AUTH_FAILED");
+    }
+    throw new PayPalError("PayPal is temporarily unavailable for subscription verification. Payment status is unknown; do not pay again.", 503, "PAYPAL_VERIFICATION_UNAVAILABLE");
+  }
   cachedToken = { key, value: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 300) * 1000 };
   return cachedToken.value;
 }
