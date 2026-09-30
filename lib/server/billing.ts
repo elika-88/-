@@ -1,10 +1,12 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import type { Client } from "@libsql/client";
-import { PLAN_LIMITS, type BillingSummary, type PaidPlanId, type PlanId, type UsageKind } from "@/lib/billing/plans";
+import { PLAN_LIMITS, PLAN_RANK, type BillingSubscription, type BillingSummary, type PaidPlanId, type PlanId, type UsageKind } from "@/lib/billing/plans";
 import { withDatabase } from "@/lib/server/database";
 import { getUserFromRequest, initializeUserTables } from "@/lib/server/user-auth";
 import { paypalConfig, planForPayPalId, type PayPalConfig, type PayPalSubscription } from "@/lib/server/paypal";
+import { readBillingChannels } from './billing-channels';
+import { initializeRevenueCatTables, publicRevenueCatConfig, revenueCatConfig } from './revenuecat';
 
 export const ANON_COOKIE = "lumina_anon";
 export const ANON_COOKIE_SECONDS = 365 * 24 * 60 * 60;
@@ -18,6 +20,7 @@ export type Subject = { key: string; userId: string | null; newAnonId: string | 
 
 export async function initializeBillingTables(db: Client) {
   await initializeUserTables(db);
+  await initializeRevenueCatTables(db);
   await db.batch([
     `CREATE TABLE IF NOT EXISTS billing_subscriptions (
       user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
@@ -61,11 +64,12 @@ export function withAnonCookie(response: Response, subject: Subject, request: Re
   return response;
 }
 
-type SubscriptionRow = { tier: string; status: string; billing_interval: string | null; next_billing_at: number | null; paid_through: number | null };
+type SubscriptionRow = { provider: 'paypal' | 'revenuecat'; management_url?: string | null; tier: string; status: string; billing_interval: string | null; next_billing_at: number | null; paid_through: number | null };
 const tierOf = (row: SubscriptionRow): PaidPlanId => row.tier === "basic" ? "basic" : "pro";
 
 function planFor(row: SubscriptionRow | null, now: number): PlanId {
   if (!row) return "free";
+  if (row.provider === 'revenuecat' && (!row.paid_through || row.paid_through <= now)) return 'free';
   if (row.status === "ACTIVE") return tierOf(row);
   // A cancelled subscription keeps its tier until the period that was already paid for ends.
   if (row.status === "CANCELLED" && row.paid_through && row.paid_through > now) return tierOf(row);
@@ -73,19 +77,32 @@ function planFor(row: SubscriptionRow | null, now: number): PlanId {
 }
 
 async function readState(db: Client, subject: Subject, now: number) {
-  const row = subject.userId
-    ? (await db.execute({ sql: "SELECT tier, status, billing_interval, next_billing_at, paid_through FROM billing_subscriptions WHERE user_id = ?", args: [subject.userId] })).rows[0] as unknown as SubscriptionRow | undefined
+  const paypalRow = subject.userId
+    ? (await db.execute({ sql: "SELECT provider, tier, status, billing_interval, next_billing_at, paid_through FROM billing_subscriptions WHERE user_id = ?", args: [subject.userId] })).rows[0] as unknown as SubscriptionRow | undefined
     : undefined;
+  const rcRow = subject.userId
+    ? (await db.execute({ sql: "SELECT 'revenuecat' AS provider, tier, status, billing_interval, next_billing_at, paid_through, management_url FROM revenuecat_memberships WHERE user_id=? AND environment=?", args: [subject.userId, revenueCatConfig().sandbox ? 'sandbox' : 'production'] })).rows[0] as unknown as SubscriptionRow | undefined
+    : undefined;
+  const rows = [paypalRow, rcRow].filter((row): row is SubscriptionRow => Boolean(row) && row?.tier !== 'free');
+  rows.sort((a, b) => PLAN_RANK[planFor(b, now)] - PLAN_RANK[planFor(a, now)]);
+  const row = rows[0];
   const counts = await db.execute({ sql: "SELECT kind, count FROM usage_counters WHERE subject = ? AND day = ?", args: [subject.key, dayKey(now)] });
   const used = { lecture: 0, prep: 0 } as Record<UsageKind, number>;
   for (const count of counts.rows) if (count.kind === "lecture" || count.kind === "prep") used[count.kind] = Number(count.count);
-  return { row: row ?? null, plan: planFor(row ?? null, now), used };
+  return { row: row ?? null, rows, plan: planFor(row ?? null, now), used };
 }
 
 export async function billingSummary(subject: Subject, now = Date.now()): Promise<BillingSummary> {
   const state = await withDatabase(async (db) => { await initializeBillingTables(db); return readState(db, subject, now); });
   const limits = PLAN_LIMITS[state.plan];
   const config = paypalConfig();
+  const channels = await readBillingChannels();
+  const subscriptionView = (row: SubscriptionRow): BillingSubscription => ({
+    provider: row.provider, managementUrl: row.management_url ?? null,
+    tier: tierOf(row), status: row.provider === 'revenuecat' && (!row.paid_through || row.paid_through <= now) ? 'EXPIRED' : row.status,
+    interval: row.billing_interval === 'monthly' || row.billing_interval === 'yearly' ? row.billing_interval : null,
+    nextBillingAt: row.next_billing_at, paidThrough: row.paid_through, cancelled: row.status === 'CANCELLED',
+  });
   return {
     plan: state.plan,
     signedIn: Boolean(subject.userId),
@@ -95,15 +112,10 @@ export async function billingSummary(subject: Subject, now = Date.now()): Promis
       prep: { used: state.used.prep, limit: limits.prepSetsPerDay },
     },
     resetsAt: nextUtcMidnight(now),
-    subscription: state.row ? {
-      tier: tierOf(state.row),
-      status: state.row.status,
-      interval: state.row.billing_interval === "monthly" || state.row.billing_interval === "yearly" ? state.row.billing_interval : null,
-      nextBillingAt: state.row.next_billing_at,
-      paidThrough: state.row.paid_through,
-      cancelled: state.row.status === "CANCELLED",
-    } : null,
-    paypal: config ? { clientId: config.clientId, currency: config.currency, plans: config.plans } : null,
+    subscription: state.row ? subscriptionView(state.row) : null,
+    subscriptions: state.rows.map(subscriptionView),
+    paypal: config && channels.paypal ? { clientId: config.clientId, currency: config.currency, plans: config.plans } : null,
+    revenuecat: channels.revenuecat ? publicRevenueCatConfig() : null,
   };
 }
 
