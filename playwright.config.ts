@@ -6,6 +6,9 @@ process.env.LUMINA_E2E_DATABASE_PATH = e2eDatabasePath;
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  // Keep browser contention predictable on small CI runners sharing one dev
+  // server. Local runs can still choose their own concurrency.
+  workers: process.env.CI ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: "list",
