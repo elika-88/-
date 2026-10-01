@@ -21,9 +21,10 @@ export const generateInBackground = inngest.createFunction({
 
 export const recoverBackgroundJobs = inngest.createFunction({
   id: 'recover-generation-jobs',
-  triggers: [{ cron: '* * * * *' }],
+  // New jobs dispatch immediately; this sweep is only for recovery and cleanup.
+  triggers: [{ cron: '*/10 * * * *' }],
   concurrency: 1,
-  retries: 2,
+  retries: 1,
   checkpointing: false,
 }, async ({ step }) => {
   if (!backgroundGenerationEnabled()) return { disabled: true };

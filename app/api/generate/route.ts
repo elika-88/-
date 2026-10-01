@@ -5,6 +5,7 @@ import { generateStudyKit, publicError } from '@/lib/ai/pipeline';
 import { encodeGenerationEvent, type GenerationEvent } from '@/lib/contracts/generation';
 import { getEncoding } from 'js-tiktoken';
 import { AccountError, getUserFromRequest, requireSameOrigin } from '@/lib/server/user-auth';
+import { assertAllowance, BillingError, recordUsage, resolveSubject, withAnonCookie, type Subject } from '@/lib/server/billing';
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -81,6 +82,16 @@ export async function POST(request: Request) {
   try { connection = await createOpenAIClient(validation.data.provider); } catch {
     return errorResponse({ code: 'SERVER_CONFIG', message: 'Configure an API key, base URL and model before generating.', retryable: false });
   }
+  // Plan limits: checked before spending model calls, counted only after success.
+  let subject: Subject;
+  try {
+    subject = await resolveSubject(request);
+    await assertAllowance(subject, 'lecture', { characters: validation.data.lecture.length });
+  } catch (error) {
+    if (error instanceof BillingError) return errorResponse({ code: error.code, message: error.message, retryable: false });
+    return errorResponse({ code: 'SERVER_CONFIG', message: 'The usage service is unavailable. Try again shortly.', retryable: true });
+  }
+  const countUsage = () => recordUsage(subject, 'lecture').catch(() => undefined);
   const runId = crypto.randomUUID();
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -94,7 +105,8 @@ export async function POST(request: Request) {
   if (request.headers.get('accept')?.includes('application/json')) {
     try {
       const result = await generateStudyKit(validation.data, connection, runId, controller.signal, () => {});
-      return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });
+      await countUsage();
+      return withAnonCookie(Response.json(result, { headers: { 'Cache-Control': 'no-store' } }), subject, request);
     } catch (error) { return errorResponse(failure(error)); } finally { cleanup(); }
   }
   let cancelled = false;
@@ -104,6 +116,7 @@ export async function POST(request: Request) {
       try {
         emit({ type: 'stage', runId, stage: 'validating' });
         const result = await generateStudyKit(validation.data, connection, runId, controller.signal, emit);
+        await countUsage();
         emit({ type: 'stage', runId, stage: 'complete' });
         emit({ type: 'result', runId, data: result });
       } catch (error) { emit({ type: 'error', runId, error: failure(error) }); }
@@ -111,5 +124,5 @@ export async function POST(request: Request) {
     },
     cancel() { cancelled = true; controller.abort(); cleanup(); },
   });
-  return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' } });
+  return withAnonCookie(new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' } }), subject, request);
 }

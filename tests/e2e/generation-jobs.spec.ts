@@ -89,11 +89,13 @@ test('saves the exact revision first, disables duplicate submits, restores and d
   await page.reload(); await expect(page.getByTestId('generation-job')).toContainText('Queued');
   await expect(page.locator('.gen-step[data-state="active"]')).toHaveCount(0);
   await page.clock.install();
+  // Stages run in order, so earlier stages are ticked; correcting re-opens the writing step.
+  const finishedBefore = { validating: 0, analyzing: 1, generating: 2, verifying: 3, correcting: 2 } as const;
   for (const stage of ['validating', 'analyzing', 'generating', 'verifying', 'correcting'] as const) {
     state.setJob({ status: 'running', stage }); await page.clock.runFor(4_000);
     await expect(page.getByTestId('generation-stage')).toContainText(`(${stage})`);
     await expect(page.locator('.gen-step[aria-current="step"]')).toHaveAttribute('data-stage', stage);
-    await expect(page.locator('.gen-step[data-state="done"]')).toHaveCount(0);
+    await expect(page.locator('.gen-step[data-state="done"]')).toHaveCount(finishedBefore[stage]);
   }
   await expect(page.getByTestId('generation-job')).not.toContainText('%');
   await expect(page.getByTestId('generation-job')).not.toContainText('Usually takes');

@@ -6,6 +6,7 @@ export const ErrorCodeSchema = z.enum([
   "UPSTREAM_FAILURE", "MODEL_REFUSAL", "INVALID_OUTPUT", "VERIFICATION_FAILED",
   "TIMEOUT", "NOT_IMPLEMENTED", "INVALID_PROVIDER_CONFIG",
   "LOGIN_REQUIRED", "BACKGROUND_REQUIRED", "INVALID_ORIGIN",
+  "PLAN_LIMIT", "PRO_REQUIRED",
 ]);
 
 export const GenerationErrorSchema = z.strictObject({
@@ -39,4 +40,6 @@ export const ERROR_HTTP_STATUS = {
   VERIFICATION_FAILED: 422,
   TIMEOUT: 504,
   NOT_IMPLEMENTED: 501,
+  PLAN_LIMIT: 429,
+  PRO_REQUIRED: 403,
 } as const satisfies Record<ErrorCode, number>;

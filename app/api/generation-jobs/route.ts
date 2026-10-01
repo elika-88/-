@@ -5,7 +5,8 @@ import { createGenerationJob, listGenerationJobs } from '@/lib/server/generation
 import { authenticateJobRequest, jobFailure, jobJson } from '@/lib/server/generation-job-http';
 import { requireBackgroundGeneration } from '@/lib/server/generation-job-config';
 import { dispatchGenerationJobs } from '@/lib/server/generation-dispatch';
-import { readAccountJson, requireSameOrigin } from '@/lib/server/user-auth';
+import { AccountError, readAccountJson, requireSameOrigin } from '@/lib/server/user-auth';
+import { assertAllowance, BillingError, recordUsage } from '@/lib/server/billing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,11 @@ export async function POST(request: Request) {
     const user = await authenticateJobRequest(request);
     requireBackgroundGeneration();
     const input = CreateGenerationJobSchema.parse(await readAccountJson(request, 8192));
+    const subject = { key: `user:${user.id}`, userId: user.id, newAnonId: null };
+    try { await assertAllowance(subject, 'lecture'); }
+    catch (error) { if (error instanceof BillingError) throw new AccountError(error.code, error.message, error.status); throw error; }
     const result = await createGenerationJob(user.id, input);
+    if (!result.reused) await recordUsage(subject, 'lecture').catch(() => undefined);
     await dispatchGenerationJobs(result.job.id);
     return jobJson({ userId: user.id, ...result }, result.reused ? 200 : 202);
   } catch (error) { return jobFailure(error); }

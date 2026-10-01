@@ -88,8 +88,8 @@ export const GeneratedMaterialsSchema = z.strictObject({
   overview: ClaimSchema,
   summary: z.array(SummarySectionSchema).min(1),
   keyPoints: z.array(KeyPointSchema).min(1),
-  quiz: z.array(QuizQuestionSchema).min(1).max(10),
-  flashcards: z.array(FlashcardSchema).min(1).max(12),
+  quiz: z.array(QuizQuestionSchema).min(1).max(15),
+  flashcards: z.array(FlashcardSchema).min(1).max(20),
   limitations: z.array(TextSchema),
 });
 

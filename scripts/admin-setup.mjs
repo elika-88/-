@@ -5,8 +5,8 @@ const file = '.env.local';
 let text = existsSync(file) ? readFileSync(file, 'utf8') : '';
 env.loadEnvConfig(process.cwd());
 const values = { ADMIN_PASSWORD: process.env.ADMIN_PASSWORD, ADMIN_ENCRYPTION_KEY: process.env.ADMIN_ENCRYPTION_KEY };
-if (values.ADMIN_PASSWORD && values.ADMIN_PASSWORD.length < 8) {
-  console.error('ADMIN_PASSWORD must contain at least 8 characters. Existing values were not changed.');
+if (values.ADMIN_PASSWORD && (values.ADMIN_PASSWORD.trim().length < 15 || values.ADMIN_PASSWORD.length > 1024)) {
+  console.error('ADMIN_PASSWORD must contain 15–1024 characters. Existing values were not changed.');
   process.exit(1);
 }
 if (values.ADMIN_ENCRYPTION_KEY && !/^[a-f0-9]{64}$/i.test(values.ADMIN_ENCRYPTION_KEY)) {

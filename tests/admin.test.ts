@@ -28,11 +28,11 @@ function request(body: unknown, token = '', origin = 'http://localhost') {
   return new NextRequest('http://localhost/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: `lumina_admin=${token}` }, body: JSON.stringify(body) });
 }
 describe('admin database', () => {
-  it('accepts an existing nine-character administrator password', async () => {
+  it('rejects a short legacy administrator password', async () => {
     vi.stubEnv('ADMIN_PASSWORD', 'test-1234');
-    expect(await loginAdmin('test-1234')).toHaveProperty('token');
+    expect(await loginAdmin('test-1234')).toEqual({ error: 'UNCONFIGURED' });
   });
-  it('rejects administrator passwords shorter than six characters', async () => {
+  it('rejects administrator passwords shorter than fifteen characters', async () => {
     vi.stubEnv('ADMIN_PASSWORD', 'short');
     expect(await loginAdmin('short')).toEqual({ error: 'UNCONFIGURED' });
   });
@@ -86,7 +86,7 @@ describe('admin database', () => {
     expect(await validAdminSession(login.token)).toBe(true);
     vi.stubEnv('ADMIN_PASSWORD', 'changed-test-only-password');
     expect(await validAdminSession(login.token)).toBe(false);
-    for (let i = 0; i < 10; i++) expect(await loginAdmin('wrong')).toEqual({ error: 'INVALID' });
+    for (let i = 0; i < 5; i++) expect(await loginAdmin('wrong')).toEqual({ error: 'INVALID' });
     expect(await loginAdmin('wrong')).toEqual({ error: 'LIMITED' });
   });
 });

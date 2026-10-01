@@ -4,6 +4,16 @@ export type Translations = {
   newLecture: string;
   searchPlaceholder: string;
   recent: string;
+  groupToday: string;
+  groupWeek: string;
+  groupEarlier: string;
+  expandSidebar: string;
+  collapseSidebar: string;
+  pinned: string;
+  pin: string;
+  unpin: string;
+  showRecents: string;
+  examPrep: string;
   noMatching: string;
   noSaved: string;
   untitled: string;
@@ -75,6 +85,16 @@ export const translations: Record<SupportedLanguage, Translations> = {
     newLecture: "New lecture",
     searchPlaceholder: "Search lectures...",
     recent: "Recent",
+    groupToday: "Today",
+    groupWeek: "Previous 7 days",
+    groupEarlier: "Earlier",
+    expandSidebar: "Expand sidebar",
+    collapseSidebar: "Collapse sidebar",
+    pinned: "Pinned",
+    pin: "Pin",
+    unpin: "Unpin",
+    showRecents: "Show recent lectures",
+    examPrep: "Exam prep",
     noMatching: "No matching lectures",
     noSaved: "No saved lectures yet",
     untitled: "Untitled lecture",
@@ -144,6 +164,16 @@ export const translations: Record<SupportedLanguage, Translations> = {
     newLecture: "新讲座",
     searchPlaceholder: "搜索讲座...",
     recent: "最近记录",
+    groupToday: "今天",
+    groupWeek: "过去 7 天",
+    groupEarlier: "更早",
+    expandSidebar: "展开侧栏",
+    collapseSidebar: "收起侧栏",
+    pinned: "已固定",
+    pin: "固定",
+    unpin: "取消固定",
+    showRecents: "查看最近讲稿",
+    examPrep: "备考专区",
     noMatching: "未找到匹配的讲座",
     noSaved: "暂无保存的讲座",
     untitled: "未命名讲座",
@@ -213,6 +243,16 @@ export const translations: Record<SupportedLanguage, Translations> = {
     newLecture: "Новая лекция",
     searchPlaceholder: "Поиск лекций...",
     recent: "Недавние",
+    groupToday: "Сегодня",
+    groupWeek: "Последние 7 дней",
+    groupEarlier: "Ранее",
+    expandSidebar: "Развернуть панель",
+    collapseSidebar: "Свернуть панель",
+    pinned: "Закреплённые",
+    pin: "Закрепить",
+    unpin: "Открепить",
+    showRecents: "Недавние лекции",
+    examPrep: "Подготовка к экзаменам",
     noMatching: "Лекции не найдены",
     noSaved: "Нет сохраненных лекций",
     untitled: "Лекция без названия",
@@ -282,6 +322,16 @@ export const translations: Record<SupportedLanguage, Translations> = {
     newLecture: "Жаңа дәріс",
     searchPlaceholder: "Дәрістерді іздеу...",
     recent: "Жақында қаралғандар",
+    groupToday: "Бүгін",
+    groupWeek: "Соңғы 7 күн",
+    groupEarlier: "Ертерек",
+    expandSidebar: "Панельді ашу",
+    collapseSidebar: "Панельді жию",
+    pinned: "Бекітілген",
+    pin: "Бекіту",
+    unpin: "Босату",
+    showRecents: "Соңғы дәрістер",
+    examPrep: "Емтиханға дайындық",
     noMatching: "Сәйкес дәрістер табылмады",
     noSaved: "Сақталған дәрістер жоқ",
     untitled: "Атаусыз дәріс",

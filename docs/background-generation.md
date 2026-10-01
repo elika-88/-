@@ -18,7 +18,13 @@
 3. 点击 **Deployments -> Redeploy**，选择最新 `main` 部署并确认使用最新环境变量。
 4. 在 Inngest 控制台把应用同步到生产 URL：
    `https://lumina-six-chi-20.vercel.app/api/inngest`
-5. 确认 Inngest 中出现两个函数：`generate-study-kit` 和 `recover-generation-jobs`。恢复函数每分钟运行一次，用于重新投递中断任务和清理过期任务。
+5. 确认 Inngest 中出现两个函数：`generate-study-kit` 和 `recover-generation-jobs`。恢复函数每 10 分钟运行一次（`*/10 * * * *`），用于重新投递中断任务和清理过期任务。新任务提交后立即投递，不等待这个定时巡检；需要补投或恢复的任务可能要等待下一个巡检周期。恢复函数失败时最多重试 1 次，生成任务的数据库两次尝试上限保持不变。
+
+### 暂停与恢复巡检
+
+若在 Inngest 控制台手动暂停 `recover-generation-jobs`，中断恢复、自动补投和过期清理也会暂停。`generate-study-kit` 是独立函数，但其执行仍要求账户可用且有剩余额度。
+
+准备恢复时，先确认账户额度和账期，再确认最新生产部署已同步且恢复函数的触发规则为 `*/10 * * * *`，最后在控制台手动恢复函数。修改代码或部署本身不代表已解除账户限制。恢复后检查巡检运行记录，并用一条新课程确认任务能从 `queued` 到 `succeeded`；长期排队的旧任务可能由巡检判定超时，需要用户重新提交。
 
 缺少 Inngest 密钥时创建接口返回 `503 QUEUE_UNAVAILABLE`；开关关闭时返回 `503 BACKGROUND_DISABLED`。密钥齐全但应用未同步、投递失败或队列不可用时，任务仍可能被接受并保存在数据库中，因此必须确认两个函数已同步且恢复函数正常运行。配置完成前保持 `LUMINA_BACKGROUND_GENERATION=false`。
 

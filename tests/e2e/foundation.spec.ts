@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 test("validates input and preserves it after a generation failure", async ({ page }) => {
   await page.goto("/");
   const formError = page.locator("#form-error");
-  await expect(page.getByRole("heading", { name: "Build your study materials" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What are you studying today?" })).toBeVisible();
   await page.getByRole("button", { name: "Generate materials", exact: true }).click();
   await expect(formError).toContainText("Enter lecture text");
   await page.getByLabel("Lecture text", { exact: true }).fill("A short lecture.");

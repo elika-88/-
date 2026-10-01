@@ -29,14 +29,17 @@ const messages: Record<GenerationClientErrorCode, string> = {
   VERIFICATION_FAILED: "The generated materials could not be verified against the lecture.",
   TIMEOUT: "Generation took too long. Try again later.",
   NOT_IMPLEMENTED: "The backend generation service is not available yet.",
+  PLAN_LIMIT: "You have reached today's generation limit.",
+  PRO_REQUIRED: "This needs Lumina Pro.",
   NETWORK_ERROR: "The server could not be reached. Check your connection and try again.",
   INVALID_RESPONSE: "The server returned an invalid response. No materials were saved.",
   STREAM_INTERRUPTED: "Generation ended before a complete result arrived. Try again.",
 };
 
 export class GenerationClientError extends Error {
-  constructor(public readonly code: GenerationClientErrorCode, public readonly retryable: boolean) {
-    super(messages[code]);
+  constructor(public readonly code: GenerationClientErrorCode, public readonly retryable: boolean, detail?: string) {
+    // Plan errors carry the server's specific wording (limits, reset time).
+    super(detail && (code === "PLAN_LIMIT" || code === "PRO_REQUIRED") ? detail : messages[code]);
     this.name = "GenerationClientError";
   }
 }
@@ -141,7 +144,7 @@ export async function requestGeneration(
       try { payload = JSON.parse(errorText); } catch { throw invalidResponse(); }
       const parsed = ErrorResponseSchema.safeParse(payload);
       if (!parsed.success) throw invalidResponse();
-      throw new GenerationClientError(parsed.data.error.code, parsed.data.error.retryable);
+      throw new GenerationClientError(parsed.data.error.code, parsed.data.error.retryable, parsed.data.error.message);
     }
 
     const contentType = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
@@ -198,7 +201,7 @@ export async function requestGeneration(
     onEvent?.(terminal);
     if (signal.aborted) throw abortError();
     if (terminal.type === "error") {
-      throw new GenerationClientError(terminal.error.code, terminal.error.retryable);
+      throw new GenerationClientError(terminal.error.code, terminal.error.retryable, terminal.error.message);
     }
     return terminal.data;
   } catch (error) {

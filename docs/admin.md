@@ -6,11 +6,13 @@
 
 ### Vercel 部署
 
-Vercel 无持久化本地磁盘。请在 Turso 创建数据库，将以下变量添加到 Vercel 项目的 **Production** 环境后重新部署：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`ADMIN_PASSWORD`、`ADMIN_ENCRYPTION_KEY`。其中管理员密码至少6位，加密密钥必须是64位十六进制。再配置 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL` 和 `OPENAI_API_FORMAT`。访问 `/api/admin/status` 应返回 HTTP 200；返回 `configured:false` 时响应中的 `setupError` 会直接告诉你应在 Vercel 设置哪些变量。
+Vercel 无持久化本地磁盘。请在 Turso 创建数据库，将以下变量添加到 Vercel 项目的 **Production** 环境后重新部署：`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`ADMIN_PASSWORD`、`ADMIN_ENCRYPTION_KEY`。管理员密码至少15位，最多1024位，建议使用密码管理器生成的独立随机密码；加密密钥必须是64位十六进制。再配置 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL` 和 `OPENAI_API_FORMAT`。`APP_BASE_URL` 必须指向实际管理入口的 HTTPS 网站源（例如 `https://lectorai.tech`）；后台写请求只接受这个源，预览域名不能冒充它。未配置该变量时使用请求 URL 的源作为同源基准。
+
+公开的 `/api/admin/status` 只显示能否登录及是否需要动态码，不再向访客列出环境变量、数据库或托管平台的配置错误。管理员应在服务端检查上述配置。升级前先确认密码符合长度要求，否则管理员登录会被关闭；已有 AI 配置和普通用户功能不因此重置。
 
 首次访问 `/admin` 不再调用受保护的 `/api/admin`，而是调用公开的状态接口；未登录的 `/api/admin` 返回401仍是刻意的鉴权行为，不是服务故障。
 
-自定义管理员密码至少8位。初始化默认生成32位随机密码；已有密码或加密密钥不会被重置。配置缺失与格式错误会显示不同提示。
+自定义管理员密码至少15位。初始化默认生成32位随机密码；已有密码或加密密钥不会被重置。
 
 运行 `npm run admin:setup`。脚本在本机 `.env.local` 中创建随机 `ADMIN_PASSWORD` 和独立的64位十六进制 `ADMIN_ENCRYPTION_KEY`，已有值不会被覆盖。管理员在本机读取密码，重启服务后登录。不要提交或分享这个文件。
 
@@ -18,9 +20,23 @@ Vercel 无持久化本地磁盘。请在 Turso 创建数据库，将以下变量
 
 ## SQLite
 
-数据库首次访问时自动初始化，默认 `.data/admin.sqlite`，可通过 `ADMIN_DATABASE_PATH` 指定持久化磁盘路径。表：settings（AES-256-GCM加密配置）、sessions（令牌哈希、有效期及密码版本）、audit（不含秘密的事件）、login_limit（登录尝试限制）。
+数据库首次访问时自动初始化，默认 `.data/admin.sqlite`，可通过 `ADMIN_DATABASE_PATH` 指定持久化磁盘路径。表：settings（AES-256-GCM加密配置）、sessions（令牌哈希、有效期及带服务端密钥的密码版本）、admin_session_activity（会话活动）、audit（不含秘密的事件）、login_limit（登录尝试限制）、admin_totp（加密动态码密钥及已使用时间步）、admin_totp_pending（有期限且绑定会话的待确认密钥）、admin_recovery_codes（一次性恢复码哈希）。初始化不再删除旧 MFA 表。
 
-保存使用事务和版本号，防止两个管理员互相覆盖。管理员使用密码登录。会话有效8小时，HttpOnly、SameSite=Strict；HTTPS访问时Secure。退出会撤销令牌，修改密码会使已有会话失效。连续10次密码错误后等待5分钟。后台写操作校验同源请求。
+保存使用事务和版本号，防止两个管理员互相覆盖。管理员会话最长2小时，30分钟未访问受保护的后台接口即失效。Cookie 使用 HttpOnly、SameSite=Strict；生产环境强制 Secure。退出会撤销令牌，修改密码会使已有会话失效。升级前的会话会失效，需要重新登录。
+
+每15分钟最多5次认证尝试，限制保存在数据库中，对所有实例及来源共同生效，不能用伪造转发 IP 绕过；成功登录重置计数。密码错误和动态码错误返回相同信息。账号级限流也意味着攻击者可以暂时阻塞管理员登录；生产环境仍可在边缘网关为后台增加速率限制。后台写请求检查完整同源和跨站来源标志，后台页面禁止被其他页面嵌入，不允许搜索引擎收录。
+
+## 绑定验证器（部署后必须由管理员完成）
+
+1. 使用强密码登录 `/admin`，打开「安全设置」。
+2. 再输入管理员密码，点击「开始绑定验证器」。
+3. 在 Google Authenticator 或 Microsoft Authenticator 手动添加账号，名称 `LectorAI Admin`，选择基于时间并输入页面密钥。密钥不要发送给其他人或第三方二维码服务。
+4. 在10分钟内输入验证器上的6位码并确认。只有这一步成功才会强制双重验证；仅展示密钥不算启用。
+5. 保存页面一次性显示的8个恢复码。每个恢复码仅能与正确管理员密码配合登录一次。确认后其他旧会话立即失效。
+
+登录时同时填写密码和动态码。动态码有效步长30秒，允许前后一个时间步偏差，同一码不能重复或并发用于登录。刚确认绑定的码已经使用，请等下一组码再测试登录。普通用户 Cookie 不能用于管理接口。浏览器不持久保存密码、动态码密钥或恢复码，服务端不提供免验证关闭 MFA 的接口。
+
+手机丢失时，用密码和一个恢复码登录。更换验证器目前需要由有服务器/数据库管理权限的人安排受控恢复；不要通过公开接口清空 MFA。密码轮换不会关闭 MFA，丢失密码时需在部署平台更新 `ADMIN_PASSWORD`。不要轮换 `ADMIN_ENCRYPTION_KEY` 来重置登录，它还用于解密 AI 设置和 MFA 密钥。
 
 数据库和加密密钥应分别备份；丢失密钥无法解密配置。数据库文件、真实凭据均被Git忽略。`.env.local`中的旧API配置只是未保存时的回退值。后台保存后数据库优先。
 

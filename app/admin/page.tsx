@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
+import { BillingControls } from "@/components/admin/BillingControls";
+import { AdminSecurity } from "@/components/admin/AdminSecurity";
 
 type Settings = {
   baseURL: string;
@@ -30,14 +32,16 @@ type Settings = {
   updatedAt: number | null;
 };
 
-type AdminTab = "relay" | "logs";
+type AdminTab = "relay" | "logs" | "billing" | "security";
 
 export default function AdminPage() {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const [authenticated, setAuthenticated] = useState(false);
   const [configured, setConfigured] = useState(true);
   const [setupError, setSetupError] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [mfaEnabled, setMfaEnabled] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState("");
@@ -56,6 +60,7 @@ export default function AdminPage() {
     const response = await fetch("/api/admin", { cache: "no-store" });
     const data = await response.json();
     setAuthenticated(data.authenticated === true);
+    if (typeof data.mfaEnabled === 'boolean') setMfaEnabled(data.mfaEnabled);
     if (data.configured !== undefined) setConfigured(data.configured);
     setSetupError(data.setupError ?? "");
     setSettings(data.settings ?? null);
@@ -71,6 +76,7 @@ export default function AdminPage() {
       .then((response) => response.json())
       .then((data) => {
         setAuthenticated(data.authenticated === true);
+        setMfaEnabled(data.mfaEnabled === true);
         if (data.configured !== undefined) setConfigured(data.configured);
         setSetupError(data.setupError ?? "");
         setSettings(data.settings ?? null);
@@ -133,7 +139,7 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           name === "login"
-            ? { action: name, password }
+            ? { action: name, password, code }
             : name === "save" && settings
             ? {
                 action: name,
@@ -150,9 +156,11 @@ export default function AdminPage() {
       });
 
       const data = await response.json();
+      if (response.status === 401 && name !== 'login') { setAuthenticated(false); setSettings(null); setApiKey(''); }
       if (!response.ok) throw new Error(data.error ?? "Operation failed.");
 
       setPassword("");
+      setCode("");
       setApiKey("");
       await refresh();
       if (name === "save") {
@@ -196,6 +204,7 @@ export default function AdminPage() {
               <input
                 id="admin-password"
                 type="password"
+                autoComplete="current-password"
                 placeholder="Enter administrator password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -205,6 +214,10 @@ export default function AdminPage() {
                 autoFocus
               />
             </div>
+            {mfaEnabled && <div className="gpt-auth-field">
+              <label htmlFor="admin-code">{language === 'zh' ? '验证器动态码或一次性恢复码' : 'Authenticator code or one-time recovery code'}</label>
+              <input id="admin-code" type="text" autoComplete="one-time-code" autoCapitalize="none" spellCheck={false} maxLength={24} required value={code} onChange={event => setCode(event.target.value)} disabled={busy} />
+            </div>}
 
             <button type="submit" className="gpt-auth-submit" disabled={busy || !configured}>
               {busy ? "Authenticating..." : "Continue"}
@@ -269,6 +282,9 @@ export default function AdminPage() {
           <div className="gpt-admin-sidebar-section">
             <div className="gpt-admin-sidebar-title">{t.management}</div>
             <nav className="gpt-admin-nav-list">
+              <button type="button" className={`gpt-admin-nav-item ${activeTab === 'security' ? 'active' : ''}`} onClick={() => setActiveTab('security')}>
+                <Key size={18} /> {language === 'zh' ? '安全设置' : 'Security'}
+              </button>
               <button
                 type="button"
                 className={`gpt-admin-nav-item ${activeTab === "relay" ? "active" : ""}`}
@@ -276,6 +292,10 @@ export default function AdminPage() {
               >
                 <Cpu size={16} />
                 <span>{t.aiRelayTab}</span>
+              </button>
+              <button type="button" className={`gpt-admin-nav-item ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>
+                <Settings size={16} />
+                <span>{language === 'zh' ? '订阅渠道' : 'Subscriptions'}</span>
               </button>
               <button
                 type="button"
@@ -291,6 +311,10 @@ export default function AdminPage() {
 
         {/* Right Content View */}
         <main className="gpt-admin-main">
+          {!mfaEnabled && activeTab !== 'security' && <div className="gpt-admin-toast error" role="status">
+            <span>{language === 'zh' ? '管理员动态码尚未启用。请完成验证器绑定。' : 'Two-factor authentication is not enabled. Set up your authenticator.'}</span>
+            <button type="button" onClick={() => setActiveTab('security')}>{language === 'zh' ? '安全设置' : 'Security settings'}</button>
+          </div>}
           {/* Notifications */}
           {message && (
             <div className="gpt-admin-toast success">
@@ -533,6 +557,9 @@ export default function AdminPage() {
               </div>
             </section>
           )}
+
+          {activeTab === "billing" && <BillingControls />}
+          {activeTab === 'security' && <AdminSecurity enabled={mfaEnabled} onChanged={refresh} />}
         </main>
       </div>
 
