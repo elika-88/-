@@ -50,9 +50,28 @@
    and menus stay on top. color-scheme: light stops the browser painting an opaque
    white box behind the light PayPal iframe on the dark theme. */
 .paypalSlot { position: relative; z-index: 0; isolation: isolate; min-height: 48px; color-scheme: light; }
-/* On the dark theme, sit the PayPal buttons on a deliberate light panel so their
-   "Powered by PayPal" line stays readable instead of looking like a white strip. */
-:global(html.dark) .paypalSlot { padding: 12px 12px 6px; border-radius: 12px; background: #f4f6f7; }
+/* Price row: the yearly saving sits beside the period instead of on its own line. */
+.saveBadge { display: inline-block; margin-left: 10px; padding: 3px 9px; border-radius: 999px; vertical-align: middle; font: 600 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-style: normal; color: var(--accent); background: var(--accent-soft); }
+
+/* Checkout sheet. PayPal's buttons are light-only iframes, so the sheet is always light,
+   like a payment form, whatever the site theme. */
+.checkout { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 18px; color-scheme: light; background: #ffffff; color: #20252b; box-shadow: 0 1px 2px #0000001a, 0 24px 80px #00000059; }
+.checkout::backdrop { background: rgba(10, 12, 14, 0.55); backdrop-filter: blur(4px); }
+.checkout[open] { animation: checkoutIn 220ms cubic-bezier(.2,0,0,1); }
+@keyframes checkoutIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.checkoutBody { display: grid; gap: 16px; padding: 22px 22px 18px; }
+.checkoutHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.checkoutHead h2 { margin: 2px 0 0; font-family: var(--font-display); font-size: 24px; font-weight: 400; color: #20252b; }
+.checkoutKicker { margin: 0; font-size: 12.5px; color: #59636f; }
+.checkoutClose { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: #59636f; }
+.checkoutClose:hover, .checkoutClose:focus-visible { background: #eef1f3; color: #20252b; }
+.checkoutSummary { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 16px; border-radius: 12px; background: #f2f4f6; font-size: 14px; color: #394450; }
+.checkoutSummary strong { font-family: var(--font-display); font-size: 26px; font-weight: 400; color: #20252b; font-variant-numeric: tabular-nums; }
+.checkoutSummary small { font: 400 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; color: #59636f; }
+.checkoutNote { margin: -4px 0 0; font-size: 13px; line-height: 1.6; color: #59636f; }
+.checkoutLegal { margin: 0; font-size: 12px; text-align: center; color: #59636f; }
+.checkoutLegal a { color: #20252b; text-decoration: underline; text-underline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .checkout[open] { animation: none; } }
 .recovery { margin-top: 24px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--foreground); overflow-wrap: anywhere; }
 .recovery p { margin: 12px 0; line-height: 1.6; }
 .recovery details { margin-top: 16px; }

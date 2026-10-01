@@ -8,7 +8,7 @@ import { useAuth, type Account } from "@/components/auth/AuthProvider";
 import { PLAN_LIMITS, PLAN_PRICES, PLAN_RANK, type BillingInterval, type BillingSummary, type PaidPlanId } from "@/lib/billing/plans";
 import { refreshBilling, setBillingSummary, useBilling } from "@/lib/client/billing";
 import { clearPendingPayPal, isPayPalSubscriptionId, savePendingPayPal, usePendingPayPal } from "@/lib/client/pending-paypal";
-import { PayPalSubscribeButton } from "./PayPalSubscribeButton";
+import { PayPalCheckout } from "./PayPalCheckout";
 import { RevenueCatSubscribeButton } from "./RevenueCatSubscribeButton";
 import { setPendingRevenueCat, usePendingRevenueCat } from '@/lib/client/pending-revenuecat';
 import { useSettings } from '@/lib/i18n/SettingsContext';
@@ -66,6 +66,7 @@ function PricingContent({ user }: { user: Account | null }) {
   const pendingId = usePendingPayPal(user?.id ?? null);
   const pendingRevenueCat = usePendingRevenueCat(user?.id ?? null);
   const [selectedProvider, setSelectedProvider] = useState<'paypal' | 'revenuecat'>('revenuecat');
+  const [checkoutTier, setCheckoutTier] = useState<PaidPlanId | null>(null);
   const confirming = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -76,7 +77,13 @@ function PricingContent({ user }: { user: Account | null }) {
   const sub = summary?.subscription ?? null;
   const now = summary?.resetsAt ? summary.resetsAt - 24 * 60 * 60 * 1000 : 0;
   const date = (time: number | null) => time ? new Date(time).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" }) : "";
-  const money = (value: string | undefined, currency: string) => value ? new Intl.NumberFormat(locale, { style: "currency", currency }).format(Number(value)) : "—";
+  // "$95" and "$12.90", never "US$95.00": whole amounts drop the cents and the symbol stays short.
+  const money = (value: string | undefined, currency: string) => {
+    if (!value) return "—";
+    const amount = Number(value);
+    const digits = Number.isInteger(amount) ? 0 : 2;
+    return new Intl.NumberFormat(locale, { style: "currency", currency, currencyDisplay: "narrowSymbol", minimumFractionDigits: digits, maximumFractionDigits: digits }).format(amount);
+  };
   // Until checkout is configured, show the advertised USD catalogue. Once a
   // plan exists, use its configured price/currency rather than masking it.
   const priceFor = (tier: PaidPlanId, period: BillingInterval) => {
@@ -145,8 +152,10 @@ function PricingContent({ user }: { user: Account | null }) {
     if (!paypal || !plan) return <p className={styles.muted}>{c.notConfigured}</p>;
     return <>
       {current === "basic" && tier === "pro" && <p className={styles.muted}>{c.upgradeNote}</p>}
-      <PayPalSubscribeButton key={plan.id} clientId={paypal.clientId} currency={paypal.currency} planId={plan.id} userId={user.id} tier={tier} interval={interval}
-        onApproved={approved} onError={(message) => setStatus({ kind: "error", text: message === "paypal" ? c.paypalError : message })} />
+      <PayPalCheckout open={checkoutTier === tier} onOpen={() => { setStatus(null); setCheckoutTier(tier); }} onClose={() => setCheckoutTier(null)} zh={zh}
+        planName={tier === "pro" ? c.pro : c.basic} price={money(plan.price, paypal.currency)} tier={tier} interval={interval}
+        paypal={{ clientId: paypal.clientId, currency: paypal.currency, planId: plan.id }} userId={user.id}
+        onApproved={approved} onError={(message) => { setCheckoutTier(null); setStatus({ kind: "error", text: message === "paypal" ? c.paypalError : message }); }} />
     </>;
   }
 
@@ -160,8 +169,8 @@ function PricingContent({ user }: { user: Account | null }) {
     return <section className={`${styles.plan} ${tier === "pro" ? styles.planPro : ""}`} aria-labelledby={`plan-${tier}`}>
       <h2 id={`plan-${tier}`}>{tier === "pro" ? c.pro : c.basic}</h2>
       <p className={styles.planNote}>{tier === "pro" ? c.proNote : c.basicNote}</p>
-      {showPrice && <p className={styles.price}>{money(price.value, price.currency)}<span>{interval === "monthly" ? c.perMonth : c.perYear}</span></p>}
-      {showPrice && interval === "yearly" && saving && <p className={styles.planNote}>{c.save(saving)}</p>}
+      {showPrice && <p className={styles.price}>{money(price.value, price.currency)}<span>{interval === "monthly" ? c.perMonth : c.perYear}</span>
+        {interval === "yearly" && saving ? <em className={styles.saveBadge}>{c.save(saving)}</em> : null}</p>}
       {features(c, tier)}
       <div className={styles.action}>{action(tier)}</div>
     </section>;
