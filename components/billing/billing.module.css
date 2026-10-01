@@ -55,7 +55,8 @@
 
 /* Checkout sheet. PayPal's buttons are light-only iframes, so the sheet is always light,
    like a payment form, whatever the site theme. */
-.checkout { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 18px; color-scheme: light; background: #ffffff; color: #20252b; box-shadow: 0 1px 2px #0000001a, 0 24px 80px #00000059; }
+/* The global reset zeroes margins, which strips <dialog>'s built-in centring; restore it. */
+.checkout { position: fixed; inset: 0; margin: auto; height: fit-content; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 18px; color-scheme: light; background: #ffffff; color: #20252b; box-shadow: 0 1px 2px #0000001a, 0 24px 80px #00000059; }
 .checkout::backdrop { background: rgba(10, 12, 14, 0.55); backdrop-filter: blur(4px); }
 .checkout[open] { animation: checkoutIn 220ms cubic-bezier(.2,0,0,1); }
 @keyframes checkoutIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
