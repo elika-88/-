@@ -5,6 +5,7 @@ import "./sidebar.css";
 import "./workspace.css";
 import { SettingsProvider } from "@/lib/i18n/SettingsContext";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "Lumina | Lecture Study Materials",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <body>
         <SettingsProvider><AuthProvider>{children}</AuthProvider></SettingsProvider>
+        <Analytics />
       </body>
     </html>
   );
