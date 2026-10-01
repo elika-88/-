@@ -29,7 +29,10 @@ export type RevenueCatConfig = ReturnType<typeof revenueCatConfig>;
 
 export function revenueCatSetupIssues(config = revenueCatConfig()) {
   const issues: string[] = [];
-  if (!/^rcb_[A-Za-z0-9_]+$/.test(config.publicApiKey)) issues.push('REVENUECAT_PUBLIC_API_KEY (RevenueCat Billing public SDK key)');
+  // RevenueCat Web Billing uses rcb_ keys for its native web billing setup
+  // and pdl_ keys when the Web Billing app is backed by Paddle. Both are
+  // public browser keys supported by purchases-js.
+  if (!/^(?:rcb|pdl)_[A-Za-z0-9_.-]+$/.test(config.publicApiKey)) issues.push('REVENUECAT_PUBLIC_API_KEY (RevenueCat Web Billing public SDK key)');
   if (config.publicApiKey.startsWith('rcb_') && config.publicApiKey.startsWith('rcb_sb_') !== config.sandbox) issues.push('REVENUECAT_ENV must match the public key environment');
   if (!config.secretApiKey.startsWith('sk_')) issues.push('REVENUECAT_SECRET_API_KEY (secret API v1 key)');
   if (config.webhookToken.length < 32) issues.push('REVENUECAT_WEBHOOK_AUTH_TOKEN (at least 32 characters)');
@@ -79,7 +82,10 @@ function managementURL(value: string | null | undefined) {
   if (!value) return null;
   try {
     const url = new URL(value);
-    const allowed = ['revenuecat.com', 'stripe.com'];
+    // RevenueCat Web Billing can be backed by Stripe or Paddle. Keep the
+    // provider management URL allowlist narrow so a provider response cannot
+    // turn into an arbitrary external redirect in the account UI.
+    const allowed = ['revenuecat.com', 'stripe.com', 'paddle.com'];
     return url.protocol === 'https:' && !url.username && !url.password && allowed.some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)) ? url.href : null;
   } catch { return null; }
 }

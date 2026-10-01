@@ -7,9 +7,10 @@ Turning a switch off is a reversible operational control. It blocks new checkout
 ## RevenueCat dashboard setup
 
 1. Create a RevenueCat project and a Web Billing configuration. RevenueCat Web Billing requires a connected Stripe, Paddle, or RevenueCat Billing payment setup; a PayPal Client ID cannot be pasted into RevenueCat.
+   When using Paddle inside this RevenueCat configuration, finish **Connect Paddle account** and **Import Paddle products and prices** in the RevenueCat Web Billing page. This is the RevenueCat checkout path; it does not use the website's direct-Paddle variables (`PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, or `PADDLE_PRICE_*`).
 2. Create four products with stable identifiers matching the Vercel variables below: Basic monthly/yearly and Pro monthly/yearly.
 3. Use separate entitlements (`basic` and `pro`), or keep the single entitlement created by onboarding and attach all four products to it. For a shared entitlement, set both `REVENUECAT_ENTITLEMENT_BASIC` and `REVENUECAT_ENTITLEMENT_PRO` to its exact **Identifier**, not its display name. The server still verifies the product identifier to distinguish Basic from Pro; a Basic purchase never grants Pro just because the entitlement is called “LectorAI Pro”. Put all four products in the configured offering, or change `REVENUECAT_OFFERING_ID` to match. The shared mode supports one current subscription per account; use separate entitlements if you need independent overlapping tiers.
-4. Copy the Web Billing public SDK key to `REVENUECAT_PUBLIC_API_KEY`. Copy a RevenueCat secret API v1 key to `REVENUECAT_SECRET_API_KEY`. The secret is server-only.
+4. Copy the Web Billing public SDK key to `REVENUECAT_PUBLIC_API_KEY`. It is usually `rcb_...`; a Paddle-backed Web Billing app can use a `pdl_...` key. Copy a RevenueCat secret API v1 key to `REVENUECAT_SECRET_API_KEY`. The secret is server-only.
 5. In RevenueCat Integrations → Webhooks, add:
 
    `https://lectorai.tech/api/billing/revenuecat/webhook`
@@ -17,6 +18,12 @@ Turning a switch off is a reversible operational control. It blocks new checkout
    Set the Authorization header to `Bearer <a random token>`, then put only the random token (without `Bearer `) into `REVENUECAT_WEBHOOK_AUTH_TOKEN`. Keep the token at least 32 characters. Enable HMAC signing if your plan supports it; the current endpoint uses the authorization header and can be extended to HMAC without changing the public checkout flow.
 
 6. Add all variables from `.env.example` to Vercel Production, redeploy, and open `/admin` → **订阅渠道**. The RevenueCat row must show no missing variables before it can be enabled.
+
+### Paddle product identifiers
+
+After importing Paddle products, copy the identifiers shown on the RevenueCat product/package pages into the four `REVENUECAT_PRODUCT_*` variables. Do not assume they are the same as Paddle `pri_...` price IDs. The values must exactly match the product identifier returned by `getOfferings()`; the server uses that verified identifier to distinguish Basic from Pro.
+
+Create an Offering (for example `default`) and add the four imported packages. Set `REVENUECAT_OFFERING_ID` to the Offering identifier, then redeploy before enabling the channel. If the Offering is missing a package, that plan will intentionally remain unavailable instead of charging an unverified product.
 
 ## Checkout and verification
 
