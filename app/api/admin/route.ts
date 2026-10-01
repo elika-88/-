@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AdminSettingsSchema, SaveAdminSettingsSchema } from '@/lib/admin-schema';
-import { adminReady, adminSetupIssue, loginAdmin, logoutAdmin, readStoredSettings, saveStoredSettings, validAdminSession, withAdminDb, type AdminLoginResult } from '@/lib/server/admin-db';
+import { adminMfaEnabled, beginAdminMfa, confirmAdminMfa, loginAdmin, logoutAdmin, readStoredSettings, saveStoredSettings, validAdminSession, withAdminDb, type AdminLoginResult } from '@/lib/server/admin-db';
+import { ADMIN_LOGIN_WINDOW_MS, ADMIN_SESSION_SECONDS, requireAdminOrigin } from '@/lib/server/admin-request';
+import { AccountError } from '@/lib/server/user-auth';
 import { ApiBaseUrlSchema, DEFAULT_API_BASE_URL, DEFAULT_MODEL } from '@/lib/provider';
 import { validateGenerationInput } from '@/lib/input';
 import { createOpenAIClient } from '@/lib/openai';
@@ -11,14 +13,6 @@ export const maxDuration = 300;
 const cookieName = 'lumina_admin';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 async function authorized(request: NextRequest) { return validAdminSession(request.cookies.get(cookieName)?.value ?? ''); }
-function sameOrigin(request: NextRequest) {
-  try {
-    const origin = new URL(request.headers.get('origin') ?? '');
-    // Next may reconstruct request.url with localhost behind a bound listener.
-    // Browser Host is authoritative for the host the user actually opened.
-    return ['http:', 'https:'].includes(origin.protocol) && origin.host === (request.headers.get('host') ?? new URL(request.url).host);
-  } catch { return false; }
-}
 async function settingsView() {
   const stored = await readStoredSettings();
   return {
@@ -32,27 +26,30 @@ async function settingsView() {
 }
 export async function GET(request: NextRequest) {
   try {
-    if (!await authorized(request)) return json({ authenticated: false, configured: adminReady(), setupError: adminSetupIssue() }, 401);
-    return json({ authenticated: true, settings: await settingsView(), audit: await withAdminDb(async (db) => (await db.execute('SELECT event,created_at FROM audit ORDER BY id DESC LIMIT 20')).rows) });
+    if (!await authorized(request)) return json({ authenticated: false, error: 'Please log in as administrator.' }, 401);
+    return json({ authenticated: true, mfaEnabled: await adminMfaEnabled(), settings: await settingsView(), audit: await withAdminDb(async (db) => (await db.execute('SELECT event,created_at FROM audit ORDER BY id DESC LIMIT 20')).rows) });
   } catch { return json({ error: 'Cannot read admin configuration.' }, 503); }
 }
-function loginResponse(request: NextRequest, result: AdminLoginResult) {
+function loginResponse(request: NextRequest, result: AdminLoginResult & { recoveryCodes?: string[] }) {
   if ('error' in result) {
     const messages = {
-      LIMITED: 'Too many attempts. Wait five minutes.',
-      UNCONFIGURED: 'Run admin setup first.',
+      LIMITED: 'Too many attempts. Wait fifteen minutes before trying again.',
+      UNCONFIGURED: 'Administrator sign-in is unavailable. Check the server configuration.',
       INVALID: 'Incorrect administrator credentials.',
     };
-    return json({ error: messages[result.error], code: result.error }, result.error === 'LIMITED' ? 429 : result.error === 'UNCONFIGURED' ? 503 : 401);
+    const response = json({ error: messages[result.error], code: result.error }, result.error === 'LIMITED' ? 429 : result.error === 'UNCONFIGURED' ? 503 : 401);
+    if (result.error === 'LIMITED') response.headers.set('Retry-After', String(ADMIN_LOGIN_WINDOW_MS / 1000));
+    return response;
   }
-  const options = { httpOnly: true, sameSite: 'strict' as const, secure: request.headers.get('origin')?.startsWith('https:') ?? false, path: '/api/admin' };
-  const response = json({ authenticated: true });
-  response.cookies.set(cookieName, result.token, { ...options, maxAge: 8 * 3600 });
+  const options = { httpOnly: true, sameSite: 'strict' as const, secure: process.env.NODE_ENV === 'production' || request.headers.get('origin')?.startsWith('https:') === true, path: '/api/admin' };
+  const response = json({ authenticated: true, ...(result.recoveryCodes ? { recoveryCodes: result.recoveryCodes } : {}) });
+  response.cookies.set(cookieName, result.token, { ...options, maxAge: ADMIN_SESSION_SECONDS });
   return response;
 }
 export async function POST(request: NextRequest) {
-  if (!sameOrigin(request)) return json({ error: 'Invalid request origin.' }, 403);
   try {
+    requireAdminOrigin(request);
+    if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') return json({ error: 'Expected application/json.' }, 415);
     const reader = request.body?.getReader();
     if (!reader) return json({ error: 'Missing request.' }, 400);
     let size = 0; let raw = ''; const decoder = new TextDecoder();
@@ -62,9 +59,23 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== 'object') return json({ error: 'Invalid request.' }, 400);
     if (body.action === 'login') {
       if (typeof body.password !== 'string' || body.password.length > 1024) return json({ error: 'Invalid password.' }, 400);
-      return loginResponse(request, await loginAdmin(body.password));
+      if (body.code !== undefined && (typeof body.code !== 'string' || body.code.length > 32)) return json({ error: 'Invalid verification code.' }, 400);
+      return loginResponse(request, await loginAdmin(body.password, body.code?.trim() ?? ''));
     }
     if (!await authorized(request)) return json({ error: 'Please log in.' }, 401);
+    if (body.action === 'mfa_begin') {
+      if (typeof body.password !== 'string' || body.password.length > 1024) return json({ error: 'Enter your administrator password.' }, 400);
+      const result = await beginAdminMfa(request.cookies.get(cookieName)?.value ?? '', body.password);
+      if ('secret' in result) return json({ secret: result.secret });
+      if (result.error === 'ALREADY_ENABLED') return json({ error: 'Two-factor authentication is already enabled.' }, 409);
+      return loginResponse(request, result);
+    }
+    if (body.action === 'mfa_confirm') {
+      if (typeof body.code !== 'string' || !/^\d{6}$/.test(body.code)) return json({ error: 'Enter the six-digit authenticator code.' }, 400);
+      const result = await confirmAdminMfa(request.cookies.get(cookieName)?.value ?? '', body.code);
+      if ('error' in result && result.error === 'ALREADY_ENABLED') return json({ error: 'Two-factor authentication is already enabled.' }, 409);
+      return loginResponse(request, result);
+    }
     if (body.action === 'diagnose_ai') {
       const input = validateGenerationInput(body.input);
       if (!input.success || input.data.provider || input.data.lecture.length > 6000) return json({ error: 'Provide 80 words to 6,000 characters without a provider override.' }, 400);
@@ -119,5 +130,8 @@ export async function POST(request: NextRequest) {
     if (!config.success) return json({ error: 'Enter an API key. A changed API URL requires a new key.' }, 400);
     await saveStoredSettings(config.data, revision);
     return json({ settings: await settingsView() });
-  } catch (error) { return json({ error: error instanceof Error && error.message === 'CONFLICT' ? 'Settings changed in another session. Reload before saving.' : 'Could not save configuration.' }, error instanceof Error && error.message === 'CONFLICT' ? 409 : 503); }
+  } catch (error) {
+    if (error instanceof AccountError) return json({ error: error.message }, error.status);
+    return json({ error: error instanceof Error && error.message === 'CONFLICT' ? 'Settings changed in another session. Reload before saving.' : 'Could not save configuration.' }, error instanceof Error && error.message === 'CONFLICT' ? 409 : 503);
+  }
 }
