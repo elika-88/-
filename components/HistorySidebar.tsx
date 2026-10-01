@@ -10,6 +10,7 @@ import { useSettings } from "@/lib/i18n/SettingsContext";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { SidebarPlan } from "@/components/billing/SidebarPlan";
+import { LEGAL_PAGES } from "@/lib/legal";
 
 type Props = {
   sessions: StudySession[];
@@ -36,7 +37,7 @@ const PEEK_CLOSE_DELAY = 220;
  *    as a floating card without changing the layout, clicking pins it open.
  */
 export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse, onNew, onSelect, onEdit, onExport, prepActive = false, pricingActive = false }: Props) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const [search, setSearch] = useState("");
   const [menu, setMenu] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -198,6 +199,9 @@ export function HistorySidebar({ sessions, activeId, collapsed, onToggleCollapse
                 <span>{t.settingsTitle}</span>
               </button>
             </div>
+            <nav className="sb-legal" aria-label={language === "zh" ? "法律信息" : "Legal"}>
+              {LEGAL_PAGES.map((page) => <Link key={page.href} href={page.href}>{language === "zh" ? page.labelZh : page.label}</Link>)}
+            </nav>
           </div>
         </div>
       </div>

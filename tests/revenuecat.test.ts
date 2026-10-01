@@ -88,6 +88,8 @@ describe('channel controls', () => {
   });
   it('rejects secret SDK keys, environment mismatch and duplicate plan mappings', () => {
     const config = revenueCatConfig(); expect(revenueCatSetupIssues(config)).toEqual([]);
+    // A Paddle web config has its own public key format; it must be accepted like an rcb_ key.
+    expect(revenueCatSetupIssues({ ...config, publicApiKey: 'paddle_publicKey123' })).toEqual([]);
     expect(revenueCatSetupIssues({ ...config, publicApiKey: 'sk_secret' }).length).toBeGreaterThan(0);
     expect(revenueCatSetupIssues({ ...config, publicApiKey: 'rcb_sb_test' }).length).toBeGreaterThan(0);
     config.products.pro.monthly = config.products.basic.monthly;

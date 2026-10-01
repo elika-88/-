@@ -12,6 +12,7 @@ import { PayPalSubscribeButton } from "./PayPalSubscribeButton";
 import { RevenueCatSubscribeButton } from "./RevenueCatSubscribeButton";
 import { setPendingRevenueCat, usePendingRevenueCat } from '@/lib/client/pending-revenuecat';
 import { useSettings } from '@/lib/i18n/SettingsContext';
+import { LEGAL, LEGAL_PAGES } from "@/lib/legal";
 import { useBillingCopy } from "./copy";
 import styles from "./billing.module.css";
 
@@ -121,7 +122,7 @@ function PricingContent({ user }: { user: Account | null }) {
       setBillingSummary(result);
       const active = result.subscriptions?.some(s => s.provider === 'revenuecat' && (s.status === 'ACTIVE' || (s.cancelled && (s.paidThrough ?? 0) > Date.now())));
       if (active) { setPendingRevenueCat(user.id, false); setStatus({ kind: 'success', text: c.welcome }); }
-      else setStatus({ kind: 'info', text: zh ? '尚未查到有效的 RevenueCat 订阅。若刚刚付款，请稍后重试同步，不要重复支付。' : 'No active RevenueCat subscription was found yet. If you just paid, retry syncing shortly; do not pay again.' });
+      else setStatus({ kind: 'info', text: zh ? '尚未查到有效的银行卡订阅。若刚刚付款，请稍后重试同步，不要重复支付。' : 'No active card subscription was found yet. If you just paid, retry syncing shortly; do not pay again.' });
     } catch (error) {
       if (mounted.current) setStatus({ kind: 'error', text: error instanceof Error ? error.message : 'Could not sync subscription.' });
     } finally { if (mounted.current) setBusy(false); }
@@ -129,7 +130,7 @@ function PricingContent({ user }: { user: Account | null }) {
 
   function action(tier: PaidPlanId) {
     if (!summary) return error ? <p className={styles.error}>{error}</p> : <p className={styles.muted}>{c.loading}</p>;
-    if (pendingId || pendingRevenueCat || busy) return <p className={styles.muted}>{busy ? c.activating : pendingId ? c.pendingConfirmation : (zh ? '请在下方同步 RevenueCat 订阅，避免重复支付。' : 'Sync your RevenueCat subscription below before purchasing again.')}</p>;
+    if (pendingId || pendingRevenueCat || busy) return <p className={styles.muted}>{busy ? c.activating : pendingId ? c.pendingConfirmation : (zh ? '请在下方同步银行卡订阅，避免重复支付。' : 'Sync your card subscription below before purchasing again.')}</p>;
     const plan = paypal?.plans[tier][interval] ?? null;
     if (current === tier && sub) return <div className={styles.manage}>
       <p className={styles.currentTag}>{c.current}{sub.interval ? ` · ${c.interval[sub.interval]}` : ""}</p>
@@ -174,7 +175,7 @@ function PricingContent({ user }: { user: Account | null }) {
     </header>
 
     {paypal && revenuecat && <div className={styles.toggle} role="radiogroup" aria-label={zh ? '付款方式' : 'Payment method'}>
-      {(['revenuecat', 'paypal'] as const).map(value => <button key={value} type="button" role="radio" aria-checked={provider === value} disabled={busy || Boolean(pendingId) || pendingRevenueCat} className={provider === value ? styles.toggleOn : undefined} onClick={() => setSelectedProvider(value)}>{value === 'paypal' ? 'PayPal' : 'RevenueCat'}</button>)}
+      {(['revenuecat', 'paypal'] as const).map(value => <button key={value} type="button" role="radio" aria-checked={provider === value} disabled={busy || Boolean(pendingId) || pendingRevenueCat} className={provider === value ? styles.toggleOn : undefined} onClick={() => setSelectedProvider(value)}>{value === 'paypal' ? 'PayPal' : (zh ? '银行卡' : 'Card')}</button>)}
     </div>}
 
     <div className={styles.toggle} role="radiogroup" aria-label={c.kicker}>
@@ -197,10 +198,10 @@ function PricingContent({ user }: { user: Account | null }) {
 
     {status && <p className={`${styles.status} ${styles[status.kind]}`} role={status.kind === "error" ? "alert" : "status"}>{status.text}</p>}
     {user && <section className={styles.recovery} aria-label={c.restoreTitle}>
-      <Button type="button" variant="outline" disabled={busy} onClick={() => void syncRevenueCat()}>{zh ? '同步 RevenueCat 订阅（不重复付款）' : 'Sync RevenueCat subscription (no new payment)'}</Button>
+      {(revenuecat || pendingRevenueCat || summary?.subscriptions?.some(s => s.provider === 'revenuecat')) && <Button type="button" variant="outline" disabled={busy} onClick={() => void syncRevenueCat()}>{zh ? '同步银行卡订阅（不重复付款）' : 'Sync card subscription (no new payment)'}</Button>}
       {pendingRevenueCat && <p role="status">{zh ? '订阅待确认，请同步已有购买，不要重新付款。' : 'Subscription confirmation is pending. Sync your existing purchase; do not pay again.'}</p>}
       {(summary?.subscriptions ?? []).filter(s => s.provider !== sub?.provider && (s.status === 'ACTIVE' || s.cancelled && (s.paidThrough ?? 0) > now)).map(s => <div key={s.provider}>
-        <p>{s.provider === 'paypal' ? 'PayPal' : 'RevenueCat'} · {s.tier} · {s.cancelled ? c.endsOn(date(s.paidThrough)) : c.renews(date(s.nextBillingAt))}</p>
+        <p>{s.provider === 'paypal' ? 'PayPal' : (zh ? '银行卡' : 'Card')} · {s.tier} · {s.cancelled ? c.endsOn(date(s.paidThrough)) : c.renews(date(s.nextBillingAt))}</p>
         {s.provider === 'paypal' && !s.cancelled && <Button variant="outline" disabled={busy} onClick={cancel}>{c.cancel}</Button>}
         {s.provider === 'revenuecat' && s.managementUrl && <a href={s.managementUrl} target="_blank" rel="noopener noreferrer">{zh ? '管理订阅' : 'Manage subscription'}</a>}
       </div>)}
@@ -227,6 +228,11 @@ function PricingContent({ user }: { user: Account | null }) {
       <small>{c.resets}</small>
     </section>}
 
-    <p className={styles.fineprint}>{zh ? '付款由所选支付渠道处理。可通过订阅管理入口取消自动续费。' : 'Payments are handled by your selected provider. Manage your subscription to cancel renewal.'}</p>
+    <p className={styles.fineprint}>
+      {revenuecat && (zh ? '银行卡付款由 Paddle.com 作为交易商户（Merchant of Record）处理。' : 'Card payments are processed by Paddle.com, our Merchant of Record. ')}
+      {paypal && (zh ? 'PayPal 付款由 PayPal 处理。' : 'PayPal payments are processed by PayPal. ')}
+      {zh ? `可随时取消自动续费，每次付款后 ${LEGAL.refundDays} 天内可全额退款。` : `Cancel renewal any time; full refund within ${LEGAL.refundDays} days of any payment.`}
+    </p>
+    <nav className={styles.legal} aria-label={zh ? '法律信息' : 'Legal'}>{LEGAL_PAGES.map(page => <Link key={page.href} href={page.href}>{zh ? page.labelZh : page.label}</Link>)}</nav>
   </div>;
 }

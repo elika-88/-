@@ -4,19 +4,27 @@ LectorAI supports two subscription channels: the existing PayPal integration and
 
 Turning a switch off is a reversible operational control. It blocks new checkouts at the server, even for an already-open pricing page. It does not remove existing access, erase subscription records, or stop provider webhooks. This prevents an outage or maintenance switch from revoking a paid subscription.
 
-## RevenueCat dashboard setup
+## RevenueCat dashboard setup (Paddle, for a Kazakhstan seller)
 
-1. Create a RevenueCat project and a Web Billing configuration. RevenueCat Web Billing requires a connected Stripe, Paddle, or RevenueCat Billing payment setup; a PayPal Client ID cannot be pasted into RevenueCat.
-2. Create four products with stable identifiers matching the Vercel variables below: Basic monthly/yearly and Pro monthly/yearly.
-3. Create two entitlements, `basic` and `pro`, and attach the matching products. Put all four products in the current offering, or change `REVENUECAT_OFFERING_ID` to the offering identifier you use.
-4. Copy the Web Billing public SDK key to `REVENUECAT_PUBLIC_API_KEY`. Copy a RevenueCat secret API v1 key to `REVENUECAT_SECRET_API_KEY`. The secret is server-only.
-5. In RevenueCat Integrations → Webhooks, add:
+RevenueCat's own Web Billing checkout needs a Stripe account, and Stripe does not onboard businesses registered in Kazakhstan. Lumina's seller is an individual entrepreneur in Kazakhstan, so card payments go through **Paddle**: Paddle is the Merchant of Record (it charges the customer, handles sales tax/VAT, receipts and refunds) and pays out to us. The same purchases-js checkout code opens Paddle's checkout.
+
+1. **Paddle account.** Sign up at paddle.com as an individual seller. Before checkout works, Paddle runs a *domain review* of https://lectorai.tech. The site must show:
+   - a product description, the Plans page with prices, and the features of each plan;
+   - Terms of Service with the seller's legal name, a Refund Policy and a Privacy Policy, reachable from navigation. They are at `/terms`, `/refund` and `/privacy` (linked in the sidebar, the Plans page and sign-up). **Fill in `lib/legal.ts` first**: name, IIN, address and support email.
+   Paddle sandbox (sandbox-vendors.paddle.com) is a separate account; repeat the setup there for testing.
+2. **Paddle catalogue.** In Paddle create a product "Lumina Basic" with two prices (monthly 9.90, yearly 95.00 USD) and "Lumina Pro" with two prices (12.90, 124.00). Each Paddle *price* becomes one RevenueCat product.
+3. **Paddle API key.** In Paddle → Developer tools → Authentication create an API key with the permissions listed in RevenueCat's Paddle guide, including *Customer portal sessions (write)* so customers get a working "Manage subscription" link.
+4. **RevenueCat web config.** In RevenueCat → your project → Web, create a web config for **Paddle** and paste the Paddle API key with *Set secret*. Import the products.
+5. **Entitlements and offering.** Create entitlements `basic` and `pro`, attach the matching products, and put all four in the current offering (or set `REVENUECAT_OFFERING_ID`). Copy each product identifier into `REVENUECAT_PRODUCT_*`.
+6. **Keys.** Copy the Paddle web config's **public** API key to `REVENUECAT_PUBLIC_API_KEY` and a RevenueCat secret API v1 key (`sk_…`) to `REVENUECAT_SECRET_API_KEY`. The secret is server-only.
+7. **Webhook.** In RevenueCat Integrations → Webhooks, add
 
    `https://lectorai.tech/api/billing/revenuecat/webhook`
 
-   Set the Authorization header to `Bearer <a random token>`, then put only the random token (without `Bearer `) into `REVENUECAT_WEBHOOK_AUTH_TOKEN`. Keep the token at least 32 characters. Enable HMAC signing if your plan supports it; the current endpoint uses the authorization header and can be extended to HMAC without changing the public checkout flow.
+   Set the Authorization header to `Bearer <a random token>`, then put only the random token (without `Bearer `) into `REVENUECAT_WEBHOOK_AUTH_TOKEN`. Keep the token at least 32 characters.
+8. Add all variables from `.env.example` to Vercel Production, redeploy, and open `/admin` → **订阅渠道**. The RevenueCat row must show no missing variables before it can be enabled. Customers see this channel as **Card**.
 
-6. Add all variables from `.env.example` to Vercel Production, redeploy, and open `/admin` → **订阅渠道**. The RevenueCat row must show no missing variables before it can be enabled.
+Set up payouts in Paddle (Business account → Payouts) and confirm which payout methods Paddle offers for Kazakhstan before going live.
 
 ## Checkout and verification
 

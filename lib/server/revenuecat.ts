@@ -29,7 +29,9 @@ export type RevenueCatConfig = ReturnType<typeof revenueCatConfig>;
 
 export function revenueCatSetupIssues(config = revenueCatConfig()) {
   const issues: string[] = [];
-  if (!/^rcb_[A-Za-z0-9_]+$/.test(config.publicApiKey)) issues.push('REVENUECAT_PUBLIC_API_KEY (RevenueCat Billing public SDK key)');
+  // Web Billing (Stripe) keys start with rcb_; a Paddle web config issues its own public key.
+  // Either works with purchases-js, but a secret key must never reach the browser.
+  if (!/^[A-Za-z0-9]+_[A-Za-z0-9_]{8,}$/.test(config.publicApiKey) || config.publicApiKey.startsWith('sk_')) issues.push('REVENUECAT_PUBLIC_API_KEY (public Web SDK key of the Web Billing or Paddle config)');
   if (config.publicApiKey.startsWith('rcb_') && config.publicApiKey.startsWith('rcb_sb_') !== config.sandbox) issues.push('REVENUECAT_ENV must match the public key environment');
   if (!config.secretApiKey.startsWith('sk_')) issues.push('REVENUECAT_SECRET_API_KEY (secret API v1 key)');
   if (config.webhookToken.length < 32) issues.push('REVENUECAT_WEBHOOK_AUTH_TOKEN (at least 32 characters)');
@@ -78,7 +80,8 @@ function managementURL(value: string | null | undefined) {
   if (!value) return null;
   try {
     const url = new URL(value);
-    const allowed = ['revenuecat.com', 'stripe.com'];
+    // RevenueCat/Stripe Web Billing portals, and Paddle's customer portal (customer-portal.paddle.com).
+    const allowed = ['revenuecat.com', 'stripe.com', 'paddle.com'];
     return url.protocol === 'https:' && !url.username && !url.password && allowed.some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)) ? url.href : null;
   } catch { return null; }
 }

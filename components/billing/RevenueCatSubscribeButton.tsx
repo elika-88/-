@@ -41,13 +41,13 @@ export function RevenueCatSubscribeButton({ config, tier, interval, userId, onPu
     } catch (error) {
       const { PurchasesError, ErrorCode } = await import('@revenuecat/purchases-js');
       if (error instanceof PurchasesError && error.errorCode === ErrorCode.UserCancelledError) setPendingRevenueCat(userId, false);
-      else onError(started ? (zh ? '暂时无法确认订阅。若已付款，请勿重复支付，在下方同步 RevenueCat 订阅。' : 'Subscription confirmation is pending. If you paid, do not pay again; sync your RevenueCat subscription below.') : error instanceof Error ? error.message : 'Checkout is unavailable.');
+      else onError(started ? (zh ? '暂时无法确认订阅。若已付款，请勿重复支付，在下方同步银行卡订阅。' : 'Subscription confirmation is pending. If you paid, do not pay again; sync your card subscription below.') : error instanceof Error ? error.message : 'Checkout is unavailable.');
     } finally { clicking.current = false; onBusy(false); }
   }
   if (loadError) return <p className={styles.error}>{zh ? '此方案暂时无法加载，请刷新或联系支持。' : 'This plan could not load. Refresh or contact support.'}</p>;
   return <div className={styles.manage}>
     <p className={styles.price}>{price ?? '…'}<span>{interval === 'monthly' ? (zh ? '/ 月' : '/ month') : (zh ? '/ 年' : '/ year')}</span></p>
     {config.sandbox && <p className={styles.muted}>{zh ? '测试模式：不收取真实费用' : 'Sandbox: no real charge'}</p>}
-    <Button type="button" disabled={!price} onClick={() => void purchase()}>{zh ? '通过 RevenueCat 订阅' : 'Subscribe with RevenueCat'}</Button>
+    <Button type="button" disabled={!price} onClick={() => void purchase()}>{zh ? '银行卡订阅' : 'Subscribe with card'}</Button>
   </div>;
 }
