@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Sliders,
@@ -54,7 +55,9 @@ export function SettingsModal({ isOpen, onClose, onExport }: Props) {
     }
   };
 
-  return (
+  // Render at <body> so the dialog is never trapped under the sidebar's stacking
+  // context or covered by third-party iframes such as the PayPal buttons.
+  return createPortal(
     <div className="gpt-settings-backdrop" onClick={onClose}>
       <div className="gpt-settings-dialog" onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
@@ -170,6 +173,7 @@ export function SettingsModal({ isOpen, onClose, onExport }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
