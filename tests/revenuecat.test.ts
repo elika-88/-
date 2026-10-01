@@ -62,11 +62,11 @@ afterEach(async () => {
 });
 
 describe('channel controls', () => {
-  it('defaults to PayPal on with RevenueCat and Paddle off; persists revisions and rejects stale writes', async () => {
-    expect(await readBillingChannels()).toEqual({ paypal: true, revenuecat: false, paddle: false, revision: 0 });
+  it('defaults to PayPal on with RevenueCat off; persists revisions and rejects stale writes', async () => {
+    expect(await readBillingChannels()).toEqual({ paypal: true, revenuecat: false, revision: 0 });
     await setBillingChannel('paypal', false, 0);
     await expect(setBillingChannel('revenuecat', true, 0)).rejects.toThrow('CONFLICT');
-    expect(await readBillingChannels()).toEqual({ paypal: false, revenuecat: false, paddle: false, revision: 1 });
+    expect(await readBillingChannels()).toEqual({ paypal: false, revenuecat: false, revision: 1 });
   });
   it('requires admin auth and same-origin; never returns secret credentials', async () => {
     expect((await adminGet(request('/api/admin/billing', {}, {}, 'GET'))).status).toBe(401);
