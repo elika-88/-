@@ -101,11 +101,11 @@ export function ReadingPractice({ exam: examId }: { exam: ExamId }) {
   function cancel() { request.current?.abort(); request.current = null; setLoading(false); setProgress(null); }
 
   if (!saved) {
-    const count = passage.length;
+    const characters = passage.length;
     return <section className={styles.card} aria-busy={loading}>
       <div className={styles.fieldHead}>
         <label htmlFor="prep-passage">{c.passage}</label>
-        <span className={count > PASSAGE_LIMITS.maxCharacters ? styles.over : undefined}>{c.characters(count, PASSAGE_LIMITS.maxCharacters)}</span>
+        <span className={characters > PASSAGE_LIMITS.maxCharacters ? styles.over : undefined}>{c.characters(characters, PASSAGE_LIMITS.maxCharacters)}</span>
       </div>
       <p className={styles.hint}>{exam.passageHint[lang]}</p>
       <textarea id="prep-passage" className={styles.passageInput} value={passage} maxLength={PASSAGE_LIMITS.maxCharacters} disabled={loading}
