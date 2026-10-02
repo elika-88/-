@@ -15,3 +15,8 @@ test-results/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local hand-off artifacts (git bundles, patches, screenshots)
+/Claude outputs/
+/*.bundle
+/*.patch
