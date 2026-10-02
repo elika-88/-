@@ -13,20 +13,21 @@ describe('admin readiness endpoint', () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.configured).toBe(false);
-    expect(body.setupError).toContain('admin:setup');
+    expect(body.setupError).toContain('unavailable');
+    expect(body.setupError).not.toContain('admin:setup');
     expect(body).not.toHaveProperty('apiKey');
   });
 
-  it('gives Vercel-specific setup instructions instead of local commands', async () => {
+  it('does not disclose hosting configuration to unauthenticated visitors', async () => {
     vi.stubEnv('ADMIN_PASSWORD', undefined);
     vi.stubEnv('ADMIN_ENCRYPTION_KEY', undefined);
     vi.stubEnv('VERCEL', '1');
     const body = await (await GET()).json();
-    expect(body.setupError).toContain('in Vercel');
+    expect(body.setupError).not.toContain('Vercel');
     expect(body.setupError).not.toContain('npm run admin:setup');
   });
 
-  it('reports the persistent database requirement after admin secrets are present', async () => {
+  it('does not disclose database configuration when setup is incomplete', async () => {
     vi.stubEnv('ADMIN_PASSWORD', 'test-only-password');
     vi.stubEnv('ADMIN_ENCRYPTION_KEY', 'ab'.repeat(32));
     vi.stubEnv('VERCEL', '1');
@@ -34,6 +35,6 @@ describe('admin readiness endpoint', () => {
     vi.stubEnv('TURSO_AUTH_TOKEN', undefined);
     const body = await (await GET()).json();
     expect(body.configured).toBe(false);
-    expect(body.setupError).toContain('TURSO_DATABASE_URL');
+    expect(body.setupError).not.toContain('TURSO_DATABASE_URL');
   });
 });

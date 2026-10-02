@@ -62,7 +62,7 @@ afterEach(async () => {
 });
 
 describe('channel controls', () => {
-  it('defaults to PayPal on and RevenueCat off; persists revisions and rejects stale writes', async () => {
+  it('defaults to PayPal on with RevenueCat off; persists revisions and rejects stale writes', async () => {
     expect(await readBillingChannels()).toEqual({ paypal: true, revenuecat: false, revision: 0 });
     await setBillingChannel('paypal', false, 0);
     await expect(setBillingChannel('revenuecat', true, 0)).rejects.toThrow('CONFLICT');
@@ -88,8 +88,6 @@ describe('channel controls', () => {
   });
   it('rejects secret SDK keys, environment mismatch and duplicate plan mappings', () => {
     const config = revenueCatConfig(); expect(revenueCatSetupIssues(config)).toEqual([]);
-    // A Paddle web config has its own public key format; it must be accepted like an rcb_ key.
-    expect(revenueCatSetupIssues({ ...config, publicApiKey: 'paddle_publicKey123' })).toEqual([]);
     expect(revenueCatSetupIssues({ ...config, publicApiKey: 'sk_secret' }).length).toBeGreaterThan(0);
     expect(revenueCatSetupIssues({ ...config, publicApiKey: 'rcb_sb_test' }).length).toBeGreaterThan(0);
     config.products.pro.monthly = config.products.basic.monthly;
@@ -98,10 +96,44 @@ describe('channel controls', () => {
 });
 
 describe('RevenueCat authoritative membership', () => {
+  it.each([
+    ['basic', 'monthly'], ['basic', 'yearly'], ['pro', 'monthly'], ['pro', 'yearly'],
+  ] as const)('maps a shared entitlement to %s %s by verified product ID', async (tier, interval) => {
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_BASIC', 'lector_access');
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_PRO', 'lector_access');
+    expect(revenueCatSetupIssues()).toEqual([]);
+    const product = `${tier}_${interval}`;
+    const data = snapshot(tier);
+    data.subscriber.entitlements = { lector_access: { product_identifier: product, expires_date: future() } };
+    data.subscriber.subscriptions = { [product]: { expires_date: future(), is_sandbox: false, unsubscribe_detected_at: null } };
+    mockSnapshot(data);
+    await syncRevenueCat(userId);
+    expect(await billingSummary(subject)).toMatchObject({ plan: tier, subscription: { tier, interval } });
+  });
+  it('does not grant a shared entitlement for an unmapped product', async () => {
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_BASIC', 'lector_access');
+    vi.stubEnv('REVENUECAT_ENTITLEMENT_PRO', 'lector_access');
+    const data = snapshot();
+    data.subscriber.entitlements = { lector_access: { product_identifier: 'foreign', expires_date: future() } };
+    data.subscriber.subscriptions = { foreign: { expires_date: future(), is_sandbox: false, unsubscribe_detected_at: null } };
+    mockSnapshot(data); await syncRevenueCat(userId);
+    expect((await billingSummary(subject)).plan).toBe('free');
+  });
   it('grants the server-verified tier and expires it without a webhook', async () => {
     mockSnapshot(); await syncRevenueCat(userId);
     expect((await billingSummary(subject)).plan).toBe('pro');
     expect((await billingSummary(subject, Date.now() + 31 * 86400000)).plan).toBe('free');
+  });
+  it('keeps provider management links for RevenueCat Web Billing backed by Paddle', async () => {
+    const data = snapshot();
+    data.subscriber.management_url = 'https://customer-portal.paddle.com/session/test';
+    mockSnapshot(data); await syncRevenueCat(userId);
+    expect((await billingSummary(subject)).subscription?.managementUrl).toBe(data.subscriber.management_url);
+    const unsafe = snapshot();
+    unsafe.request_date_ms = now + 1;
+    unsafe.subscriber.management_url = 'https://evil.invalid/session';
+    mockSnapshot(unsafe); await syncRevenueCat(userId);
+    expect((await billingSummary(subject)).subscription?.managementUrl).toBeNull();
   });
   it('keeps cancellation access only until the paid period ends', async () => {
     mockSnapshot(snapshot('basic', { unsubscribe_detected_at: new Date(now).toISOString() })); await syncRevenueCat(userId);
@@ -129,6 +161,11 @@ describe('RevenueCat authoritative membership', () => {
   });
   it('does not create phantom users or query RevenueCat for strangers', async () => {
     const fetcher = mockSnapshot(); expect(await syncRevenueCat('unknown')).toEqual({ applied: false }); expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('accepts a Paddle-backed RevenueCat Web Billing public key', () => {
+    vi.stubEnv('REVENUECAT_PUBLIC_API_KEY', 'pdl_live_web_key');
+    expect(revenueCatSetupIssues()).not.toContain('REVENUECAT_PUBLIC_API_KEY (RevenueCat Web Billing public SDK key)');
   });
   it('retains PayPal separately and chooses the highest paid tier even when channels close', async () => {
     await syncSubscription(paypalConfig()!, { id: 'I-PAYPAL01', status: 'ACTIVE', plan_id: 'P-BASIC', custom_id: userId, billing_info: { next_billing_time: future() } });

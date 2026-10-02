@@ -11,6 +11,9 @@ import type { StudyKit } from "@/lib/schemas/studyMaterials";
 export type GenerationClientErrorCode = ErrorCode | "NETWORK_ERROR" | "INVALID_RESPONSE" | "STREAM_INTERRUPTED";
 
 const messages: Record<GenerationClientErrorCode, string> = {
+  LOGIN_REQUIRED: "Sign in to generate study materials. Your lecture is still saved in this browser.",
+  BACKGROUND_REQUIRED: "Reload your workspace and generate from your saved course.",
+  INVALID_ORIGIN: "This request could not be verified. Reload the page and try again.",
   INVALID_REQUEST: "The request could not be accepted. Check the lecture and try again.",
   INVALID_PROVIDER_CONFIG: "API connection settings must be configured on the server.",
   UNSUPPORTED_MEDIA_TYPE: "The server could not read this request format.",

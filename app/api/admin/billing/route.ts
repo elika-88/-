@@ -4,7 +4,8 @@ import { validAdminSession } from '@/lib/server/admin-db';
 import { readBillingChannels, setBillingChannel } from '@/lib/server/billing-channels';
 import { paypalConfig } from '@/lib/server/paypal';
 import { revenueCatConfig, revenueCatSetupIssues } from '@/lib/server/revenuecat';
-import { AccountError, readAccountJson, requireSameOrigin } from '@/lib/server/user-auth';
+import { AccountError, readAccountJson } from '@/lib/server/user-auth';
+import { requireAdminOrigin } from '@/lib/server/admin-request';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    requireSameOrigin(request);
+    requireAdminOrigin(request);
     if (!await authorized(request)) return json({ error: 'Please log in as administrator.' }, 401);
     const body = z.strictObject({ channel: z.enum(['paypal', 'revenuecat']), enabled: z.boolean(), revision: z.number().int().min(0) }).safeParse(await readAccountJson(request, 2048));
     if (!body.success) return json({ error: 'Invalid subscription settings.' }, 400);
