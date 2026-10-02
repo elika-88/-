@@ -6,15 +6,16 @@ import type { Evidence, StudyKit } from "@/lib/schemas/studyMaterials";
 import { FlashcardsView } from "./FlashcardsView";
 import { QuizView } from "./QuizView";
 import { EvidenceButton, SourceEvidence } from "./SourceEvidence";
+import { useWorkspaceCopy } from "@/lib/i18n/workspace";
 import styles from "./study.module.css";
 
 export type StudyTab = "summary" | "keypoints" | "quiz" | "flashcards";
 
 const tabs = [
-  { id: "summary", label: "Summary", icon: BookOpen },
-  { id: "keypoints", label: "Key Points", icon: ListChecks },
-  { id: "quiz", label: "Quiz", icon: CircleHelp },
-  { id: "flashcards", label: "Flashcards", icon: Layers },
+  { id: "summary", icon: BookOpen },
+  { id: "keypoints", icon: ListChecks },
+  { id: "quiz", icon: CircleHelp },
+  { id: "flashcards", icon: Layers },
 ] as const;
 
 type DashboardProps = { kit: StudyKit; tab: StudyTab; onTabChange: (tab: StudyTab) => void };
@@ -24,6 +25,8 @@ export function StudyDashboard(props: DashboardProps) {
 }
 
 function StudyDashboardContent({ kit, tab, onTabChange }: DashboardProps) {
+  const w = useWorkspaceCopy();
+  const d = w.dashboard;
   const [activeEvidence, setActiveEvidence] = useState<Evidence[] | null>(null);
   const [wrongTopicIds, setWrongTopicIds] = useState<string[]>([]);
   const [onlyWrong, setOnlyWrong] = useState(false);
@@ -45,18 +48,18 @@ function StudyDashboardContent({ kit, tab, onTabChange }: DashboardProps) {
   }
 
   return (
-    <section className={styles.dashboard} aria-label="Study materials">
+    <section className={styles.dashboard} aria-label={d.label}>
       <header className={styles.dashboardHeader}>
-        <p className={styles.eyebrow}>YOUR STUDY MATERIALS</p>
+        <p className={styles.eyebrow}>{d.eyebrow}</p>
         <h2>{kit.lectureTitle}</h2>
         <div className={styles.verification}>
           <ShieldCheck size={15} aria-hidden="true" />
-          <span>{verification.supportedItems} / {verification.totalItems} items supported</span>
-          <span>{verification.representedTopics} / {verification.totalTopics} topics covered</span>
+          <span>{d.supported(verification.supportedItems, verification.totalItems)}</span>
+          <span>{d.covered(verification.representedTopics, verification.totalTopics)}</span>
         </div>
-        <p className={styles.verificationNote}>AI review results. Confirm important details against the lecture source.</p>
+        <p className={styles.verificationNote}>{d.note}</p>
       </header>
-      <div className={styles.tabs} role="tablist" aria-label="Study material type" style={{ "--tab-index": Math.max(0, tabs.findIndex((item) => item.id === tab)) } as CSSProperties}>
+      <div className={styles.tabs} role="tablist" aria-label={d.tabsLabel} style={{ "--tab-index": Math.max(0, tabs.findIndex((item) => item.id === tab)) } as CSSProperties}>
         <span className={styles.tabIndicator} aria-hidden="true" />
         {tabs.map((item, index) => {
           const Icon = item.icon;
@@ -72,12 +75,12 @@ function StudyDashboardContent({ kit, tab, onTabChange }: DashboardProps) {
             onClick={() => onTabChange(item.id)}
             onKeyDown={(event) => navigateTabs(event, index)}
             className={styles.tab}
-          ><Icon aria-hidden="true" size={16} /><span>{item.label}</span></button>;
+          ><Icon aria-hidden="true" size={16} /><span>{d.tabs[item.id]}</span></button>;
         })}
       </div>
       <div role="tabpanel" id={`${id}-panel-summary`} aria-labelledby={`${id}-tab-summary`} hidden={tab !== "summary"} tabIndex={0} className={styles.panel}>
         <div className={styles.overview}>
-          <h3>Overview</h3>
+          <h3>{d.overview}</h3>
           <p>{kit.overview.text}</p>
           <EvidenceButton evidence={kit.overview.evidence} onEvidence={setActiveEvidence} />
         </div>
@@ -87,10 +90,10 @@ function StudyDashboardContent({ kit, tab, onTabChange }: DashboardProps) {
         </article>)}
       </div>
       <div role="tabpanel" id={`${id}-panel-keypoints`} aria-labelledby={`${id}-tab-keypoints`} hidden={tab !== "keypoints"} tabIndex={0} className={styles.panel}>
-        <div className={styles.panelHeading}><h3>Key takeaways</h3><span className={styles.muted}>{kit.keyPoints.length} points</span></div>
+        <div className={styles.panelHeading}><h3>{d.keyTakeaways}</h3><span className={styles.muted}>{d.points(kit.keyPoints.length)}</span></div>
         <ul className={styles.keyPoints}>{kit.keyPoints.map((point) => <li key={point.id}>
           <ArrowUpRight size={20} aria-hidden="true" />
-          <div><div className={styles.pointMeta}><span>{kit.topics.find((topic) => topic.id === point.topicId)?.title}</span>{point.importance === "high" && <span className={styles.importance}>Essential</span>}</div><p>{point.text}</p><EvidenceButton evidence={point.evidence} onEvidence={setActiveEvidence} /></div>
+          <div><div className={styles.pointMeta}><span>{kit.topics.find((topic) => topic.id === point.topicId)?.title}</span>{point.importance === "high" && <span className={styles.importance}>{d.essential}</span>}</div><p>{point.text}</p><EvidenceButton evidence={point.evidence} onEvidence={setActiveEvidence} /></div>
         </li>)}</ul>
       </div>
       <div role="tabpanel" id={`${id}-panel-quiz`} aria-labelledby={`${id}-tab-quiz`} hidden={tab !== "quiz"} tabIndex={0} className={styles.panel}>
@@ -100,7 +103,7 @@ function StudyDashboardContent({ kit, tab, onTabChange }: DashboardProps) {
         <FlashcardsView key={String(onlyWrong)} cards={kit.flashcards} topics={kit.topics} wrongTopicIds={wrongTopicIds} onlyWrong={onlyWrong} onFilterChange={setOnlyWrong} onEvidence={setActiveEvidence} />
       </div>
       {(kit.limitations.length > 0 || reviewConcerns.length > 0) && <details className={styles.limitations}>
-        <summary>Limitations and review notes ({kit.limitations.length + reviewConcerns.length})</summary>
+        <summary>{d.limitations(kit.limitations.length + reviewConcerns.length)}</summary>
         <ul>{kit.limitations.map((text, index) => <li key={`limitation-${index}`}>{text}</li>)}{reviewConcerns.map((item, index) => <li key={`${item.itemId}-${index}`}><p>{item.reason}</p>{item.evidence.length > 0 && <EvidenceButton evidence={item.evidence} onEvidence={setActiveEvidence} />}</li>)}</ul>
       </details>}
       {activeEvidence && <SourceEvidence source={kit.source} evidence={activeEvidence} onClose={() => setActiveEvidence(null)} />}

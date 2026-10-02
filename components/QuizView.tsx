@@ -5,11 +5,8 @@ import { ArrowLeft, ArrowRight, Check, CircleCheck, RotateCcw, X } from "lucide-
 import { Button } from "@/components/ui/button";
 import type { QuizQuestion, Topic } from "@/lib/schemas/studyMaterials";
 import { EvidenceButton, type EvidenceHandler } from "./SourceEvidence";
+import { useWorkspaceCopy } from "@/lib/i18n/workspace";
 import styles from "./study.module.css";
-
-const questionKinds: Record<QuizQuestion["kind"], string> = {
-  recall: "Recall", understanding: "Understanding", comparison: "Comparison", reasoning: "Reasoning",
-};
 
 export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, onReviewMistakes }: {
   questions: QuizQuestion[];
@@ -18,6 +15,7 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
   onWrongTopicsChange: (topicIds: string[]) => void;
   onReviewMistakes: () => void;
 }) {
+  const q = useWorkspaceCopy().quiz;
   const [current, setCurrent] = useState(0);
   const [selection, setSelection] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -58,18 +56,18 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
     if (index >= 0 && index < question.options.length) { event.preventDefault(); setSelection(index); }
   }
 
-  if (!question) return <p className={styles.emptyState}>No quiz questions in these materials.</p>;
+  if (!question) return <p className={styles.emptyState}>{q.none}</p>;
 
   if (finished) return (
     <div className={styles.quizResult} aria-live="polite">
       <CircleCheck size={32} strokeWidth={1.5} aria-hidden="true" />
-      <h3>Quiz complete</h3>
+      <h3>{q.complete}</h3>
       <ScoreRing score={score} total={questions.length} />
-      <p className={styles.muted}>{score} correct, {questions.length - score} incorrect</p>
-      {wrongTopics.length > 0 && <p className={styles.reviewTopics}>Topics to revisit: {wrongTopics.map((topic) => topic.title).join(", ")}</p>}
+      <p className={styles.muted}>{q.scoreLine(score, questions.length - score)}</p>
+      {wrongTopics.length > 0 && <p className={styles.reviewTopics}>{q.revisit(wrongTopics.map((topic) => topic.title).join(", "))}</p>}
       <div className={styles.actionRow}>
-        <Button type="button" variant="outline" onClick={retry}><RotateCcw aria-hidden="true" />Try again</Button>
-        {wrongTopics.length > 0 && <Button type="button" onClick={onReviewMistakes}>Review missed topics<ArrowRight aria-hidden="true" /></Button>}
+        <Button type="button" variant="outline" onClick={retry}><RotateCcw aria-hidden="true" />{q.tryAgain}</Button>
+        {wrongTopics.length > 0 && <Button type="button" onClick={onReviewMistakes}>{q.reviewMissed}<ArrowRight aria-hidden="true" /></Button>}
       </div>
     </div>
   );
@@ -77,10 +75,10 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
   return (
     <div className={styles.quiz} onKeyDown={handleKeys}>
       <div className={styles.studyToolbar}>
-        <p className={styles.muted}>Question {current + 1} of {questions.length}</p>
-        <span className={styles.questionKind}>{questionKinds[question.kind]}</span>
+        <p className={styles.muted}>{q.questionOf(current + 1, questions.length)}</p>
+        <span className={styles.questionKind}>{q.kinds[question.kind]}</span>
       </div>
-      <div className={styles.progress} role="progressbar" aria-label="Quiz progress" aria-valuemin={0} aria-valuemax={questions.length} aria-valuenow={Object.keys(answers).length}>
+      <div className={styles.progress} role="progressbar" aria-label={q.progressLabel} aria-valuemin={0} aria-valuemax={questions.length} aria-valuenow={Object.keys(answers).length}>
         <span style={{ transform: `scaleX(${questions.length ? Object.keys(answers).length / questions.length : 0})` }} />
       </div>
       <fieldset key={question.id} className={styles.question} disabled={Boolean(answered)}>
@@ -95,8 +93,8 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
                 <input type="radio" aria-label={option} name={`quiz-${question.id}`} value={index} checked={isSelected} onChange={() => setSelection(index)} />
                 <span className={styles.optionLetter} aria-hidden="true">{String.fromCharCode(65 + index)}</span>
                 <span className={styles.optionText}>{option}</span>
-                {isCorrect && <Check aria-label="Correct answer" size={18} />}
-                {isWrong && <X aria-label="Incorrect answer" size={18} />}
+                {isCorrect && <Check aria-label={q.correctAnswer} size={18} />}
+                {isWrong && <X aria-label={q.incorrectAnswer} size={18} />}
               </label>
             );
           })}
@@ -104,18 +102,18 @@ export function QuizView({ questions, topics, onEvidence, onWrongTopicsChange, o
       </fieldset>
       {answered && (
         <div className={`${styles.explanation} explanation-enter`} role="status">
-          <p className={styles.answerStatus}>{checkedAnswer === question.correctAnswer ? "Correct answer" : `Correct answer: ${String.fromCharCode(65 + question.correctAnswer)}`}</p>
+          <p className={styles.answerStatus}>{checkedAnswer === question.correctAnswer ? q.correctAnswer : q.correctAnswerIs(String.fromCharCode(65 + question.correctAnswer))}</p>
           <p>{question.explanation}</p>
           <EvidenceButton evidence={question.evidence} onEvidence={onEvidence} />
         </div>
       )}
       <div className={styles.quizActions}>
-        <Button type="button" variant="ghost" disabled={current === 0} onClick={() => goTo(current - 1)}><ArrowLeft aria-hidden="true" />Previous</Button>
+        <Button type="button" variant="ghost" disabled={current === 0} onClick={() => goTo(current - 1)}><ArrowLeft aria-hidden="true" />{q.previous}</Button>
         {answered ? <Button type="button" onClick={() => current === questions.length - 1 ? setFinished(true) : goTo(current + 1)}>
-          {current === questions.length - 1 ? "See results" : "Next question"}<ArrowRight aria-hidden="true" />
-        </Button> : <Button type="button" disabled={selection === null} onClick={submit}><Check aria-hidden="true" />Check answer</Button>}
+          {current === questions.length - 1 ? q.seeResults : q.nextQuestion}<ArrowRight aria-hidden="true" />
+        </Button> : <Button type="button" disabled={selection === null} onClick={submit}><Check aria-hidden="true" />{q.check}</Button>}
       </div>
-      {!answered && <p className={styles.keyHint} aria-hidden="true">Tip: press 1–{Math.min(question.options.length, 9)} to choose, then Check answer</p>}
+      {!answered && <p className={styles.keyHint} aria-hidden="true">{q.tip(Math.min(question.options.length, 9))}</p>}
     </div>
   );
 }

@@ -26,11 +26,8 @@ import type { ExamId } from '@/lib/prep/exams';
 import { GenerationSteps, MaterialsSkeleton } from './GenerationProgress';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
+import { generationErrorText, useWorkspaceCopy, type WorkspaceCopy } from "@/lib/i18n/workspace";
 
-const stages: Record<GenerationStage, string> = {
-  validating: "Validating lecture", analyzing: "Analyzing lecture", generating: "Generating study materials",
-  verifying: "Checking source evidence", correcting: "Refining study materials", complete: "Receiving final result",
-};
 const emptyDraft: StudySession = { id: "draft", title: "", lecture: "", outputLanguage: "auto", tab: "summary", kit: null, updatedAt: 0, customTitle: false };
 type Operation = { controller: AbortController; sessionId: string };
 const SIDEBAR_KEY = "lumina.sidebar.collapsed";
@@ -43,13 +40,18 @@ export type PrepRoute = { exam: ExamId | null };
  */
 export function StudyWorkspace({ prep, pricing = false, backgroundJobs = false }: { prep?: PrepRoute; pricing?: boolean; backgroundJobs?: boolean } = {}) {
   const { user, ready, verified, error, recheckIdentity } = useAuth();
-  if (!ready || !verified || error) return <main className="workspace-main"><div className="study-sync" role="status"><p>{error ? 'Account verification is unavailable. Your lectures are hidden until your account can be checked.' : 'Checking your account before opening lectures…'}</p><AccountMenu /></div></main>;
+  const w = useWorkspaceCopy();
+  if (!ready || !verified || error) return <main className="workspace-main"><div className="study-sync" role="status"><p>{error ? w.verifyUnavailable : w.verifyChecking}</p><AccountMenu /></div></main>;
   // Remount synchronously on identity changes: no frame can render the old account's data.
   return <AccountWorkspace key={user?.id ?? 'guest'} userId={user?.id ?? null} username={user?.username ?? null} refreshAuth={recheckIdentity} prep={prep} pricing={pricing} backgroundJobs={backgroundJobs} />;
 }
 
 function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgroundJobs }: { userId: string | null; username: string | null; refreshAuth: () => Promise<void>; prep?: PrepRoute; pricing: boolean; backgroundJobs: boolean }) {
   const otherView = Boolean(prep || pricing);
+  const w = useWorkspaceCopy();
+  // Progress messages are stored as keys so they follow a language change made mid-task.
+  const wRef = useRef<WorkspaceCopy>(w);
+  useEffect(() => { wRef.current = w; });
   const jobUserId = backgroundJobs ? userId : null;
   const router = useRouter();
   const sync = useStudyHistory(userId, refreshAuth);
@@ -71,7 +73,8 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
   const [importError, setImportError] = useState<string | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState("");
   
-  const [progress, setProgress] = useState("");
+  const [progressText, setProgress] = useState<string | ((copy: WorkspaceCopy) => string)>("");
+  const progress = typeof progressText === "function" ? progressText(w) : progressText;
   const [liveStage, setLiveStage] = useState<{ stage: GenerationStage | null; startedAt: number; done?: boolean } | null>(null);
   // Keep the finished checklist visible briefly so the user sees every step ticked off.
   useEffect(() => {
@@ -115,12 +118,12 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
     extraction.current?.abort(); extraction.current = null;
   }, []);
 
-  function cancel(message = "Generation canceled.") {
+  function cancel(message: string | ((copy: WorkspaceCopy) => string) = (copy) => copy.canceled) {
     operation.current?.controller.abort();
     operation.current = null;
     extraction.current?.abort(); extraction.current = null; setImporting(false);
     setPending(false); setLiveStage(null);
-    setProgress(message);
+    setProgress(() => message);
   }
 
   function updateSession(patch: Partial<Pick<StudySession, "title" | "lecture" | "outputLanguage" | "tab" | "customTitle">>) {
@@ -143,7 +146,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
     if (!ready || pending || importing || submitting) return;
     const controller = new AbortController(); extraction.current = controller;
     const targetId = historyRef.current.activeId;
-    setImportError(null); setError(null); setProgress("Extracting course content"); setImporting(true);
+    setImportError(null); setError(null); setProgress(() => (copy: WorkspaceCopy) => copy.extracting); setImporting(true);
     try {
       const response = await fetch("/api/extract-course", { method: "POST", body: form, signal: controller.signal });
       const responseText = await response.text();
@@ -151,19 +154,19 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
       let body: unknown = null;
       if (responseText) {
         try { body = JSON.parse(responseText); }
-        catch { throw new Error("The server returned an invalid response while extracting this course. Try again shortly."); }
+        catch { throw new Error(wRef.current.extractInvalidResponse); }
       }
-      const message = typeof body === "object" && body !== null && "error" in body && typeof body.error === "object" && body.error !== null && "message" in body.error && typeof body.error.message === "string" ? body.error.message : "Course content could not be extracted.";
+      const message = typeof body === "object" && body !== null && "error" in body && typeof body.error === "object" && body.error !== null && "message" in body.error && typeof body.error.message === "string" ? body.error.message : wRef.current.extractFailed;
       if (!response.ok) throw new Error(message);
-      if (typeof body !== "object" || body === null || !("text" in body) || !("title" in body) || typeof body.text !== "string" || typeof body.title !== "string") throw new Error("The extracted course content was invalid.");
+      if (typeof body !== "object" || body === null || !("text" in body) || !("title" in body) || typeof body.text !== "string" || typeof body.title !== "string") throw new Error(wRef.current.extractInvalid);
       updateSession({ lecture: body.text, title: active.customTitle ? active.title : body.title });
       setYoutubeUrl("");
-      setProgress("Course content imported. Review it, then generate materials.");
+      setProgress(() => (copy: WorkspaceCopy) => copy.imported);
       requestAnimationFrame(() => lectureInput.current?.focus());
     } catch (caught) {
       if (extraction.current !== controller) return;
       setProgress("");
-      setImportError(caught instanceof Error ? caught.message : "Course content could not be extracted.");
+      setImportError(caught instanceof Error ? caught.message : wRef.current.extractFailed);
     } finally { if (extraction.current === controller) { extraction.current = null; setImporting(false); } }
   }
 
@@ -175,7 +178,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
 
   function importYouTube() {
     const sourceUrl = youtubeUrl.trim();
-    if (!sourceUrl) { setImportError("Paste a YouTube link first."); return; }
+    if (!sourceUrl) { setImportError(w.pasteYoutubeFirst); return; }
     const form = new FormData(); form.set("youtubeUrl", sourceUrl);
     void importCourse(form);
   }
@@ -230,7 +233,7 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
     const validation = validateGenerationInput({ title: active.title, lecture: normalizedLecture, outputLanguage: active.outputLanguage });
     if (!validation.success) { setError(new GenerationClientError(validation.error.code, validation.error.retryable)); lectureInput.current?.focus(); return; }
     if (jobUserId) { setError(null); setProgress(''); task.create(); return; }
-    setError(null); setPending(true); setProgress("Sending lecture"); setLiveStage({ stage: null, startedAt: Date.now() });
+    setError(null); setPending(true); setProgress(() => (copy: WorkspaceCopy) => copy.sending); setLiveStage({ stage: null, startedAt: Date.now() });
     const current: Operation = { controller: new AbortController(), sessionId: active.id };
     operation.current = current;
     let timedOut = false;
@@ -240,21 +243,21 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
         signal: current.controller.signal,
         onEvent: (event) => {
           if (operation.current !== current) return;
-          if (event.type === "stage") { setProgress(stages[event.stage]); setLiveStage((value) => value && { ...value, stage: event.stage }); }
-          if (event.type === "retry") { setProgress(`${stages[event.stage]}: attempt ${event.attempt} of ${event.maxAttempts}`); setLiveStage((value) => value && { ...value, stage: event.stage }); }
+          if (event.type === "stage") { const stage = event.stage; setProgress(() => (copy: WorkspaceCopy) => copy.stages[stage]); setLiveStage((value) => value && { ...value, stage: event.stage }); }
+          if (event.type === "retry") { const { stage, attempt, maxAttempts } = event; setProgress(() => (copy: WorkspaceCopy) => copy.attempt(copy.stages[stage], attempt, maxAttempts)); setLiveStage((value) => value && { ...value, stage: event.stage }); }
         },
       });
       if (operation.current !== current) return;
       if (kit.source.text !== validation.data.lecture) throw new GenerationClientError("INVALID_RESPONSE", false);
       const latest = historyRef.current;
       save({ ...latest, sessions: latest.sessions.map((session) => session.id === current.sessionId ? { ...session, kit, tab: "summary", updatedAt: Date.now() } : session) });
-      setProgress("Study materials ready.");
+      setProgress(() => (copy: WorkspaceCopy) => copy.ready);
       void refreshBilling();
       setLiveStage((value) => value && { ...value, stage: "complete", done: true });
     } catch (caught) {
       if (operation.current !== current) return;
       if (timedOut) setError(new GenerationClientError("TIMEOUT", true));
-      else if (caught instanceof Error && caught.name === "AbortError") setProgress("Generation canceled.");
+      else if (caught instanceof Error && caught.name === "AbortError") setProgress(() => (copy: WorkspaceCopy) => copy.canceled);
       else setError(caught instanceof GenerationClientError ? caught : new GenerationClientError("NETWORK_ERROR", true));
     } finally {
       clearTimeout(timeout);
@@ -264,19 +267,19 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
 
   const sidebarProps = { sessions: history.sessions, activeId: history.activeId, onNew: newLecture, onSelect: selectLecture, onEdit: openEdit, onExport: sync.download, prepActive: Boolean(prep), pricingActive: pricing };
   return <div className={`study-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-    <aside className={`lecture-sidebar ${sidebarCollapsed ? "rail" : ""}`} aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} onClose={() => setSidebarCollapsed(true)} /></aside>
-    <dialog ref={mobileSidebar} className="mobile-sidebar" aria-label="Lecture history"><HistorySidebar {...sidebarProps} collapsed={false} onToggleCollapse={() => mobileSidebar.current?.close()} onClose={() => mobileSidebar.current?.close()} /></dialog>
+    <aside className={`lecture-sidebar ${sidebarCollapsed ? "rail" : ""}`} aria-label={w.lectureHistory}><HistorySidebar {...sidebarProps} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} onClose={() => setSidebarCollapsed(true)} /></aside>
+    <dialog ref={mobileSidebar} className="mobile-sidebar" aria-label={w.lectureHistory}><HistorySidebar {...sidebarProps} collapsed={false} onToggleCollapse={() => mobileSidebar.current?.close()} onClose={() => mobileSidebar.current?.close()} /></dialog>
     <div className="workspace">
       <header className="workspace-header"><div className="header-inner">
-        <button className="icon-button open-sidebar" type="button" title="Open sidebar" aria-label="Open sidebar" onClick={() => { if (matchMedia("(max-width: 767px)").matches) mobileSidebar.current?.showModal(); else setSidebarCollapsed(false); }}><PanelLeft aria-hidden="true" /></button>
-        <span className="workspace-title">{prep ? "Exam prep" : pricing ? "Plans" : active.title || "New lecture"}</span>
+        <button className="icon-button open-sidebar" type="button" title={w.openSidebar} aria-label={w.openSidebar} onClick={() => { if (matchMedia("(max-width: 767px)").matches) mobileSidebar.current?.showModal(); else setSidebarCollapsed(false); }}><PanelLeft aria-hidden="true" /></button>
+        <span className="workspace-title">{prep ? w.examPrep : pricing ? w.plans : active.title || w.newLecture}</span>
       </div></header>
       {prep ? <main className="workspace-main prep-main"><PrepArea exam={prep.exam} /></main> : pricing ? <main className="workspace-main prep-main"><PricingArea /></main> : <main className="workspace-main">
         <StudySyncStatus sync={sync} username={username} />
         <section className="input-section composer" aria-labelledby="input-heading">
           <div className="composer-intro">
-            <h1 id="input-heading">What are you studying today?</h1>
-            <p>Paste a lecture or import a file. Lumina turns it into a summary, key points, a quiz and flashcards, each linked back to the original text.</p>
+            <h1 id="input-heading">{w.heading}</h1>
+            <p>{w.intro}</p>
           </div>
           <form onSubmit={submit} noValidate aria-busy={pending || importing || backgroundBusy}>
             <div className="lecture-fields">
@@ -286,50 +289,50 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
                 onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
                 onDrop={(event) => { if (!event.dataTransfer.files.length) return; event.preventDefault(); setDragging(false); importFile(event.dataTransfer.files[0]); }}>
                 <fieldset className="composer-fields" disabled={!ready || pending || importing || submitting}>
-                <label className="sr-only" htmlFor="lecture-title">Lecture title (optional)</label>
-                <input className="composer-title" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder="Untitled lecture" />
-                <label className="sr-only" htmlFor="lecture">Lecture text</label>
-                <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder="Paste lecture notes, a transcript or an article here. At least a few paragraphs works best." />
+                <label className="sr-only" htmlFor="lecture-title">{w.titleLabel}</label>
+                <input className="composer-title" id="lecture-title" value={active.title} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => updateSession({ title: event.target.value, customTitle: true })} placeholder={w.titlePlaceholder} />
+                <label className="sr-only" htmlFor="lecture">{w.textLabel}</label>
+                <textarea id="lecture" ref={lectureInput} value={active.lecture} onChange={(event) => updateSession({ lecture: event.target.value })} maxLength={INPUT_LIMITS.maxCharacters} aria-describedby={error ? "lecture-count form-error" : "lecture-count"} placeholder={w.textPlaceholder} />
                 </fieldset>
                 <div className="composer-bar">
-                  <span id="lecture-count" className="composer-count">{countWords(active.lecture).toLocaleString("en-US")} words · {active.lecture.length.toLocaleString("en-US")} / 60,000</span>
+                  <span id="lecture-count" className="composer-count">{w.count(countWords(active.lecture).toLocaleString(w.numberLocale), active.lecture.length.toLocaleString(w.numberLocale), INPUT_LIMITS.maxCharacters.toLocaleString(w.numberLocale))}</span>
                   <div className="composer-actions">
                     <CustomLanguageSelect value={active.outputLanguage} disabled={!ready || pending || importing || submitting} onChange={(val) => updateSession({ outputLanguage: val })} />
-                    {pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />Cancel</Button> : null}
-                    <Button type="submit" className="composer-submit" disabled={!ready || pending || importing || Boolean(jobUserId && task.blocked)}>{pending || importing || backgroundBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : displayedKit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? "Importing" : task.action === 'saving' ? 'Saving lecture' : task.restoring ? 'Checking tasks' : pending || backgroundBusy ? "Generating" : displayedKit ? "Regenerate materials" : "Generate materials"}</Button>
+                    {pending ? <Button type="button" variant="outline" onClick={() => cancel()}><Square aria-hidden="true" />{w.cancel}</Button> : null}
+                    <Button type="submit" className="composer-submit" disabled={!ready || pending || importing || Boolean(jobUserId && task.blocked)}>{pending || importing || backgroundBusy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : displayedKit ? <RotateCcw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{importing ? w.importing : task.action === 'saving' ? w.savingLecture : task.restoring ? w.checkingTasks : pending || backgroundBusy ? w.generating : displayedKit ? w.regenerate : w.generate}</Button>
                   </div>
                 </div>
-                {dragging && <div className="composer-drop" aria-hidden="true"><Upload />Drop to import this file</div>}
+                {dragging && <div className="composer-drop" aria-hidden="true"><Upload />{w.dropToImport}</div>}
               </div>
-              <fieldset className="course-import" aria-label="Import course source" disabled={!ready || pending || importing || submitting}>
-                <span className="course-import-label">Or import from</span>
+              <fieldset className="course-import" aria-label={w.importSource} disabled={!ready || pending || importing || submitting}>
+                <span className="course-import-label">{w.orImportFrom}</span>
                 <div className="file-dropzone">
                   <input ref={courseFileInput} id="course-file" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={(event) => { importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-                  <label htmlFor="course-file"><FileText aria-hidden="true" />A file <span>PDF, PPTX, DOCX, TXT, MD · 15 MB</span></label>
+                  <label htmlFor="course-file"><FileText aria-hidden="true" />{w.aFile} <span>PDF, PPTX, DOCX, TXT, MD · 15 MB</span></label>
                 </div>
-                <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">YouTube video link</label><Link aria-hidden="true" /><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); importYouTube(); } }} placeholder="A YouTube link with captions" inputMode="url" /><Button type="button" variant="ghost" onClick={importYouTube} title="Import YouTube captions">Import captions</Button></div>
+                <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">{w.youtubeLabel}</label><Link aria-hidden="true" /><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); importYouTube(); } }} placeholder={w.youtubePlaceholder} inputMode="url" /><Button type="button" variant="ghost" onClick={importYouTube} title={w.importCaptionsTitle}>{w.importCaptions}</Button></div>
               </fieldset>
             </div>
-            {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{error.message}{error.retryable && " Your lecture is still here. Try generating again."}{error.code === 'LOGIN_REQUIRED' && <> <NextLink className="notice-link" href="/login">Sign in or create an account</NextLink></>}{(error.code === "PLAN_LIMIT" || error.code === "PRO_REQUIRED") && <> <NextLink className="notice-link" href="/pricing">See plans</NextLink></>}</p></div>}
+            {error && <div id="form-error" className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{generationErrorText(w, error)}{error.retryable && w.stillHere}{error.code === 'LOGIN_REQUIRED' && <> <NextLink className="notice-link" href="/login">{w.signInOrCreate}</NextLink></>}{(error.code === "PLAN_LIMIT" || error.code === "PRO_REQUIRED") && <> <NextLink className="notice-link" href="/pricing">{w.seePlans}</NextLink></>}</p></div>}
             {importError && <div className="notice error" role="alert"><AlertCircle aria-hidden="true" /><p>{importError}</p></div>}
-            <div className="form-footer"><span>{userId ? 'Your lectures sync with your account' : 'Guest workspace · saved on this device only'}<UsageHint /></span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
+            <div className="form-footer"><span>{userId ? w.syncAccount : w.guestWorkspace}<UsageHint /></span><span className="processing-status" role="status">{pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : progress && !error ? <Check aria-hidden="true" /> : null}<span className={pending && !error ? "shimmer-text" : undefined}>{error ? "" : progress}</span></span></div>
             {liveStage && (pending || liveStage.done) && <div className="gen-progress"><GenerationSteps stage={liveStage.stage} startedAt={liveStage.startedAt} running={!liveStage.done} /></div>}
           </form>
           {jobUserId && <GenerationJobStatus task={task} />}
         </section>
-        {staleKit && <div className="notice warning" role="status"><AlertCircle aria-hidden="true" /><p>These materials are from the previous version of this lecture. Regenerate to update them.</p></div>}
-        {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : pending || (jobUserId && isActiveJob(task.job)) ? <MaterialsSkeleton /> : <section className="empty-materials" aria-labelledby="empty-heading"><h2 id="empty-heading">No study materials yet</h2><p className="empty-lead">Here is what you will get once you generate:</p><ul className="empty-grid">
-          <li><BookOpen aria-hidden="true" /><strong>Summary</strong><span>An overview and the main sections in plain language.</span></li>
-          <li><ListChecks aria-hidden="true" /><strong>Key points</strong><span>The ideas worth remembering, marked by importance.</span></li>
-          <li><CircleHelp aria-hidden="true" /><strong>Quiz</strong><span>Multiple-choice questions with explanations.</span></li>
-          <li><Layers aria-hidden="true" /><strong>Flashcards</strong><span>Cards to flip, with a review mode for mistakes.</span></li>
-        </ul><p className="empty-foot">Every item links to the sentence it came from, so you can check it.</p></section>}
+        {staleKit && <div className="notice warning" role="status"><AlertCircle aria-hidden="true" /><p>{w.stale}</p></div>}
+        {displayedKit ? <StudyDashboard key={`${active.id}:${displayedKit.runId}`} kit={displayedKit} tab={active.tab} onTabChange={(tab: SessionTab) => updateSession({ tab })} /> : pending || (jobUserId && isActiveJob(task.job)) ? <MaterialsSkeleton /> : <section className="empty-materials" aria-labelledby="empty-heading"><h2 id="empty-heading">{w.emptyTitle}</h2><p className="empty-lead">{w.emptyLead}</p><ul className="empty-grid">
+          <li><BookOpen aria-hidden="true" /><strong>{w.emptyItems.summary[0]}</strong><span>{w.emptyItems.summary[1]}</span></li>
+          <li><ListChecks aria-hidden="true" /><strong>{w.emptyItems.keyPoints[0]}</strong><span>{w.emptyItems.keyPoints[1]}</span></li>
+          <li><CircleHelp aria-hidden="true" /><strong>{w.emptyItems.quiz[0]}</strong><span>{w.emptyItems.quiz[1]}</span></li>
+          <li><Layers aria-hidden="true" /><strong>{w.emptyItems.flashcards[0]}</strong><span>{w.emptyItems.flashcards[1]}</span></li>
+        </ul><p className="empty-foot">{w.emptyFoot}</p></section>}
       </main>}
     </div>
     <dialog className="history-dialog" ref={editDialog} aria-labelledby="edit-title" onClose={() => setEdit(null)}>
-      <form onSubmit={submitEdit}><h2 id="edit-title">{edit?.action === "delete" ? "Delete lecture?" : "Rename lecture"}</h2>
-        {edit?.action === "delete" ? <p>{userId ? 'This deletes the lecture and its study materials from your account on all devices. If syncing fails, the deletion remains pending until you retry.' : 'This removes the lecture and its study materials from this device.'}</p> : <><label className="sr-only" htmlFor="rename-title">Lecture title</label><input className="text-field" id="rename-title" value={rename} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => setRename(event.target.value)} required /></>}
-        <div className="dialog-actions"><Button type="button" variant="outline" onClick={() => editDialog.current?.close()}>Cancel</Button><Button type="submit" disabled={edit?.action === "rename" && !rename.trim()}>{edit?.action === "delete" ? "Delete" : "Save"}</Button></div>
+      <form onSubmit={submitEdit}><h2 id="edit-title">{edit?.action === "delete" ? w.deleteTitle : w.renameTitle}</h2>
+        {edit?.action === "delete" ? <p>{userId ? w.deleteAccount : w.deleteDevice}</p> : <><label className="sr-only" htmlFor="rename-title">{w.titleLabelPlain}</label><input className="text-field" id="rename-title" value={rename} maxLength={INPUT_LIMITS.maxTitleCharacters} onChange={(event) => setRename(event.target.value)} required /></>}
+        <div className="dialog-actions"><Button type="button" variant="outline" onClick={() => editDialog.current?.close()}>{w.cancel}</Button><Button type="submit" disabled={edit?.action === "rename" && !rename.trim()}>{edit?.action === "delete" ? w.delete : w.save}</Button></div>
       </form>
     </dialog>
   </div>;

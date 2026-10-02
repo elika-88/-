@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { BookOpen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Evidence, StudyKit } from "@/lib/schemas/studyMaterials";
+import { useWorkspaceCopy } from "@/lib/i18n/workspace";
 import styles from "./study.module.css";
 
 export type EvidenceHandler = (evidence: Evidence[]) => void;
@@ -12,9 +13,10 @@ export function EvidenceButton({ evidence, onEvidence }: {
   evidence: Evidence[];
   onEvidence: EvidenceHandler;
 }) {
+  const s = useWorkspaceCopy().source;
   return (
     <Button type="button" variant="ghost" className={styles.evidenceButton} onClick={() => onEvidence(evidence)}>
-      <BookOpen aria-hidden="true" />View source{evidence.length > 1 ? ` (${evidence.length})` : ""}
+      <BookOpen aria-hidden="true" />{s.view(evidence.length)}
     </Button>
   );
 }
@@ -24,6 +26,7 @@ export function SourceEvidence({ source, evidence, onClose }: {
   evidence: Evidence[];
   onClose: () => void;
 }) {
+  const s = useWorkspaceCopy().source;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const quoteRef = useRef<HTMLElement>(null);
   const [selected, setSelected] = useState(0);
@@ -66,25 +69,25 @@ export function SourceEvidence({ source, evidence, onClose }: {
     >
       <header className={styles.dialogHeader}>
         <div>
-          <p className={styles.eyebrow}>LECTURE SOURCE</p>
-          <h2 id={titleId}>Lecture source</h2>
+          <p className={styles.eyebrow}>{s.eyebrow}</p>
+          <h2 id={titleId}>{s.title}</h2>
         </div>
-        <Button type="button" variant="ghost" size="icon" aria-label="Close source" title="Close source" onClick={onClose}>
+        <Button type="button" variant="ghost" size="icon" aria-label={s.close} title={s.close} onClick={onClose}>
           <X aria-hidden="true" />
         </Button>
       </header>
       {evidence.length > 1 && (
-        <div className={styles.citationList} aria-label="Source citations">
+        <div className={styles.citationList} aria-label={s.citations}>
           {evidence.map((item, index) => (
             <Button type="button" key={`${item.segmentId}-${index}`} variant={index === selected ? "default" : "outline"} aria-pressed={index === selected} onClick={() => setSelected(index)}>
-              Source {index + 1}
+              {s.item(index + 1)}
             </Button>
           ))}
         </div>
       )}
       {quoteStart < 0 && (
         <div className={styles.sourceWarning} role="status">
-          <p>This citation could not be located exactly. Check it against the full lecture below.</p>
+          <p>{s.notLocated}</p>
           {citation && <blockquote>{citation.quote}</blockquote>}
         </div>
       )}

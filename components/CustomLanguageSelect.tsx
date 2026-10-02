@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check, Languages } from "lucide-react";
 import type { OutputLanguage } from "@/lib/input";
+import { useWorkspaceCopy } from "@/lib/i18n/workspace";
 
 type Props = {
   value: OutputLanguage;
@@ -10,18 +11,14 @@ type Props = {
   onChange: (val: OutputLanguage) => void;
 };
 
-const OPTIONS: { value: OutputLanguage; label: string; flag?: string }[] = [
-  { value: "auto", label: "Match lecture" },
-  { value: "en", label: "English" },
-  { value: "zh", label: "中文 (Chinese)" },
-  { value: "ru", label: "Русский (Russian)" },
-];
+const OPTIONS: OutputLanguage[] = ["auto", "en", "zh", "ru"];
 
 export function CustomLanguageSelect({ value, disabled, onChange }: Props) {
+  const w = useWorkspaceCopy();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selected = OPTIONS.find((o) => o.value === value) || OPTIONS[0];
+  const selected = OPTIONS.includes(value) ? value : OPTIONS[0];
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -37,7 +34,7 @@ export function CustomLanguageSelect({ value, disabled, onChange }: Props) {
     <div className="gpt-custom-select-container" ref={dropdownRef}>
       <label className="gpt-custom-select-label">
         <Languages size={14} />
-        <span>Output language</span>
+        <span>{w.outputLanguage}</span>
       </label>
 
       <button
@@ -48,7 +45,7 @@ export function CustomLanguageSelect({ value, disabled, onChange }: Props) {
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="gpt-select-text">{selected.label}</span>
+        <span className="gpt-select-text">{w.outputOptions[selected]}</span>
         <ChevronDown size={15} className={`gpt-select-arrow ${open ? "rotate" : ""}`} />
       </button>
 
@@ -56,17 +53,17 @@ export function CustomLanguageSelect({ value, disabled, onChange }: Props) {
         <ul className="gpt-custom-select-menu" role="listbox">
           {OPTIONS.map((opt) => (
             <li
-              key={opt.value}
+              key={opt}
               role="option"
-              aria-selected={opt.value === value}
-              className={`gpt-custom-select-item ${opt.value === value ? "selected" : ""}`}
+              aria-selected={opt === value}
+              className={`gpt-custom-select-item ${opt === value ? "selected" : ""}`}
               onClick={() => {
-                onChange(opt.value);
+                onChange(opt);
                 setOpen(false);
               }}
             >
-              <span>{opt.label}</span>
-              {opt.value === value && <Check size={14} className="gpt-check-icon" />}
+              <span>{w.outputOptions[opt]}</span>
+              {opt === value && <Check size={14} className="gpt-check-icon" />}
             </li>
           ))}
         </ul>
