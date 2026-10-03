@@ -11,6 +11,8 @@ import { withDatabase } from '@/lib/server/database';
 
 let directory: string;
 let sentToken = '';
+let sentReset = '';
+let sentEmails = 0;
 const password = 'Unit-test-password-48!';
 const account = { action: 'register', username: 'Alice', email: 'alice@example.invalid', password };
 function request(body?: unknown, cookie = '', path = '/api/auth', method = body ? 'POST' : 'GET') {
@@ -34,10 +36,12 @@ beforeEach(() => {
   vi.stubEnv('APP_BASE_URL', 'https://lumina.test');
   vi.stubEnv('RESEND_API_KEY', 're_test');
   vi.stubEnv('RESEND_FROM_EMAIL', 'no-reply@example.invalid');
-  sentToken = '';
+  sentToken = ''; sentReset = ''; sentEmails = 0;
   vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? '{}')) as { text?: string };
-    sentToken = body.text?.match(/https:\/\/lumina\.test\/verify-email#token=([a-f0-9]{64})/)?.[1] ?? '';
+    sentEmails += 1;
+    sentToken = body.text?.match(/https:\/\/lumina\.test\/verify-email#token=([a-f0-9]{64})/)?.[1] ?? sentToken;
+    sentReset = body.text?.match(/https:\/\/lumina\.test\/reset-password#token=([a-f0-9]{64})/)?.[1] ?? sentReset;
     return new Response(JSON.stringify({ id: 'email-test' }), { status: 200, headers: { 'content-type': 'application/json' } });
   }));
 });
@@ -239,5 +243,51 @@ describe('account study record isolation and concurrent edits', () => {
     expect((await remove(request({ id: session.id, expectedRevision: 2 }, alice.cookie, path, 'DELETE'))).status).toBe(200);
     expect((await save(request({ session, expectedRevision: 3 }, alice.cookie, path, 'PUT'))).status).toBe(409);
     expect((await (await list(request(undefined, alice.cookie, path))).json()).sessions).toEqual([]);
+  });
+});
+
+describe('password reset', () => {
+  it('emails a one-time link only for existing accounts, sets the new password and signs out other devices', async () => {
+    const { user, cookie } = await register();
+    const before = sentEmails;
+    const unknown = await POST(request({ action: 'request-reset', email: 'nobody@example.invalid' }));
+    expect(unknown.status).toBe(202);
+    const unknownBody = await unknown.json();
+    expect(sentEmails).toBe(before);
+    const known = await POST(request({ action: 'request-reset', email: user.email.toUpperCase(), language: 'zh' }));
+    expect(known.status).toBe(202);
+    expect(await known.json()).toEqual(unknownBody);
+    expect(sentReset).toMatch(/^[a-f0-9]{64}$/);
+
+    const reset = await POST(request({ action: 'reset-password', token: sentReset, password: 'A-brand-new-password-9' }));
+    expect(reset.status).toBe(200);
+    expect(reset.headers.get('set-cookie')).toContain('HttpOnly');
+    expect((await (await GET(request(undefined, cookie))).json()).user).toBeNull();
+    expect((await POST(request({ action: 'login', identifier: user.username, password }))).status).toBe(401);
+    expect((await POST(request({ action: 'login', identifier: user.username, password: 'A-brand-new-password-9' }))).status).toBe(200);
+
+    const reused = await POST(request({ action: 'reset-password', token: sentReset, password: 'Another-password-77' }));
+    expect(reused.status).toBe(400);
+    expect((await reused.json()).code).toBe('INVALID_RESET');
+  });
+
+  it('replaces older reset links and rejects malformed or unknown tokens', async () => {
+    const { user } = await register();
+    await POST(request({ action: 'request-reset', email: user.email }));
+    const first = sentReset;
+    await POST(request({ action: 'request-reset', email: user.email }));
+    expect(sentReset).not.toBe(first);
+    expect((await (await POST(request({ action: 'reset-password', token: first, password: 'Whatever-password-1' }))).json()).code).toBe('INVALID_RESET');
+    expect((await POST(request({ action: 'reset-password', token: 'b'.repeat(64), password: 'Whatever-password-1' }))).status).toBe(400);
+    expect((await POST(request({ action: 'reset-password', token: 'not-a-token', password: 'Whatever-password-1' }))).status).toBe(400);
+    expect((await POST(request({ action: 'reset-password', token: sentReset, password: 'short' }))).status).toBe(400);
+  });
+
+  it('limits reset requests for an email address', async () => {
+    const { user } = await register();
+    for (let i = 0; i < 5; i += 1) expect((await POST(request({ action: 'request-reset', email: user.email }))).status).toBe(202);
+    const limited = await POST(request({ action: 'request-reset', email: user.email }));
+    expect(limited.status).toBe(429);
+    expect((await limited.json()).code).toBe('RATE_LIMITED');
   });
 });

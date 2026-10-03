@@ -55,9 +55,19 @@ function writeSetting(key: string, value: string) {
   window.dispatchEvent(new Event(SETTINGS_EVENT));
 }
 
+// First visit: follow the browser's preferred language until the user picks one.
+function browserLanguage(): SupportedLanguage {
+  const preferred = typeof navigator === "undefined" ? [] : navigator.languages?.length ? navigator.languages : [navigator.language];
+  for (const tag of preferred) {
+    const base = tag?.toLowerCase().split("-")[0];
+    if (base === "zh" || base === "ru" || base === "kk" || base === "en") return base;
+  }
+  return "en";
+}
+
 function getLanguage(): SupportedLanguage {
   const value = readSetting(LANGUAGE_KEY);
-  return value === "en" || value === "zh" || value === "ru" || value === "kk" ? value : "en";
+  return value === "en" || value === "zh" || value === "ru" || value === "kk" ? value : browserLanguage();
 }
 
 function getTheme(): ThemeMode {
