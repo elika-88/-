@@ -49,7 +49,11 @@ async function mockBilling(page: Page) {
 test('an approved subscription survives failure and reload, then syncs without another checkout', async ({ page }) => {
   const state = await mockBilling(page);
   await page.goto('/pricing');
-  await page.getByRole('button', { name: 'Mock PayPal subscribe' }).first().click();
+  // PayPal buttons live in the checkout dialog that the plan card's own button opens.
+  await page.getByRole('button', { name: 'Subscribe to Basic', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Basic · Yearly' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mock PayPal subscribe' }).click();
+  await expect(page.getByRole('dialog', { name: 'Basic · Yearly' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Sync existing subscription (no new payment)', exact: true }).first()).toBeEnabled();
   await expect(page.getByRole('alert').filter({ hasText: 'PayPal approval was received' })).toContainText('Do not pay again');
   await expect(page.getByRole('button', { name: 'Mock PayPal subscribe' })).toHaveCount(0);
@@ -82,7 +86,7 @@ test('does not show another account’s pending subscription or allow a plan ID 
   const state = await mockBilling(page);
   await page.addInitScript(() => localStorage.setItem('lumina:pending-paypal:another-account', 'I-PRIVATE123'));
   await page.goto('/pricing');
-  await expect(page.getByRole('button', { name: 'Mock PayPal subscribe' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Subscribe to Basic', exact: true })).toBeVisible();
   await expect(page.getByText('I-PRIVATE123', { exact: false })).toHaveCount(0);
   await page.locator('summary').filter({ hasText: 'Already paid? Restore your subscription' }).click();
   await page.getByLabel('PayPal subscription ID', { exact: true }).fill('P-NOTASUBSCRIPTION');

@@ -1960,6 +1960,12 @@ html:root :is(.gpt-auth-submit, .gpt-settings-done-btn, .gpt-pill-btn.primary) {
 html:root :is(.gpt-auth-submit:hover, .gpt-settings-done-btn:hover, .gpt-pill-btn.primary:hover:not(:disabled)) { background: var(--primary); opacity: .92; }
 html:root .gpt-auth-box { max-width: 400px; }
 .account-back { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 13px; margin-bottom: 28px; }
+.account-top { width: 100%; max-width: 400px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
+.account-top .account-back { margin-bottom: 0; }
+.account-lang select { height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--foreground); font-size: 13px; }
+.account-lang select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.account-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.account-forgot { font-size: 12.5px; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .account-password { position: relative; }
 .account-password input { padding-right: 50px; }
 .account-password button { position: absolute; inset: 3px 3px 3px auto; width: 42px; display: grid; place-items: center; border-radius: 6px; color: var(--muted-foreground); }

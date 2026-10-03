@@ -16,7 +16,7 @@ test('restores real preferences without showing demo account or disconnected set
   await expect(page.locator('html')).toHaveClass(/dark/);
   await expect(page.getByText('Old Demo User', { exact: true })).toHaveCount(0);
   await expect(page.locator('.study-shell')).toBeVisible();
-  const open = page.getByRole('button', { name: 'Open sidebar', exact: true });
+  const open = page.getByRole('button', { name: '打开侧边栏', exact: true });
   if (await open.isVisible()) await open.click();
   await page.getByRole('button', { name: '设置', exact: true }).click();
   const settings = page.locator('.gpt-settings-dialog').filter({ visible: true });

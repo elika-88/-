@@ -56,7 +56,9 @@ export function SettingsModal({ isOpen, onClose, onExport }: Props) {
   };
 
   // Render at <body> so the dialog is never trapped under the sidebar's stacking
-  // context or covered by third-party iframes such as the PayPal buttons.
+  // context or covered by third-party iframes such as the PayPal buttons. When a
+  // modal <dialog> is open (the mobile sidebar), it sits in the top layer above
+  // <body>, so render inside it instead or it would cover the settings.
   return createPortal(
     <div className="gpt-settings-backdrop" onClick={onClose}>
       <div className="gpt-settings-dialog" onClick={(e) => e.stopPropagation()}>
@@ -174,6 +176,18 @@ export function SettingsModal({ isOpen, onClose, onExport }: Props) {
         </div>
       </div>
     </div>,
-    document.body,
+    topModalDialog() ?? document.body,
   );
+}
+
+function topModalDialog(): HTMLDialogElement | null {
+  const open = Array.from(document.querySelectorAll<HTMLDialogElement>("dialog[open]"));
+  for (let i = open.length - 1; i >= 0; i--) {
+    try {
+      if (open[i].matches(":modal")) return open[i];
+    } catch {
+      return null; // :modal unsupported
+    }
+  }
+  return null;
 }

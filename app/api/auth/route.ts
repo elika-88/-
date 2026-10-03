@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { AccountError, AuthRequestSchema, getUserFromRequest, loginUser, logoutUser, readAccountJson, registerUser, requireSameOrigin, USER_COOKIE, USER_SESSION_SECONDS } from '@/lib/server/user-auth';
+import { AccountError, AuthRequestSchema, getUserFromRequest, loginUser, logoutUser, readAccountJson, registerUser, requestPasswordReset, requireSameOrigin, resetPassword, USER_COOKIE, USER_SESSION_SECONDS } from '@/lib/server/user-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,6 +30,16 @@ export async function POST(request: Request) {
     if (input.action === 'register') {
       await registerUser(input, request);
       return json({ pendingVerification: true, message: 'If this address can be registered, check its inbox for a verification link.' }, 202);
+    }
+    if (input.action === 'request-reset') {
+      await requestPasswordReset(input, request);
+      return json({ sent: true, message: 'If an account uses this email, a reset link is on its way.' }, 202);
+    }
+    if (input.action === 'reset-password') {
+      const reset = await resetPassword(input.token, input.password);
+      const response = json({ user: reset.user });
+      response.cookies.set(USER_COOKIE, reset.token, { ...cookieOptions, maxAge: USER_SESSION_SECONDS });
+      return response;
     }
     const result = await loginUser(input.identifier, input.password, request);
     const response = json({ user: result.user });

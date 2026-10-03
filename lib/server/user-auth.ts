@@ -5,22 +5,28 @@ import type { Client, Row, Transaction } from '@libsql/client';
 import { z } from 'zod';
 import type { UserProfile } from '@/lib/contracts/auth';
 import { withDatabase } from '@/lib/server/database';
-import { requireVerificationEmailConfiguration, sendVerificationEmail } from '@/lib/server/verification-email';
+import { requireVerificationEmailConfiguration, sendPasswordResetEmail, sendVerificationEmail, type EmailLanguage } from '@/lib/server/verification-email';
 
 export const USER_COOKIE = 'lumina_user';
 export const USER_SESSION_SECONDS = 7 * 24 * 60 * 60;
 const LOGIN_WINDOW = 15 * 60 * 1000;
 const REGISTER_WINDOW = 60 * 60 * 1000;
 const VERIFICATION_WINDOW = 30 * 60 * 1000;
+const RESET_WINDOW = 30 * 60 * 1000;
+const RESET_LIMIT_WINDOW = 60 * 60 * 1000;
 const usernameSchema = z.string().transform((value) => value.normalize('NFKC').trim())
   .pipe(z.string().min(3).max(32).regex(/^[\p{L}\p{M}\p{N}_.-]+$/u));
 const emailSchema = z.string().transform((value) => value.normalize('NFKC').trim().toLowerCase())
   .pipe(z.string().email().max(254));
 const passwordSchema = z.string().min(8).max(128);
+const languageSchema = z.enum(['en', 'zh', 'ru', 'kk']).optional();
+const tokenSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const AuthRequestSchema = z.discriminatedUnion('action', [
-  z.strictObject({ action: z.literal('register'), username: usernameSchema, email: emailSchema }),
+  z.strictObject({ action: z.literal('register'), username: usernameSchema, email: emailSchema, language: languageSchema }),
   z.strictObject({ action: z.literal('login'), identifier: z.string().min(1).max(254), password: z.string().min(1).max(128) }),
   z.strictObject({ action: z.literal('logout') }),
+  z.strictObject({ action: z.literal('request-reset'), email: emailSchema, language: languageSchema }),
+  z.strictObject({ action: z.literal('reset-password'), token: tokenSchema, password: passwordSchema }),
 ]);
 
 export class AccountError extends Error {
@@ -47,6 +53,11 @@ export async function initializeUserTables(db: Client) {
       email TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
       expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS password_resets (
+      token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+      expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+    )`,
+    'CREATE INDEX IF NOT EXISTS password_resets_owner ON password_resets(user_id)',
   ], 'write');
 }
 
@@ -119,7 +130,7 @@ async function issueSession(tx: Transaction, userId: string) {
   return token;
 }
 
-export async function registerUser(input: { username: string; email: string }, request: Request) {
+export async function registerUser(input: { username: string; email: string; language?: EmailLanguage }, request: Request) {
   const parsed = AuthRequestSchema.safeParse({ ...input, action: 'register' });
   if (!parsed.success || parsed.data.action !== 'register') throw new AccountError('INVALID_REQUEST', 'Use a 3–32 character username and a valid email.', 400);
   try { requireVerificationEmailConfiguration(); }
@@ -151,7 +162,7 @@ export async function registerUser(input: { username: string; email: string }, r
     } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
   });
   if (pending) {
-    try { await sendVerificationEmail(email, verificationToken); }
+    try { await sendVerificationEmail(email, verificationToken, parsed.data.language); }
     catch {
       await withDatabase(async (db) => db.execute({ sql: 'DELETE FROM pending_registrations WHERE token_hash = ?', args: [digest(verificationToken)] }));
       throw new AccountError('EMAIL_UNAVAILABLE', 'Verification email could not be sent. Try again later.', 503);
@@ -191,6 +202,77 @@ export async function verifyEmailToken(token: string, password: string) {
         throw new AccountError('INVALID_VERIFICATION', 'This verification link is no longer valid. Register again.', 400);
       }
       throw error;
+    } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
+  });
+}
+
+/**
+ * Starts a password reset. The response never says whether the email has an account;
+ * an email goes out only when it does. Earlier unused links for that account stop working.
+ */
+export async function requestPasswordReset(input: { email: string; language?: EmailLanguage }, request: Request) {
+  const parsed = AuthRequestSchema.safeParse({ ...input, action: 'request-reset' });
+  if (!parsed.success || parsed.data.action !== 'request-reset') throw new AccountError('INVALID_REQUEST', 'Enter a valid email address.', 400);
+  try { requireVerificationEmailConfiguration(); }
+  catch { throw new AccountError('EMAIL_UNAVAILABLE', 'Password reset email is unavailable. Contact the site administrator.', 503); }
+  const address = authClientAddress(request);
+  const { email, language } = parsed.data;
+  await reserveAttempt([
+    { key: `reset:email:${identityKey(email)}`, limit: 5, window: RESET_LIMIT_WINDOW },
+    ...(address ? [{ key: `reset:ip:${address}`, limit: 20, window: RESET_LIMIT_WINDOW }] : []),
+  ]);
+  const resetToken = randomBytes(32).toString('hex');
+  const user = await withDatabase(async (db) => {
+    await initializeUserTables(db);
+    const tx = await db.transaction('write');
+    try {
+      const now = Date.now();
+      await tx.execute({ sql: 'DELETE FROM password_resets WHERE expires_at <= ?', args: [now] });
+      const row = (await tx.execute({ sql: 'SELECT id, email FROM app_users WHERE email_key = ?', args: [identityKey(email)] })).rows[0];
+      if (!row) { await tx.commit(); return null; }
+      await tx.execute({ sql: 'DELETE FROM password_resets WHERE user_id = ?', args: [row.id] });
+      await tx.execute({
+        sql: 'INSERT INTO password_resets (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
+        args: [digest(resetToken), row.id, now + RESET_WINDOW, now],
+      });
+      await tx.commit();
+      return { id: String(row.id), email: String(row.email) };
+    } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
+  });
+  if (user) {
+    try { await sendPasswordResetEmail(user.email, resetToken, language); }
+    catch {
+      await withDatabase(async (db) => db.execute({ sql: 'DELETE FROM password_resets WHERE token_hash = ?', args: [digest(resetToken)] }));
+      throw new AccountError('EMAIL_UNAVAILABLE', 'The reset email could not be sent. Try again later.', 503);
+    }
+  }
+  return { sent: true as const };
+}
+
+/** Sets a new password from a one-time link, signs out every other session and signs this browser in. */
+export async function resetPassword(token: string, password: string) {
+  if (!tokenSchema.safeParse(token).success) throw new AccountError('INVALID_RESET', 'This reset link is invalid or expired. Request a new one.', 400);
+  if (!passwordSchema.safeParse(password).success) throw new AccountError('INVALID_REQUEST', 'Use an 8–128 character password.', 400);
+  const exists = await withDatabase(async (db) => {
+    await initializeUserTables(db);
+    return (await db.execute({ sql: 'SELECT 1 FROM password_resets WHERE token_hash = ? AND expires_at > ?', args: [digest(token), Date.now()] })).rows.length > 0;
+  });
+  if (!exists) throw new AccountError('INVALID_RESET', 'This reset link is invalid or expired. Request a new one.', 400);
+  const passwordHash = await hashPassword(password);
+  return withDatabase(async (db) => {
+    const tx = await db.transaction('write');
+    try {
+      const reset = (await tx.execute({ sql: 'SELECT user_id FROM password_resets WHERE token_hash = ? AND expires_at > ?', args: [digest(token), Date.now()] })).rows[0];
+      if (!reset) throw new AccountError('INVALID_RESET', 'This reset link is invalid or expired. Request a new one.', 400);
+      const row = (await tx.execute({ sql: 'SELECT * FROM app_users WHERE id = ?', args: [reset.user_id] })).rows[0];
+      if (!row) throw new AccountError('INVALID_RESET', 'This reset link is invalid or expired. Request a new one.', 400);
+      await tx.execute({ sql: 'UPDATE app_users SET password_hash = ? WHERE id = ?', args: [passwordHash, row.id] });
+      await tx.execute({ sql: 'DELETE FROM password_resets WHERE user_id = ?', args: [row.id] });
+      await tx.execute({ sql: 'DELETE FROM user_sessions WHERE user_id = ?', args: [row.id] });
+      await tx.execute({ sql: 'DELETE FROM user_auth_limits WHERE bucket = ?', args: [digest(`login:user:${row.id}`)] });
+      const session = await issueSession(tx, String(row.id));
+      await tx.commit();
+      return { user: profile(row), token: session };
     } finally { if (!tx.closed) await tx.rollback(); tx.close(); }
   });
 }
