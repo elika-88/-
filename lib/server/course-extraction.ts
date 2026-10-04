@@ -1,12 +1,9 @@
 import "server-only";
 import { normalizeLectureText } from "@/lib/input";
+import { COURSE_FILE_LIMITS, COURSE_FILE_SIZE_ERROR, COURSE_FILE_TYPES, COURSE_MIME_TYPES, type SupportedCourseFile } from '@/lib/course-files';
 
-export const COURSE_FILE_LIMITS = {
-  maxBytes: 15 * 1024 * 1024,
-  maxCharacters: 60_000,
-} as const;
-
-export type SupportedCourseFile = "pdf" | "pptx" | "docx" | "text";
+export { COURSE_FILE_LIMITS } from '@/lib/course-files';
+export type { SupportedCourseFile } from '@/lib/course-files';
 export type ExtractedCourse = { title: string; text: string; sourceLabel: string };
 
 const YOUTUBE_PLAYER_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
@@ -43,15 +40,6 @@ export class CourseExtractionError extends Error {
   }
 }
 
-const extensionKinds: Record<string, SupportedCourseFile> = {
-  pdf: "pdf",
-  pptx: "pptx",
-  docx: "docx",
-  txt: "text",
-  md: "text",
-  markdown: "text",
-};
-
 function cleanText(value: string) {
   return value
     .replace(/\r\n?/g, "\n")
@@ -69,12 +57,15 @@ function ensureUsableText(text: string, sourceLabel: string) {
   return cleaned;
 }
 
-export function getCourseFileKind(filename: string): SupportedCourseFile {
-  const extension = filename.toLowerCase().split(".").pop() ?? "";
+export function getCourseFileKind(filename: string, mimeType = ''): SupportedCourseFile {
+  const extension = filename.trim().toLowerCase().split(".").pop() ?? "";
   if (extension === "ppt") {
     throw new CourseExtractionError(415, "Legacy .ppt files are not supported. Save the presentation as .pptx and upload it again.");
   }
-  const kind = extensionKinds[extension];
+  // Mobile share sheets can supply an extensionless name with a valid MIME type.
+  const mime = mimeType.toLowerCase().split(';')[0].trim();
+  const kind = Object.hasOwn(COURSE_FILE_TYPES, extension) ? COURSE_FILE_TYPES[extension]
+    : Object.hasOwn(COURSE_MIME_TYPES, mime) ? COURSE_MIME_TYPES[mime] : undefined;
   if (!kind) throw new CourseExtractionError(415, "Supported files: PDF, PPTX, DOCX, TXT, and Markdown.");
   return kind;
 }
@@ -89,11 +80,12 @@ function xmlText(xml: string) {
     .replace(/<a:p\b[^>]*>/g, "")
     .replace(/<\/a:p>/g, "\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (entity, code: string) => {
+      const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+      if (!code.startsWith('#')) return named[code.toLowerCase()] ?? entity;
+      const value = code[1].toLowerCase() === 'x' ? parseInt(code.slice(2), 16) : Number(code.slice(1));
+      return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : '';
+    });
 }
 
 async function extractPptx(buffer: Buffer) {
@@ -114,16 +106,20 @@ async function extractPptx(buffer: Buffer) {
 export async function extractCourseFile(file: File): Promise<ExtractedCourse> {
   if (!file.name) throw new CourseExtractionError(400, "Choose a course file to upload.");
   if (file.size === 0) throw new CourseExtractionError(400, "The selected file is empty.");
-  if (file.size > COURSE_FILE_LIMITS.maxBytes) throw new CourseExtractionError(413, "Files must be 15 MB or smaller.");
+  if (file.size > COURSE_FILE_LIMITS.maxBytes) throw new CourseExtractionError(413, COURSE_FILE_SIZE_ERROR);
 
-  const kind = getCourseFileKind(file.name);
+  const kind = getCourseFileKind(file.name, file.type);
   const buffer = Buffer.from(await file.arrayBuffer());
   try {
     let text: string;
     if (kind === "pdf") {
+      // Load the Node polyfills first and use the packaged worker in serverless builds.
+      const { getData } = await import('pdf-parse/worker');
       const { PDFParse } = await import("pdf-parse");
+      PDFParse.setWorker(getData());
       const parser = new PDFParse({ data: buffer });
-      try { text = (await parser.getText()).text; }
+      // Page-number markers must not make a scanned/empty PDF look like readable text.
+      try { text = (await parser.getText({ pageJoiner: '' })).text; }
       finally { await parser.destroy(); }
     } else if (kind === "pptx") {
       text = await extractPptx(buffer);
@@ -131,7 +127,9 @@ export async function extractCourseFile(file: File): Promise<ExtractedCourse> {
       const { default: mammoth } = await import("mammoth");
       text = (await mammoth.extractRawText({ buffer })).value;
     } else {
-      text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+      const encoding = buffer[0] === 0xff && buffer[1] === 0xfe ? 'utf-16le'
+        : buffer[0] === 0xfe && buffer[1] === 0xff ? 'utf-16be' : 'utf-8';
+      text = new TextDecoder(encoding, { fatal: true }).decode(buffer);
     }
     return { title: titleFromFilename(file.name), text: ensureUsableText(text, file.name), sourceLabel: file.name };
   } catch (error) {

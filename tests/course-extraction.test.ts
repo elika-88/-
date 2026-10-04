@@ -4,6 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import { CourseExtractionError, extractCourseFile, getCourseFileKind, getYouTubeCaptionUrls, parseYouTubeCaptionXml, parseYouTubeTranscriptMarkdown, parseYouTubeVideoId } from "@/lib/server/course-extraction";
 import { POST } from "@/app/api/extract-course/route";
+import { COURSE_FILE_LIMITS } from '@/lib/course-files';
 
 describe("course source extraction", () => {
   it("recognizes the supported upload formats and rejects legacy PowerPoint", () => {
@@ -17,6 +18,33 @@ describe("course source extraction", () => {
   it("extracts editable text from a supported text upload", async () => {
     const file = new File(["Course title\n\nFirst concept.\r\n\r\nSecond concept."], "course.txt", { type: "text/plain" });
     await expect(extractCourseFile(file)).resolves.toMatchObject({ title: "course", text: "Course title\n\nFirst concept.\n\nSecond concept." });
+  });
+
+  it('recognizes extensionless mobile uploads by MIME type', () => {
+    expect(getCourseFileKind('download', 'application/pdf')).toBe('pdf');
+    expect(getCourseFileKind('file', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')).toBe('pptx');
+    expect(() => getCourseFileKind('constructor')).toThrow(CourseExtractionError);
+  });
+
+  it('reads UTF-16 text exported from Windows applications', async () => {
+    const text = '课程内容：学习方法与练习。';
+    const file = new File([Buffer.from('\ufeff' + text, 'utf16le')], 'notes.txt');
+    expect((await extractCourseFile(file)).text).toBe(text);
+  });
+
+  it('rejects oversized files before reading their content', async () => {
+    const file = new File([new Uint8Array(COURSE_FILE_LIMITS.maxBytes + 1)], 'large.pdf');
+    const read = vi.spyOn(file, 'arrayBuffer');
+    await expect(extractCourseFile(file)).rejects.toMatchObject({ status: 413 });
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized request with an actionable JSON error', async () => {
+    const response = await POST(new Request('http://localhost/api/extract-course', {
+      method: 'POST', headers: { 'content-length': String(COURSE_FILE_LIMITS.maxBytes + 65537) },
+    }));
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ error: { message: expect.stringContaining('4 MB') } });
   });
 
   it("accepts only standard YouTube URLs and returns their video IDs", () => {

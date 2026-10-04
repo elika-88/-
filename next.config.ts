@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   ...(process.env.LUMINA_E2E === '1' ? { distDir: '.next-e2e' } : {}),
   poweredByHeader: false,
   devIndicators: false,
+  // PDF.js loads a worker and native canvas at runtime; bundling breaks that resolution.
+  serverExternalPackages: ['pdf-parse', '@napi-rs/canvas'],
   async headers() {
     const headers = [
       { key: 'X-Frame-Options', value: 'DENY' },

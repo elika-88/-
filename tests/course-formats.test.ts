@@ -2,8 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
 vi.mock('server-only', () => ({}));
 import { extractCourseFile } from '@/lib/server/course-extraction';
+import { pdfCourse } from './fixtures/courseFiles';
 
 describe('real document parsers', () => {
+  it('does not mistake PDF page-number markers for readable content', async () => {
+    await expect(extractCourseFile(new File([new Uint8Array(pdfCourse(''))], 'scan.pdf'))).rejects.toMatchObject({ status: 422, message: expect.stringContaining('OCR') });
+  });
+
+  it('decodes numeric and named XML entities without double-decoding text', async () => {
+    const zip = new JSZip();
+    zip.file('ppt/slides/slide1.xml', '<a:p><a:r><a:t>&#x5B66;&#20064; &apos;note&apos; &amp;lt;</a:t></a:r></a:p>');
+    const content = await zip.generateAsync({ type: 'arraybuffer' });
+    expect((await extractCourseFile(new File([content], 'slides.pptx'))).text).toBe("Slide 1\n学习 'note' &lt;");
+  });
   it('extracts PPTX slides in numeric order and decodes XML entities', async () => {
     const zip = new JSZip();
     zip.file('ppt/slides/slide10.xml', '<a:p><a:r><a:t>Tenth concept</a:t></a:r></a:p>');

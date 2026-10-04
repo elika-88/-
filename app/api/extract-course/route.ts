@@ -1,4 +1,5 @@
 import { CourseExtractionError, COURSE_FILE_LIMITS, extractCourseFile, extractYouTubeTranscript } from "@/lib/server/course-extraction";
+import { COURSE_FILE_SIZE_ERROR } from '@/lib/course-files';
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -10,7 +11,7 @@ function response(message: string, status: 400 | 413 | 415 | 422 | 502) {
 export async function POST(request: Request) {
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > COURSE_FILE_LIMITS.maxBytes + 64 * 1024) {
-    return response("Files must be 15 MB or smaller.", 413);
+    return response(COURSE_FILE_SIZE_ERROR, 413);
   }
   let form: FormData;
   try { form = await request.formData(); }

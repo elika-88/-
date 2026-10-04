@@ -26,6 +26,7 @@ import type { ExamId } from '@/lib/prep/exams';
 import { GenerationSteps, MaterialsSkeleton } from './GenerationProgress';
 import { countWords, INPUT_LIMITS, normalizeLectureText, validateGenerationInput } from "@/lib/input";
 import type { GenerationStage } from "@/lib/contracts/generation";
+import { COURSE_FILE_ACCEPT, COURSE_FILE_LIMITS, COURSE_FILE_SIZE_ERROR } from "@/lib/course-files";
 import { generationErrorText, useWorkspaceCopy, type WorkspaceCopy } from "@/lib/i18n/workspace";
 
 const emptyDraft: StudySession = { id: "draft", title: "", lecture: "", outputLanguage: "auto", tab: "summary", kit: null, updatedAt: 0, customTitle: false };
@@ -151,6 +152,8 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
       const response = await fetch("/api/extract-course", { method: "POST", body: form, signal: controller.signal });
       const responseText = await response.text();
       if (extraction.current !== controller || historyRef.current.activeId !== targetId) return;
+      if (response.status === 413) throw new Error(COURSE_FILE_SIZE_ERROR);
+      if (response.status === 504) throw new Error("Reading this document took too long. Split it into smaller files and try again.");
       let body: unknown = null;
       if (responseText) {
         try { body = JSON.parse(responseText); }
@@ -172,6 +175,11 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
 
   function importFile(file: File | undefined) {
     if (!file) return;
+    if (!file.size || file.size > COURSE_FILE_LIMITS.maxBytes) {
+      setImportError(file.size ? COURSE_FILE_SIZE_ERROR : 'The selected file is empty.');
+      setProgress('');
+      return;
+    }
     const form = new FormData(); form.set("file", file);
     void importCourse(form);
   }
@@ -307,8 +315,8 @@ function AccountWorkspace({ userId, username, refreshAuth, prep, pricing, backgr
               <fieldset className="course-import" aria-label={w.importSource} disabled={!ready || pending || importing || submitting}>
                 <span className="course-import-label">{w.orImportFrom}</span>
                 <div className="file-dropzone">
-                  <input ref={courseFileInput} id="course-file" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={(event) => { importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-                  <label htmlFor="course-file"><FileText aria-hidden="true" />{w.aFile} <span>PDF, PPTX, DOCX, TXT, MD · 15 MB</span></label>
+                  <input ref={courseFileInput} id="course-file" type="file" accept={COURSE_FILE_ACCEPT} onChange={(event) => { importFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                  <label htmlFor="course-file"><FileText aria-hidden="true" />{w.aFile} <span>PDF, PPTX, DOCX, TXT, MD · 4 MB</span></label>
                 </div>
                 <div className="youtube-import"><label className="sr-only" htmlFor="youtube-url">{w.youtubeLabel}</label><Link aria-hidden="true" /><input id="youtube-url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); importYouTube(); } }} placeholder={w.youtubePlaceholder} inputMode="url" /><Button type="button" variant="ghost" onClick={importYouTube} title={w.importCaptionsTitle}>{w.importCaptions}</Button></div>
               </fieldset>
